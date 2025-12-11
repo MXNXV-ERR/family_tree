@@ -7,25 +7,29 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Plus, Link as LinkIcon, LogOut } from 'lucide-react';
 
-import { AddMemberDialog } from '@/components/tree/AddMemberDialog';
+import { MemberDialog } from '@/components/tree/MemberDialog';
+import { useFamilyTree } from '@/hooks/useFamilyTree';
 import { AddRelationshipDialog } from '@/components/tree/AddRelationshipDialog';
 import { FamilyTreeGraph } from '@/components/tree/FamilyTreeGraph';
 import GeminiChat from '@/components/GeminiChat';
 
 export default function Dashboard() {
-    const { user, loading, logout } = useAuth();
+    const { user, loading: authLoading, logout } = useAuth();
     const router = useRouter();
+
+    // Lifted State
+    const { members, relationships, loading: treeLoading } = useFamilyTree(user?.uid);
 
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
     const [isRelModalOpen, setIsRelModalOpen] = useState(false);
 
     useEffect(() => {
-        if (!loading && !user) {
+        if (!authLoading && !user) {
             router.push('/login');
         }
-    }, [user, loading, router]);
+    }, [user, authLoading, router]);
 
-    if (loading) {
+    if (authLoading) {
         return (
             <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-black">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
@@ -69,22 +73,26 @@ export default function Dashboard() {
                 >
                     {/* Graph View */}
                     <section className="glass-card p-4 h-[650px] relative">
-                        <FamilyTreeGraph />
+                        <FamilyTreeGraph
+                            members={members}
+                            relationships={relationships}
+                            loading={treeLoading}
+                        />
                     </section>
                 </motion.div>
             </div>
 
             {/* Modals */}
-            <AddMemberDialog
+            <MemberDialog
                 isOpen={isMemberModalOpen}
                 onClose={() => setIsMemberModalOpen(false)}
+                members={members}
             />
             <AddRelationshipDialog
                 isOpen={isRelModalOpen}
                 onClose={() => setIsRelModalOpen(false)}
             />
 
-            {/* Chat Bot */}
             {/* Chat Bot */}
             <GeminiChat />
         </main>

@@ -5,6 +5,7 @@ export interface Member {
     birthDate?: string;
     gender?: 'male' | 'female' | 'other';
     about?: string;
+    associatedUserId?: string; // Links this node to a specific app user for "Me" identification
 }
 
 export type RelationshipType = 'parent' | 'spouse' | 'sibling';
