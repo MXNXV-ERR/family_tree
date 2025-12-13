@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { useAuth } from '@/context/AuthContext';
 import { useFamilyTree } from '@/hooks/useFamilyTree';
 import { buildGraph, findRelationshipPath } from '@/utils/relationshipLogic';
+import { generateResponse } from '@/lib/gemini';
 
 interface Message {
     role: "user" | "bot";
@@ -138,22 +139,8 @@ export default function GeminiChat() {
         }
 
         try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    message: contextMessage,
-                    language: selectedLanguage
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || data.details || "Failed to fetch response");
-            }
-
-            setMessages((prev) => [...prev, { role: "bot", content: data.response }]);
+            const responseText = await generateResponse(contextMessage, selectedLanguage);
+            setMessages((prev) => [...prev, { role: "bot", content: responseText }]);
         } catch (error: any) {
             console.error("Chat Error:", error);
             setMessages((prev) => [
@@ -200,25 +187,14 @@ export default function GeminiChat() {
         setMessages(prev => [...prev, { role: 'user', content: `How is ${nameA} related to ${nameB}?` }]);
 
         try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: prompt, language: selectedLanguage }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || data.details || "Failed to fetch response");
-            }
-
-            setMessages(prev => [...prev, { role: 'bot', content: data.response }]);
+            const responseText = await generateResponse(prompt, selectedLanguage);
+            setMessages(prev => [...prev, { role: 'bot', content: responseText }]);
         } catch (e: any) {
             console.error("Relationship Chat Error:", e);
             setMessages(prev => [...prev, { role: 'bot', content: `Error: ${e.message || "Calculating relationship failed."}` }]);
         } finally {
             setIsLoading(false);
-            // setPersonA(''); // Keep Person A selected (usually 'Me') for better UX
+            // setPersonA(''); 
             setPersonB('');
         }
     };
