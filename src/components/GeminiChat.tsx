@@ -77,12 +77,72 @@ export default function GeminiChat() {
         setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
         setIsLoading(true);
 
+        // Smart Context Injection
+        let contextMessage = userMessage;
+        try {
+            // 1. Identify "Me"
+            const myNode = members.find(m => m.associatedUserId === user?.uid);
+
+            // 2. Identify mentioned names in the user message
+            const mentionedMembers = members.filter(m =>
+                userMessage.toLowerCase().includes(m.name.toLowerCase()) && m.id !== myNode?.id
+            );
+
+            // 3. If we have Me + Mentioned People, calculate relationships
+            if (myNode && mentionedMembers.length > 0) {
+                const graph = buildGraph(members, relationships);
+                const contexts = mentionedMembers.map(target => {
+                    const path = findRelationshipPath(graph, myNode.id, target.id);
+                    return `Relation Check: ${myNode.name} (${myNode.gender}) -> ${target.name} (${target.gender}) is '${path}'`;
+                });
+
+                contextMessage = `
+                    User Question: "${userMessage}"
+                    
+                    [System Data from Graph]:
+                    - Me (User): ${myNode.name}
+                    - ${contexts.join('\n- ')}
+                    
+                    Please answer the user's question using this system data.
+                `;
+            }
+
+            // 4. Handle "Who am I?" intent
+            const whoAmI = /who\s+am\s+i|who\s+is\s+me/i.test(userMessage);
+            if (myNode && whoAmI) {
+                const graph = buildGraph(members, relationships);
+                const neighbors = graph[myNode.id] || [];
+
+                const relativesList = neighbors.map(n => {
+                    const relative = members.find(m => m.id === n.id);
+                    return `- ${n.type}: ${relative?.name} (${relative?.gender})`;
+                }).join('\n');
+
+                contextMessage = `
+                    User Question: "${userMessage}"
+
+                    [System Data - My Profile]:
+                    - Name: ${myNode.name}
+                    - Gender: ${myNode.gender}
+                    - Birth Date: ${myNode.birthDate || 'Not specified'}
+                    - About: ${myNode.about || 'No details'}
+
+                    [Closest Relatives]:
+                    ${relativesList.length > 0 ? relativesList : 'No immediate relatives recorded.'}
+
+                    Task: Describe who I am based on this profile and my immediate family.
+                `;
+            }
+        } catch (err) {
+            console.warn("Failed to inject context:", err);
+        }
+
         try {
             const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    message: userMessage,
+                    message: contextMessage,
                     language: selectedLanguage
                 }),
             });

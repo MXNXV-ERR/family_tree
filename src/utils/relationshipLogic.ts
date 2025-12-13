@@ -1,7 +1,7 @@
 import { Member, Relationship } from '@/types/tree';
 
 // Graph adjacency list: id -> neighbors[]
-type AdjacencyList = Record<string, { id: string; type: 'parent' | 'child' | 'spouse' | 'sibling' }[]>;
+export type AdjacencyList = Record<string, { id: string; type: 'parent' | 'child' | 'spouse' | 'sibling' }[]>;
 
 export function buildGraph(members: Member[], relationships: Relationship[]): AdjacencyList {
     const file: AdjacencyList = {};
