@@ -5,7 +5,7 @@ import {
 } from './firestore';
 import { Member, Relationship } from '@/types/tree';
 import { db } from './config';
-import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, writeBatch, updateDoc, setDoc } from 'firebase/firestore';
 
 // Helper to get verified tree ref
 const getVerifiedTreeRef = (userId: string) => doc(db, 'trees', userId);
@@ -117,5 +117,13 @@ export const familyActions = {
 
         await batch.commit();
         return siblingId;
+    },
+
+    /**
+     * Update tree metadata (e.g. invite code)
+     */
+    updateTreeMetadata: async (userId: string, data: any) => {
+        const treeRef = getVerifiedTreeRef(userId);
+        await setDoc(treeRef, data, { merge: true });
     }
 };

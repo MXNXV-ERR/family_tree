@@ -22,3 +22,10 @@ export interface FamilyTreeData {
     members: Member[];
     relationships: Relationship[];
 }
+
+export interface TreeMetadata {
+    id: string; // The owner's UID
+    name?: string; // Optional custom name for the tree
+    inviteCode?: string;
+    allowedUsers?: string[];
+}

@@ -11,11 +11,13 @@ import { useFamilyTree } from '@/hooks/useFamilyTree';
 interface AddRelationshipDialogProps {
     isOpen: boolean;
     onClose: () => void;
+    treeId: string;
+    members: Member[];
 }
 
-export function AddRelationshipDialog({ isOpen, onClose }: AddRelationshipDialogProps) {
+export function AddRelationshipDialog({ isOpen, onClose, treeId, members }: AddRelationshipDialogProps) {
     const { user } = useAuth();
-    const { members } = useFamilyTree(user?.uid);
+    // Removed duplicate useFamilyTree hook
 
     const [fromId, setFromId] = useState('');
     const [toId, setToId] = useState('');
@@ -33,7 +35,7 @@ export function AddRelationshipDialog({ isOpen, onClose }: AddRelationshipDialog
 
         setLoading(true);
         try {
-            await addRelationship(user.uid, {
+            await addRelationship(treeId, {
                 fromId,
                 toId,
                 type,

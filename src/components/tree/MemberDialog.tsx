@@ -1,4 +1,6 @@
 
+'use client';
+
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { addMember, updateMember } from '@/lib/firebase/firestore';
@@ -13,9 +15,10 @@ interface MemberDialogProps {
     onClose: () => void;
     member?: Member | null; // If provided, we are in EDIT mode. If null/undefined, ADD mode.
     members: Member[];
+    treeId: string;
 }
 
-export function MemberDialog({ isOpen, onClose, member, members }: MemberDialogProps) {
+export function MemberDialog({ isOpen, onClose, member, members, treeId }: MemberDialogProps) {
     const { user } = useAuth();
 
     // Form State
@@ -123,7 +126,7 @@ export function MemberDialog({ isOpen, onClose, member, members }: MemberDialogP
                     console.log("Unclaiming other 'Me' nodes:", otherMeNodes.map(m => m.name));
                     await Promise.all(otherMeNodes.map(m =>
                         // @ts-ignore
-                        updateMember(user.uid, m.id, { associatedUserId: null })
+                        updateMember(treeId, m.id, { associatedUserId: null })
                     ));
                 }
             }
@@ -151,10 +154,10 @@ export function MemberDialog({ isOpen, onClose, member, members }: MemberDialogP
 
             if (isEditMode && member) {
                 // @ts-ignore
-                await updateMember(user.uid, member.id, commonData);
+                await updateMember(treeId, member.id, commonData);
             } else {
                 // @ts-ignore
-                await addMember(user.uid, commonData);
+                await addMember(treeId, commonData);
             }
 
             onClose();
@@ -256,29 +259,43 @@ export function MemberDialog({ isOpen, onClose, member, members }: MemberDialogP
 
                     {/* 'Me' Checkbox */}
                     <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                        <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={isSelf}
-                                onChange={(e) => setIsSelf(e.target.checked)}
-                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <div className="flex flex-col">
-                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">This is me</span>
-                                <span className="text-xs text-gray-500">Enable this to identify yourself in chat</span>
+                        {isEditMode && member?.associatedUserId && member.associatedUserId !== user?.uid ? (
+                            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800/50">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium flex items-center gap-2">
+                                    Linked to another user
+                                </p>
+                                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                                    This family member is already claimed by another user account.
+                                </p>
                             </div>
-                        </label>
+                        ) : (
+                            <>
+                                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={isSelf}
+                                        onChange={(e) => setIsSelf(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 dark:border-gray-600"
+                                    />
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                        This is me
+                                    </span>
+                                </label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 pl-7">
+                                    Selecting this links your user profile to this family member node.
+                                </p>
+                            </>
+                        )}
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="ghost" onClick={onClose}>
+                <div className="flex justify-end gap-3 pt-4">
+                    <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
                         Cancel
                     </Button>
                     <Button type="submit" disabled={loading}>
                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {isEditMode ? "Save Changes" : "Add Member"}
+                        {isEditMode ? 'Save Changes' : 'Add Member'}
                     </Button>
                 </div>
             </form>
