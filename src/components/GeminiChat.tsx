@@ -60,11 +60,13 @@ export default function GeminiChat() {
         // Auto-detect "Me"
         if (members.length > 0 && user) {
             const myNode = members.find(m => m.associatedUserId === user.uid);
-            if (myNode) {
+
+            // If Person A is not set, or we just switched to 'rel' mode and want to ensure defaults
+            if (myNode && !personA) {
                 setPersonA(myNode.id);
             }
         }
-    }, [members, user]);
+    }, [members, user, mode, personA]);
 
     const handleChatSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -111,16 +113,25 @@ export default function GeminiChat() {
         const graph = buildGraph(members, relationships);
         const pathDescription = findRelationshipPath(graph, personA, personB);
 
-        const nameA = members.find(m => m.id === personA)?.name || 'Person A';
-        const nameB = members.find(m => m.id === personB)?.name || 'Person B';
+        const memA = members.find(m => m.id === personA);
+        const memB = members.find(m => m.id === personB);
+
+        const nameA = memA?.name || 'Person A';
+        const nameB = memB?.name || 'Person B';
+        const genderA = memA?.gender || 'unknown';
+        const genderB = memB?.gender || 'unknown';
 
         // 2. Construct Prompt
         const prompt = `
-            Context: Family Tree.
-            The calculated relationship is: ${nameA} is the ${pathDescription} of ${nameB}.
-            Task: Verify this and explain the relationship in ${selectedLanguage}. 
-            What exactly should ${nameB} call ${nameA}?
-            Output format: "**${nameA} is ${nameB}'s [Relationship]** (Native term in English) (Native Term). [Short Explanation]".
+            Context: Family Tree Analysis.
+            - ${nameA} is ${genderA}.
+            - ${nameB} is ${genderB}.
+            - Calculated Path: ${nameA} is the ${pathDescription} of ${nameB}.
+            
+            Task: Verify this and explain the relationship in ${selectedLanguage}.
+            Crucial: Use the provided gender to give the EXACT specific term (e.g., if Father, say 'Father', not 'Parent').
+            
+            Output format: "**${nameA} is ${nameB}'s [Relationship]** (Native term in English) (Native Term). [Short context]".
             Keep it strictly one line.
         `;
 
@@ -135,15 +146,19 @@ export default function GeminiChat() {
                 body: JSON.stringify({ message: prompt, language: selectedLanguage }),
             });
 
-            if (!response.ok) throw new Error("Failed");
             const data = await response.json();
 
+            if (!response.ok) {
+                throw new Error(data.error || data.details || "Failed to fetch response");
+            }
+
             setMessages(prev => [...prev, { role: 'bot', content: data.response }]);
-        } catch (e) {
-            setMessages(prev => [...prev, { role: 'bot', content: "Error calculating relationship." }]);
+        } catch (e: any) {
+            console.error("Relationship Chat Error:", e);
+            setMessages(prev => [...prev, { role: 'bot', content: `Error: ${e.message || "Calculating relationship failed."}` }]);
         } finally {
             setIsLoading(false);
-            setPersonA('');
+            // setPersonA(''); // Keep Person A selected (usually 'Me') for better UX
             setPersonB('');
         }
     };
