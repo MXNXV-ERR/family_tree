@@ -2,6 +2,30 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js (v16 or higher)
+- npm (v8 or higher)
+- Firebase account
+- Firebase project
+
+### Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/your-username/family-tree.git
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Configure Firebase:
+- Create a Firebase project
+- Get your Firebase configuration (serviceAccountKey.json)
+- Place the serviceAccountKey.json in the root directory of the project
+
 First, run the development server:
 
 ```bash
