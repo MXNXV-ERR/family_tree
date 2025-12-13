@@ -11,7 +11,7 @@ export const MemberNode = memo(({ data }: { data: { name: string; photoUrl?: str
             <Handle type="target" position={Position.Left} id="left" className="!bg-pink-400 !w-2 !h-2" style={{ top: '50%' }} />
             <Handle type="source" position={Position.Right} id="right" className="!bg-pink-400 !w-2 !h-2" style={{ top: '50%' }} />
 
-            <Handle type="target" position={Position.Top} className="!bg-indigo-500" />
+            <Handle type="target" position={Position.Top} id="top" className="!bg-indigo-500" />
 
             <div className="relative mb-2 h-16 w-16 overflow-hidden rounded-full border-2 border-white dark:border-gray-700 shadow-sm">
                 {data.photoUrl ? (
@@ -40,7 +40,7 @@ export const MemberNode = memo(({ data }: { data: { name: string; photoUrl?: str
                 <p className="text-[10px] text-gray-500 capitalize">{data.gender || 'Family'}</p>
             </div>
 
-            <Handle type="source" position={Position.Bottom} className="!bg-indigo-500" />
+            <Handle type="source" position={Position.Bottom} id="bottom" className="!bg-indigo-500" />
         </div>
     );
 });

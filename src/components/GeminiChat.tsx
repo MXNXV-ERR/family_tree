@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect } from "react";
@@ -7,8 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from '@/context/AuthContext';
-import { useFamilyTree } from '@/hooks/useFamilyTree';
+import { Member, Relationship } from '@/types/tree';
 import { buildGraph, findRelationshipPath } from '@/utils/relationshipLogic';
+import { generateResponse } from '@/lib/gemini';
 
 interface Message {
     role: "user" | "bot";
@@ -23,9 +23,15 @@ const LANGUAGES = [
     { code: "English", label: "English" },
 ];
 
-export default function GeminiChat() {
+interface GeminiChatProps {
+    triggerPrompt?: string | null;
+    onTriggerHandled?: () => void;
+    members: Member[];
+    relationships: Relationship[];
+}
+
+export default function GeminiChat({ triggerPrompt, onTriggerHandled, members, relationships }: GeminiChatProps) {
     const { user } = useAuth();
-    const { members, relationships } = useFamilyTree(user?.uid);
 
     // UI State
     const [isOpen, setIsOpen] = useState(false);
@@ -57,14 +63,123 @@ export default function GeminiChat() {
     }, [messages, isOpen, mode]);
 
     useEffect(() => {
+        if (triggerPrompt) {
+            setIsOpen(true);
+            // Add artificial delay for UX
+            const timer = setTimeout(() => {
+                setMessages(prev => [...prev, { role: "user", content: triggerPrompt }]);
+
+                // We need to actually trigger the generation logic.
+                // Ideally we'd pull the generation logic out of handleChatSubmit, but for now
+                // we can simulate it or call a shared function. 
+                // Let's refactor `generateResponse` logic slightly or just duplicate the calling logic since it's cleaner than a big refactor.
+                handleTriggeredResponse(triggerPrompt);
+
+                if (onTriggerHandled) onTriggerHandled();
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [triggerPrompt]);
+
+    const handleTriggeredResponse = async (userMessage: string) => {
+        setIsLoading(true);
+        try {
+            // Reuse the exact same context injection logic?
+            // Yes, but we need access to the same variables.
+            // For simplicity, let's just do a direct generation first, but context is key.
+            // ... Code duplication is risky. Let's make handleChatSubmit reusable or accept an arg.
+            await processUserMessage(userMessage);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         // Auto-detect "Me"
         if (members.length > 0 && user) {
             const myNode = members.find(m => m.associatedUserId === user.uid);
-            if (myNode) {
+
+            // If Person A is not set, or we just switched to 'rel' mode and want to ensure defaults
+            if (myNode && !personA) {
                 setPersonA(myNode.id);
             }
         }
-    }, [members, user]);
+    }, [members, user, mode, personA]);
+
+    const processUserMessage = async (userMessage: string) => {
+        // Smart Context Injection
+        let contextMessage = userMessage;
+        try {
+            // 1. Identify "Me"
+            const myNode = members.find(m => m.associatedUserId === user?.uid);
+
+            // 2. Identify mentioned names in the user message
+            const mentionedMembers = members.filter(m =>
+                userMessage.toLowerCase().includes(m.name.toLowerCase()) && m.id !== myNode?.id
+            );
+
+            // 3. If we have Me + Mentioned People, calculate relationships
+            if (myNode && mentionedMembers.length > 0) {
+                const graph = buildGraph(members, relationships);
+                const contexts = mentionedMembers.map(target => {
+                    const path = findRelationshipPath(graph, myNode.id, target.id);
+                    return `Relation Check: ${myNode.name} (${myNode.gender}) -> ${target.name} (${target.gender}) is '${path}'`;
+                });
+
+                contextMessage = `
+                    User Question: "${userMessage}"
+                    
+                    [System Data from Graph]:
+                    - Me (User): ${myNode.name}
+                    - ${contexts.join('\n- ')}
+                    
+                    Please answer the user's question using this system data.
+                `;
+            }
+
+            // 4. Handle "Who am I?" intent
+            const whoAmI = /who\s+am\s+i|who\s+is\s+me/i.test(userMessage);
+            if (myNode && whoAmI) {
+                const graph = buildGraph(members, relationships);
+                const neighbors = graph[myNode.id] || [];
+
+                const relativesList = neighbors.map(n => {
+                    const relative = members.find(m => m.id === n.id);
+                    return `- ${n.type}: ${relative?.name} (${relative?.gender})`;
+                }).join('\n');
+
+                contextMessage = `
+                    User Question: "${userMessage}"
+
+                    [System Data - My Profile]:
+                    - Name: ${myNode.name}
+                    - Gender: ${myNode.gender}
+                    - Birth Date: ${myNode.birthDate || 'Not specified'}
+                    - About: ${myNode.about || 'No details'}
+
+                    [Closest Relatives]:
+                    ${relativesList.length > 0 ? relativesList : 'No immediate relatives recorded.'}
+
+                    Task: Describe who I am based on this profile and my immediate family.
+                `;
+            }
+        } catch (err) {
+            console.warn("Failed to inject context:", err);
+        }
+
+        try {
+            const responseText = await generateResponse(contextMessage, selectedLanguage);
+            setMessages((prev) => [...prev, { role: "bot", content: responseText }]);
+        } catch (error: any) {
+            console.error("Chat Error:", error);
+            setMessages((prev) => [
+                ...prev,
+                { role: "bot", content: `Error: ${error.message || "Something went wrong."}` },
+            ]);
+        }
+    };
 
     const handleChatSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -75,32 +190,8 @@ export default function GeminiChat() {
         setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
         setIsLoading(true);
 
-        try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    message: userMessage,
-                    language: selectedLanguage
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || data.details || "Failed to fetch response");
-            }
-
-            setMessages((prev) => [...prev, { role: "bot", content: data.response }]);
-        } catch (error: any) {
-            console.error("Chat Error:", error);
-            setMessages((prev) => [
-                ...prev,
-                { role: "bot", content: `Error: ${error.message || "Something went wrong."}` },
-            ]);
-        } finally {
-            setIsLoading(false);
-        }
+        await processUserMessage(userMessage);
+        setIsLoading(false);
     };
 
     const handleRelationshipAsk = async () => {
@@ -111,16 +202,25 @@ export default function GeminiChat() {
         const graph = buildGraph(members, relationships);
         const pathDescription = findRelationshipPath(graph, personA, personB);
 
-        const nameA = members.find(m => m.id === personA)?.name || 'Person A';
-        const nameB = members.find(m => m.id === personB)?.name || 'Person B';
+        const memA = members.find(m => m.id === personA);
+        const memB = members.find(m => m.id === personB);
+
+        const nameA = memA?.name || 'Person A';
+        const nameB = memB?.name || 'Person B';
+        const genderA = memA?.gender || 'unknown';
+        const genderB = memB?.gender || 'unknown';
 
         // 2. Construct Prompt
         const prompt = `
-            Context: Family Tree.
-            The calculated relationship is: ${nameA} is the ${pathDescription} of ${nameB}.
-            Task: Verify this and explain the relationship in ${selectedLanguage}. 
-            What exactly should ${nameB} call ${nameA}?
-            Output format: "**${nameA} is ${nameB}'s [Relationship]** (Native term in English) (Native Term). [Short Explanation]".
+            Context: Family Tree Analysis.
+            - ${nameA} is ${genderA}.
+            - ${nameB} is ${genderB}.
+            - Calculated Path: ${nameA} is the ${pathDescription} of ${nameB}.
+            
+            Task: Verify this and explain the relationship in ${selectedLanguage}.
+            Crucial: Use the provided gender to give the EXACT specific term (e.g., if Father, say 'Father', not 'Parent').
+            
+            Output format: "**${nameA} is ${nameB}'s [Relationship]** (Native term in English) (Native Term). [Short context]".
             Keep it strictly one line.
         `;
 
@@ -129,21 +229,14 @@ export default function GeminiChat() {
         setMessages(prev => [...prev, { role: 'user', content: `How is ${nameA} related to ${nameB}?` }]);
 
         try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: prompt, language: selectedLanguage }),
-            });
-
-            if (!response.ok) throw new Error("Failed");
-            const data = await response.json();
-
-            setMessages(prev => [...prev, { role: 'bot', content: data.response }]);
-        } catch (e) {
-            setMessages(prev => [...prev, { role: 'bot', content: "Error calculating relationship." }]);
+            const responseText = await generateResponse(prompt, selectedLanguage);
+            setMessages(prev => [...prev, { role: 'bot', content: responseText }]);
+        } catch (e: any) {
+            console.error("Relationship Chat Error:", e);
+            setMessages(prev => [...prev, { role: 'bot', content: `Error: ${e.message || "Calculating relationship failed."}` }]);
         } finally {
             setIsLoading(false);
-            setPersonA('');
+            // setPersonA(''); 
             setPersonB('');
         }
     };
