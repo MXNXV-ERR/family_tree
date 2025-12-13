@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Link as LinkIcon, LogOut, Share2, X, Copy, ArrowLeft, Users, Settings } from 'lucide-react';
+import { Plus, Link as LinkIcon, LogOut, Share2, X, Copy, ArrowLeft, Users, Settings, ScanFace } from 'lucide-react';
 
 import { MemberDialog } from '@/components/tree/MemberDialog';
 import { useFamilyTree } from '@/hooks/useFamilyTree';
@@ -16,6 +16,7 @@ import { familyActions } from '@/lib/firebase/familyActions';
 import { useTreeList } from '@/hooks/useTreeList';
 import { TreeSelector } from '@/components/dashboard/TreeSelector';
 import { TreeSettingsDialog } from '@/components/dashboard/TreeSettingsDialog';
+import { FaceSearchDialog } from '@/components/dashboard/FaceSearchDialog';
 
 export default function Dashboard() {
     const { user, logout, loading: authLoading } = useAuth();
@@ -23,6 +24,7 @@ export default function Dashboard() {
 
     // 1. Manage Active Tree View
     const [viewTreeId, setViewTreeId] = useState<string | null>(null);
+    const [selectedNode, setSelectedNode] = useState<any>(null); // For future use
 
     // Initialize viewTreeId from localStorage
     useEffect(() => {
@@ -44,10 +46,17 @@ export default function Dashboard() {
     // Use the hook with the ACTIVE tree ID (if selected)
     const { members, relationships, loading: treeLoading, treeMetadata } = useFamilyTree(viewTreeId || undefined);
 
+    // Find nodes matching members for graph (simplification)
+    const nodes = members.map(m => ({ id: m.id, data: { label: m.name } }));
+
     // Modal States
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
     const [isRelModalOpen, setIsRelModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isFaceSearchOpen, setIsFaceSearchOpen] = useState(false);
+
+    const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+    const [chatTrigger, setChatTrigger] = useState<string | null>(null);
 
     // Protected Route Check
     useEffect(() => {
@@ -79,7 +88,16 @@ export default function Dashboard() {
         setViewTreeId(treeId);
     };
 
+    const handleFaceMatch = (memberId: string) => {
+        // 1. Focus Graph
+        setFocusNodeId(memberId);
 
+        // 2. Trigger Chat
+        const member = members.find(m => m.id === memberId);
+        if (member) {
+            setChatTrigger(`How am I related to ${member.name}?`);
+        }
+    };
 
     // If no tree selected, show selector
     if (!viewTreeId) {
@@ -120,6 +138,9 @@ export default function Dashboard() {
                         </p>
                     </div>
                     <div className="flex gap-2">
+                        <Button variant="outline" size="icon" onClick={() => setIsFaceSearchOpen(true)} title="Find by Face">
+                            <ScanFace className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                        </Button>
                         {isMyTree && (
                             <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)} title="Settings">
                                 <Settings className="h-5 w-5 text-gray-500" />
@@ -150,6 +171,7 @@ export default function Dashboard() {
                             relationships={relationships}
                             loading={treeLoading}
                             treeId={viewTreeId}
+                            focusNodeId={focusNodeId}
                         />
                     </section>
                 </motion.div>
@@ -177,8 +199,21 @@ export default function Dashboard() {
                 members={members}
             />
 
+            {/* Face Search Dialog */}
+            <FaceSearchDialog
+                isOpen={isFaceSearchOpen}
+                onClose={() => setIsFaceSearchOpen(false)}
+                members={members}
+                onMatchFound={handleFaceMatch}
+            />
+
             {/* Chat Bot */}
-            <GeminiChat />
+            <GeminiChat
+                triggerPrompt={chatTrigger}
+                onTriggerHandled={() => setChatTrigger(null)}
+                members={members}
+                relationships={relationships}
+            />
         </main>
     );
 }

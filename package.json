@@ -12,6 +12,7 @@
     "@google/generative-ai": "^0.24.1",
     "clsx": "^2.1.1",
     "dagre": "^0.8.5",
+    "face-api.js": "^0.22.2",
     "firebase": "^12.6.0",
     "firebase-cli": "^1.2.0",
     "framer-motion": "^12.23.25",

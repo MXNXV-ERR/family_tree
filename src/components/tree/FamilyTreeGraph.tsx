@@ -10,6 +10,7 @@ import ReactFlow, {
     ConnectionLineType,
     Node,
     Edge,
+    ReactFlowInstance
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
@@ -138,9 +139,10 @@ interface FamilyTreeGraphProps {
     relationships: Relationship[];
     loading: boolean;
     treeId: string;
+    focusNodeId?: string | null;
 }
 
-export function FamilyTreeGraph({ members, relationships, loading, treeId }: FamilyTreeGraphProps) {
+export function FamilyTreeGraph({ members, relationships, loading, treeId, focusNodeId }: FamilyTreeGraphProps) {
     const { user } = useAuth();
 
     // Loading State with Skeleton
@@ -266,6 +268,21 @@ export function FamilyTreeGraph({ members, relationships, loading, treeId }: Fam
 
     }, [members, relationships, loading, setNodes, setEdges, handleEdit]);
 
+    const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+
+    // Focus Effect
+    useEffect(() => {
+        if (focusNodeId && !loading && members.length > 0 && rfInstance) {
+            // We need to wait for layout to settle, but usually nodes are already positioned by dagre
+            // Find the node in the internal state
+            const node = rfInstance.getNode(focusNodeId);
+            if (node) {
+                // NODE_WIDTH/Height is 150. Center is x + 75.
+                rfInstance.setCenter(node.position.x + 75, node.position.y + 75, { zoom: 1.5, duration: 1200 });
+            }
+        }
+    }, [focusNodeId, loading, members, rfInstance]);
+
     // Empty State
     if (members.length === 0) {
         return (
@@ -294,6 +311,7 @@ export function FamilyTreeGraph({ members, relationships, loading, treeId }: Fam
                     nodesDraggable={false}
                     nodesConnectable={false}
                     elementsSelectable={true}
+                    onInit={setRfInstance}
                 >
                     <Background />
                     <Controls />

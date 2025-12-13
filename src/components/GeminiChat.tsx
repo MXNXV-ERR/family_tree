@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect } from "react";
@@ -7,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from '@/context/AuthContext';
-import { useFamilyTree } from '@/hooks/useFamilyTree';
+import { Member, Relationship } from '@/types/tree';
 import { buildGraph, findRelationshipPath } from '@/utils/relationshipLogic';
 import { generateResponse } from '@/lib/gemini';
 
@@ -24,9 +23,15 @@ const LANGUAGES = [
     { code: "English", label: "English" },
 ];
 
-export default function GeminiChat() {
+interface GeminiChatProps {
+    triggerPrompt?: string | null;
+    onTriggerHandled?: () => void;
+    members: Member[];
+    relationships: Relationship[];
+}
+
+export default function GeminiChat({ triggerPrompt, onTriggerHandled, members, relationships }: GeminiChatProps) {
     const { user } = useAuth();
-    const { members, relationships } = useFamilyTree(user?.uid);
 
     // UI State
     const [isOpen, setIsOpen] = useState(false);
@@ -58,6 +63,40 @@ export default function GeminiChat() {
     }, [messages, isOpen, mode]);
 
     useEffect(() => {
+        if (triggerPrompt) {
+            setIsOpen(true);
+            // Add artificial delay for UX
+            const timer = setTimeout(() => {
+                setMessages(prev => [...prev, { role: "user", content: triggerPrompt }]);
+
+                // We need to actually trigger the generation logic.
+                // Ideally we'd pull the generation logic out of handleChatSubmit, but for now
+                // we can simulate it or call a shared function. 
+                // Let's refactor `generateResponse` logic slightly or just duplicate the calling logic since it's cleaner than a big refactor.
+                handleTriggeredResponse(triggerPrompt);
+
+                if (onTriggerHandled) onTriggerHandled();
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [triggerPrompt]);
+
+    const handleTriggeredResponse = async (userMessage: string) => {
+        setIsLoading(true);
+        try {
+            // Reuse the exact same context injection logic?
+            // Yes, but we need access to the same variables.
+            // For simplicity, let's just do a direct generation first, but context is key.
+            // ... Code duplication is risky. Let's make handleChatSubmit reusable or accept an arg.
+            await processUserMessage(userMessage);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         // Auto-detect "Me"
         if (members.length > 0 && user) {
             const myNode = members.find(m => m.associatedUserId === user.uid);
@@ -69,15 +108,7 @@ export default function GeminiChat() {
         }
     }, [members, user, mode, personA]);
 
-    const handleChatSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!input.trim() || isLoading) return;
-
-        const userMessage = input.trim();
-        setInput("");
-        setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-        setIsLoading(true);
-
+    const processUserMessage = async (userMessage: string) => {
         // Smart Context Injection
         let contextMessage = userMessage;
         try {
@@ -147,9 +178,20 @@ export default function GeminiChat() {
                 ...prev,
                 { role: "bot", content: `Error: ${error.message || "Something went wrong."}` },
             ]);
-        } finally {
-            setIsLoading(false);
         }
+    };
+
+    const handleChatSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!input.trim() || isLoading) return;
+
+        const userMessage = input.trim();
+        setInput("");
+        setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+        setIsLoading(true);
+
+        await processUserMessage(userMessage);
+        setIsLoading(false);
     };
 
     const handleRelationshipAsk = async () => {
