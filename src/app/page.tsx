@@ -48,7 +48,7 @@ export default function Home() {
           </Link>
         </div>
       </motion.div>
-      <GeminiChat />
+      <GeminiChat members={[]} relationships={[]} />
     </main>
   );
 }
