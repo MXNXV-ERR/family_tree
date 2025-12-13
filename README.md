@@ -9,7 +9,9 @@ A modern, interactive Family Tree application built with Next.js, Firebase, and 
 *   **interactive Graph**: Visualize your family connections using a dynamic, auto-layout graph (powered by React Flow & Dagre).
 *   **🤖 AI Relationship Assistant**: Built-in Gemini Chat that explains relationships (e.g., "What is my father's brother to me?") in English or regional languages like Gujarati.
 *   **📸 Member Management**: Add and edit family members with detailed profiles, including photos (stored efficiently as Base64/Data URLs).
-*   **👤 "Me" Node Detection**: Mark yourself in the tree, and the app (and AI) automatically understands your position relative to others.
+*   **🤝 Collaborative Editing**: Share your tree with family members via invite links. Changes are synced in real-time.
+*   **⚙️ Tree Settings**: Customize your tree name, manage authorized users, and link tree nodes to actual user accounts.
+*   **👤 "Me" Node Detection**: Mark yourself in the tree with exclusive claiming logic (prevents duplicate claims). The app automatically understands your position relative to others for AI context.
 *   **🔐 Secure**: User authentication and data storage via Firebase (Auth & Firestore).
 *   **📱 Responsive**: Fully responsive design that works beautifully on desktop and mobile.
 
