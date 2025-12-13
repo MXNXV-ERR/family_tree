@@ -2,6 +2,31 @@
 
 A modern, interactive Family Tree application built with Next.js, Firebase, and Gemini AI. Visualize your ancestry, manage family members with photos, and ask an AI assistant to explain complex relationships in your native language.
 
+### Prerequisites
+
+- Node.js (v16 or higher)
+- npm (v8 or higher)
+- Firebase account
+- Firebase project
+
+### Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/your-username/family-tree.git
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Configure Firebase:
+- Create a Firebase project
+- Get your Firebase configuration (serviceAccountKey.json)
+- Place the serviceAccountKey.json in the root directory of the project
+
+First, run the development server:
 ![Project Banner](public/banner.png) *<!-- Add a banner image here if you have one, otherwise remove or replace -->*
 
 ## ✨ Features
