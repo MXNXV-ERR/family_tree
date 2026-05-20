@@ -225,28 +225,31 @@ export function FamilyTreeGraph({ members, relationships, loading, treeId, focus
         }));
 
         // Transform relationships to edges
-        const initialEdges: Edge[] = relationships.map(r => {
-            const isSpouse = r.type === 'spouse';
-            const isSibling = r.type === 'sibling';
+        const initialEdges: Edge[] = relationships
+            .filter(r => r.type !== 'sibling') // Filter out siblings from visual graph
+            .map(r => {
+                const isSpouse = r.type === 'spouse';
+                const isSibling = r.type === 'sibling'; // This is now always false due to filter, but keeping for logic safety if filter removed later
 
-            return {
-                id: r.id,
-                source: r.fromId,
-                target: r.toId,
-                type: 'smoothstep',
-                animated: false,
-                data: { type: r.type }, // Pass type to layout engine
-                style: {
-                    stroke: isSpouse ? '#ec4899' : (isSibling ? '#10b981' : '#6366f1'),
-                    strokeWidth: 2,
-                    strokeDasharray: isSpouse ? '5,5' : '0'
-                },
-                // Explicitly define handles based on relationship type
-                sourceHandle: isSpouse || isSibling ? 'right' : 'bottom',
-                targetHandle: isSpouse || isSibling ? 'left' : 'top',
-                label: isSpouse ? '❤️' : undefined
-            };
-        });
+
+                return {
+                    id: r.id,
+                    source: r.fromId,
+                    target: r.toId,
+                    type: 'smoothstep',
+                    animated: false,
+                    data: { type: r.type }, // Pass type to layout engine
+                    style: {
+                        stroke: isSpouse ? '#ec4899' : (isSibling ? '#10b981' : '#6366f1'),
+                        strokeWidth: 2,
+                        strokeDasharray: isSpouse ? '5,5' : '0'
+                    },
+                    // Explicitly define handles based on relationship type
+                    sourceHandle: isSpouse || isSibling ? 'right' : 'bottom',
+                    targetHandle: isSpouse || isSibling ? 'left' : 'top',
+                    label: isSpouse ? '❤️' : undefined
+                };
+            });
 
         // Filter edges for Layout Calculation to avoid Cycles
         // For Spouses we do NOT want them in the Dagre graph at all as edges, 

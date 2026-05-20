@@ -27,7 +27,32 @@ export const familyActions = {
         const p2cRef = doc(relationshipsRef);
         batch.set(p2cRef, { fromId: parentId, toId: childId, type: 'parent' });
 
-        // 3. Find Parent's spouse to link them too
+        // 3. Find Parent's existing children (Siblings to be)
+        // Query: Find all relationships where fromId == parentId AND type == 'parent'
+        // This gives us all the BROTHERS/SISTERS of the new child.
+        const qSiblings = query(relationshipsRef, where('fromId', '==', parentId), where('type', '==', 'parent'));
+        const siblingsSnap = await getDocs(qSiblings);
+
+        const existingSiblingIds = new Set<string>();
+
+        siblingsSnap.forEach(docSnap => {
+            const siblingId = docSnap.data().toId;
+            if (siblingId !== childId) { // Should not be itself (though unrelated in fresh insert)
+                existingSiblingIds.add(siblingId);
+            }
+        });
+
+        // 4. Create Sibling Links
+        existingSiblingIds.forEach(siblingId => {
+            // Bidirectional Sibling Link
+            const s2c = doc(relationshipsRef);
+            batch.set(s2c, { fromId: siblingId, toId: childId, type: 'sibling' });
+
+            const c2s = doc(relationshipsRef);
+            batch.set(c2s, { fromId: childId, toId: siblingId, type: 'sibling' });
+        });
+
+        // 5. Find Parent's spouse to link them too
         const qSpouse = query(relationshipsRef, where('fromId', '==', parentId), where('type', '==', 'spouse'));
         const spouseSnap = await getDocs(qSpouse);
 
@@ -36,6 +61,11 @@ export const familyActions = {
             // Link Spouse -> Child
             const s2cRef = doc(relationshipsRef);
             batch.set(s2cRef, { fromId: spouseId, toId: childId, type: 'parent' });
+
+            // Note: We don't need to check spouse's children for siblings because they should overlap with parent's children
+            // unless they are step-siblings from a previous marriage.
+            // Edge Case: Half-siblings from spouse's side? 
+            // User said "We are not dealing with that for now". So implicit trust in primary parent is enough.
         });
 
         await batch.commit();

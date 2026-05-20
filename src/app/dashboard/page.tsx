@@ -10,7 +10,7 @@ import { Plus, Link as LinkIcon, LogOut, Share2, X, Copy, ArrowLeft, Users, Sett
 import { MemberDialog } from '@/components/tree/MemberDialog';
 import { useFamilyTree } from '@/hooks/useFamilyTree';
 import { AddRelationshipDialog } from '@/components/tree/AddRelationshipDialog';
-import { FamilyTreeGraph } from '@/components/tree/FamilyTreeGraph';
+import { FamilyExplorer } from '@/components/familyExplorer/FamilyExplorer';
 import GeminiChat from '@/components/GeminiChat';
 import { familyActions } from '@/lib/firebase/familyActions';
 import { useTreeList } from '@/hooks/useTreeList';
@@ -166,12 +166,13 @@ export default function Dashboard() {
                 >
                     {/* Graph View */}
                     <section className="glass-card p-4 h-[650px] relative">
-                        <FamilyTreeGraph
+                        <FamilyExplorer
                             members={members}
                             relationships={relationships}
                             loading={treeLoading}
                             treeId={viewTreeId}
                             focusNodeId={focusNodeId}
+                            userId={user.uid}
                         />
                     </section>
                 </motion.div>

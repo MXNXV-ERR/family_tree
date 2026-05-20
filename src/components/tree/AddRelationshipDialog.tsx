@@ -80,11 +80,10 @@ export function AddRelationshipDialog({ isOpen, onClose, treeId, members }: AddR
                         >
                             <option value="parent">is Parent of</option>
                             <option value="spouse">is Spouse of</option>
-                            <option value="sibling">is Sibling of</option>
                         </select>
                     </div>
                     <p className="text-xs text-gray-500">
-                        Read as: [Person A] {type === 'parent' ? 'is Parent of' : type === 'spouse' ? 'is Spouse of' : 'is Sibling of'} [Person B]
+                        Read as: [Person A] {type === 'parent' ? 'is Parent of' : 'is Spouse of'} [Person B]
                     </p>
                 </div>
 

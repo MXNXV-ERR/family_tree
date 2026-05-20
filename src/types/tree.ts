@@ -15,6 +15,7 @@ export interface Relationship {
     fromId: string; // The person defined (e.g., Child)
     toId: string;   // The relative (e.g., Parent)
     type: RelationshipType;
+    status?: 'current' | 'divorced';
 }
 
 // For the graph visualization

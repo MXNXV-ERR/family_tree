@@ -1,0 +1,246 @@
+// Production-ready TypeScript port of the prototype.
+// Drop these files into your Next.js codebase under `src/components/tree/`
+// and follow the INTEGRATION.md notes.
+//
+// Type extensions: this code expects an optional `status` field on Relationship
+// for divorced spouses. Add to your existing `src/types/tree.ts`:
+//
+//   export interface Relationship {
+//     id: string;
+//     fromId: string;
+//     toId: string;
+//     type: RelationshipType;
+//     status?: 'current' | 'divorced';   // ← add this line
+//   }
+//
+// Everything else uses your existing Member + Relationship + FamilyTreeData shape.
+
+import type { Member, Relationship } from '@/types/tree';
+
+// ── Adjacency index ───────────────────────────────────────────────
+export type SpouseEntry = { id: string; status: 'current' | 'divorced' };
+
+export type Adjacency = {
+  byId: Map<string, Member>;
+  get(id: string): Member | undefined;
+  parents(id: string): string[];
+  children(id: string): string[];
+  spouses(id: string): SpouseEntry[];
+  currentSpouses(id: string): string[];
+  exSpouses(id: string): string[];
+  siblings(id: string): string[];
+  grandparents(id: string): string[];
+  grandchildren(id: string): string[];
+  /** BFS distance through any relationship edge. Returns Infinity if unreachable. */
+  distance(fromId: string, toId: string): number;
+  /** Neighborhood map keyed by member id, with depth + relationship label. */
+  neighborhood(centerId: string, maxDepth: number): Map<string, NeighborNode>;
+};
+
+export type NeighborNode = {
+  id: string;
+  depth: number;
+  label: string;           // relationship to the focus
+  viaId?: string;          // through whom we reached this node
+  viaRel?: string;         // edge type from via -> this
+};
+
+export function buildAdjacency(
+  members: Member[],
+  relationships: Relationship[]
+): Adjacency {
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const parents = new Map<string, string[]>();
+  const children = new Map<string, string[]>();
+  const spouses = new Map<string, SpouseEntry[]>();
+
+  members.forEach((m) => {
+    parents.set(m.id, []);
+    children.set(m.id, []);
+    spouses.set(m.id, []);
+  });
+
+  relationships.forEach((r) => {
+    if (r.type === 'parent') {
+      parents.get(r.fromId)?.push(r.toId);
+      children.get(r.toId)?.push(r.fromId);
+    } else if (r.type === 'spouse') {
+      const status = ((r as Relationship & { status?: 'current' | 'divorced' }).status ?? 'current') as 'current' | 'divorced';
+      spouses.get(r.fromId)?.push({ id: r.toId, status });
+      spouses.get(r.toId)?.push({ id: r.fromId, status });
+    }
+  });
+
+  const siblings = new Map<string, string[]>();
+  members.forEach((m) => {
+    const sibs = new Set<string>();
+    (parents.get(m.id) || []).forEach((pid) => {
+      (children.get(pid) || []).forEach((cid) => {
+        if (cid !== m.id) sibs.add(cid);
+      });
+    });
+    siblings.set(m.id, [...sibs]);
+  });
+
+  const labelRelationship = (parentLabel: string, edge: string, parentDepth: number): string => {
+    if (parentDepth === 0) return edge;
+    if (parentLabel === 'parent'  && edge === 'parent')  return 'grandparent';
+    if (parentLabel === 'parent'  && edge === 'sibling') return 'aunt/uncle';
+    if (parentLabel === 'parent'  && edge === 'partner') return 'parent';
+    if (parentLabel === 'child'   && edge === 'child')   return 'grandchild';
+    if (parentLabel === 'child'   && edge === 'partner') return 'in-law';
+    if (parentLabel === 'sibling' && edge === 'partner') return 'in-law';
+    if (parentLabel === 'sibling' && edge === 'child')   return 'niece/nephew';
+    if (parentLabel === 'partner' && edge === 'parent')  return 'in-law';
+    if (parentLabel === 'partner' && edge === 'sibling') return 'in-law';
+    if (parentLabel === 'grandparent' && edge === 'parent') return 'great-grandparent';
+    if (parentLabel === 'grandchild'  && edge === 'child')  return 'great-grandchild';
+    if (parentLabel === 'aunt/uncle'  && edge === 'child')  return 'cousin';
+    return 'relative';
+  };
+
+  return {
+    byId,
+    get: (id) => byId.get(id),
+    parents:  (id) => parents.get(id)  || [],
+    children: (id) => children.get(id) || [],
+    spouses:  (id) => spouses.get(id)  || [],
+    currentSpouses: (id) => (spouses.get(id) || []).filter((s) => s.status === 'current').map((s) => s.id),
+    exSpouses:      (id) => (spouses.get(id) || []).filter((s) => s.status === 'divorced').map((s) => s.id),
+    siblings: (id) => siblings.get(id) || [],
+    grandparents: (id) => {
+      const out = new Set<string>();
+      (parents.get(id) || []).forEach((p) => (parents.get(p) || []).forEach((gp) => out.add(gp)));
+      return [...out];
+    },
+    grandchildren: (id) => {
+      const out = new Set<string>();
+      (children.get(id) || []).forEach((c) => (children.get(c) || []).forEach((gc) => out.add(gc)));
+      return [...out];
+    },
+    distance: (fromId, toId) => {
+      if (fromId === toId) return 0;
+      const visited = new Set([fromId]);
+      let frontier: string[] = [fromId];
+      let d = 0;
+      while (frontier.length) {
+        d++;
+        const next: string[] = [];
+        for (const id of frontier) {
+          const neighbors = new Set([
+            ...(parents.get(id)  || []),
+            ...(children.get(id) || []),
+            ...(spouses.get(id)  || []).map((s) => s.id),
+            ...(siblings.get(id) || []),
+          ]);
+          for (const n of neighbors) {
+            if (visited.has(n)) continue;
+            if (n === toId) return d;
+            visited.add(n);
+            next.push(n);
+          }
+        }
+        frontier = next;
+        if (d > 12) return Infinity;
+      }
+      return Infinity;
+    },
+    neighborhood: (centerId, maxDepth) => {
+      const out = new Map<string, NeighborNode>();
+      const visited = new Set([centerId]);
+      let frontier: NeighborNode[] = [{ id: centerId, depth: 0, label: 'focus' }];
+      while (frontier.length) {
+        const next: NeighborNode[] = [];
+        for (const node of frontier) {
+          out.set(node.id, node);
+          if (node.depth >= maxDepth) continue;
+          const groups: Array<{ ids: string[]; label: string }> = [
+            { ids: parents.get(node.id) || [],                                                            label: 'parent' },
+            { ids: children.get(node.id) || [],                                                           label: 'child' },
+            { ids: (spouses.get(node.id) || []).filter((s) => s.status === 'current').map((s) => s.id),   label: 'partner' },
+            { ids: (spouses.get(node.id) || []).filter((s) => s.status === 'divorced').map((s) => s.id),  label: 'ex-partner' },
+            { ids: siblings.get(node.id) || [],                                                           label: 'sibling' },
+          ];
+          for (const g of groups) {
+            for (const id of g.ids) {
+              if (visited.has(id)) continue;
+              visited.add(id);
+              const rel = labelRelationship(node.label, g.label, node.depth);
+              next.push({ id, depth: node.depth + 1, label: rel, viaId: node.id, viaRel: g.label });
+            }
+          }
+        }
+        frontier = next;
+      }
+      return out;
+    },
+  };
+}
+
+// ── Generations ──────────────────────────────────────────────────
+// Bloodline depth, then propagate spouses so in-laws share their partner's gen.
+export function computeGenerations(members: Member[], relationships: Relationship[]): Map<string, number> {
+  const parents = new Map<string, string[]>();
+  const spouses = new Map<string, string[]>();
+  members.forEach((m) => {
+    parents.set(m.id, []);
+    spouses.set(m.id, []);
+  });
+  relationships.forEach((r) => {
+    if (r.type === 'parent') parents.get(r.fromId)?.push(r.toId);
+    if (r.type === 'spouse') {
+      spouses.get(r.fromId)?.push(r.toId);
+      spouses.get(r.toId)?.push(r.fromId);
+    }
+  });
+
+  const memo = new Map<string, number | null>();
+  const gen = (id: string): number | null => {
+    if (memo.has(id)) return memo.get(id) ?? null;
+    memo.set(id, 0);
+    const ps = parents.get(id) || [];
+    const inTree = ps.filter((p) => parents.has(p));
+    const g: number | null = inTree.length === 0 ? null : Math.max(...inTree.map((p) => gen(p) ?? 0)) + 1;
+    memo.set(id, g);
+    return g;
+  };
+  members.forEach((m) => gen(m.id));
+
+  let changed = true;
+  let safety = 4;
+  while (changed && safety-- > 0) {
+    changed = false;
+    members.forEach((m) => {
+      if (memo.get(m.id) !== null) return;
+      const sp = (spouses.get(m.id) || [])
+        .map((s) => memo.get(s))
+        .filter((g): g is number => g !== null && g !== undefined);
+      if (sp.length > 0) {
+        memo.set(m.id, Math.max(...sp));
+        changed = true;
+      }
+    });
+  }
+  members.forEach((m) => {
+    if (memo.get(m.id) === null) memo.set(m.id, 0);
+  });
+  const numericMemo = new Map<string, number>();
+  memo.forEach((v, k) => numericMemo.set(k, v ?? 0));
+  const min = Math.min(...[...numericMemo.values()]);
+  if (min !== 0) numericMemo.forEach((v, k) => numericMemo.set(k, v - min));
+  return numericMemo;
+}
+
+// ── Formatters ────────────────────────────────────────────────────
+export const yearOf = (d?: string): number | undefined => (d ? Number(d.slice(0, 4)) : undefined);
+
+export const lifespan = (m: Member): string => {
+  const b = yearOf(m.birthDate);
+  const d = yearOf((m as Member & { deathDate?: string }).deathDate);
+  if (!b) return '';
+  if (d) return `${b} – ${d}`;
+  return `b. ${b}`;
+};
+
+export const initials = (name: string): string =>
+  name.split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();

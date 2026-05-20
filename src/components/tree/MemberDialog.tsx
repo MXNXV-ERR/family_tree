@@ -234,15 +234,14 @@ export function MemberDialog({ isOpen, onClose, member, members, treeId }: Membe
                                 Gender
                             </label>
                             <select
-                                className="flex h-10 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm focus-visible:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
                                 value={gender}
                                 onChange={(e: any) => setGender(e.target.value)}
                             >
                                 <option value="male">Male</option>
                                 <option value="female">Female</option>
                                 <option value="other">Other</option>
-                            </select>
-                        </div>
+                            </select>                </div>
                     </div>
 
                     <div className="space-y-2">
