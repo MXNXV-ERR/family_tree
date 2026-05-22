@@ -10,18 +10,22 @@ type ThemeCtxValue = { theme: 'light' | 'dark'; setTheme: (t: 'light' | 'dark', 
 const ThemeCtx = createContext<ThemeCtxValue>({ theme: 'light', setTheme: () => {} });
 
 export function FamilyExplorerThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<'light' | 'dark'>('light');
+  const getAppTheme = (): 'light' | 'dark' =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
+  const [theme, setThemeState] = useState<'light' | 'dark'>(getAppTheme);
+
+  // Stay in sync with the app's Tailwind dark class
   useEffect(() => {
-    const stored = (typeof window !== 'undefined' && localStorage.getItem('fe-theme')) as 'light' | 'dark' | null;
-    const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setThemeState(stored || (prefersDark ? 'dark' : 'light'));
+    setThemeState(getAppTheme());
+    const observer = new MutationObserver(() => setThemeState(getAppTheme()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
     const root = document.querySelector('.family-explorer') as HTMLElement | null;
     if (root) root.dataset.theme = theme;
-    if (typeof localStorage !== 'undefined') localStorage.setItem('fe-theme', theme);
   }, [theme]);
 
   const setTheme = useCallback((next: 'light' | 'dark', origin?: { x: number; y: number }) => {

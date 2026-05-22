@@ -165,7 +165,7 @@ export default function Dashboard() {
                     className="flex flex-col gap-6"
                 >
                     {/* Graph View */}
-                    <section className="glass-card p-4 h-[650px] relative">
+                    <section className="h-[650px] relative rounded-2xl overflow-hidden shadow-lg border border-white/30 dark:border-white/10">
                         <FamilyExplorer
                             members={members}
                             relationships={relationships}

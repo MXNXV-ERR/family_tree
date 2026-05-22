@@ -10,13 +10,13 @@
   --fe-ui: var(--font-public-sans), "Public Sans", system-ui, -apple-system, sans-serif;
   --fe-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, Menlo, monospace;
 
-  --fe-bg: #f4efe3;
-  --fe-paper: #faf7ee;
-  --fe-ink: #1a1a22;
-  --fe-ink-soft: #4a4a55;
-  --fe-mute: #807a6e;
-  --fe-line: #e0d9c6;
-  --fe-line-soft: #ebe5d4;
+  --fe-bg: #f8fafc;
+  --fe-paper: #ffffff;
+  --fe-ink: #111827;
+  --fe-ink-soft: #374151;
+  --fe-mute: #6b7280;
+  --fe-line: #e5e7eb;
+  --fe-line-soft: #f3f4f6;
   --fe-accent: #3a3aef;
   --fe-accent-soft: #e6e6ff;
   --fe-rose: #c92354;
@@ -29,8 +29,8 @@
   --fe-rel-sibling: oklch(60% 0.18 308);
   --fe-rel-other:   oklch(60% 0.05 268);
 
-  --fe-card-m-bg: #f3f6ff; --fe-card-m-border: #c9d6f0;
-  --fe-card-f-bg: #fff1f5; --fe-card-f-border: #f1c5d3;
+  --fe-card-m-bg: #eff6ff; --fe-card-m-border: #bfdbfe;
+  --fe-card-f-bg: #fdf2f8; --fe-card-f-border: #fbcfe8;
 
   --fe-shadow-sm: 0 1px 2px rgba(28, 24, 12, 0.05);
   --fe-shadow-md: 0 4px 18px -6px rgba(28, 24, 12, 0.12);
@@ -101,6 +101,7 @@
   background: linear-gradient(180deg, var(--fe-paper), color-mix(in oklab, var(--fe-paper) 95%, var(--fe-bg)));
 }
 .fe-header-actions { display: flex; align-items: center; gap: 8px; }
+.fe-header.fe-header-compact { justify-content: flex-end; }
 
 .fe-icon-btn {
   width: 36px; height: 36px; border-radius: 10px;

@@ -128,25 +128,7 @@ export function FamilyExplorer({ members, relationships, loading, focusNodeId, u
   return (
     <FamilyExplorerThemeProvider>
       <div className="family-explorer">
-        <header className="fe-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ color: 'var(--fe-accent)', background: 'var(--fe-accent-soft)', width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center' }}>
-              <svg width={24} height={24} viewBox="0 0 32 32" fill="none">
-                <circle cx={16} cy={6} r={3} fill="currentColor" />
-                <circle cx={8} cy={16} r={2.6} fill="currentColor" />
-                <circle cx={24} cy={16} r={2.6} fill="currentColor" />
-                <circle cx={5} cy={26} r={2.2} fill="currentColor" opacity={0.6} />
-                <circle cx={13} cy={26} r={2.2} fill="currentColor" opacity={0.6} />
-                <circle cx={21} cy={26} r={2.2} fill="currentColor" opacity={0.6} />
-                <circle cx={28} cy={26} r={2.2} fill="currentColor" opacity={0.6} />
-                <path d="M16 9 L8 14 M16 9 L24 14 M8 18 L5 24 M8 18 L13 24 M24 18 L21 24 M24 18 L28 24" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
-              </svg>
-            </div>
-            <div>
-              <h2 style={{ fontFamily: 'var(--fe-display)', fontStyle: 'italic', fontSize: 24, lineHeight: 1, margin: 0, fontWeight: 400 }}>Family Tree Explorer</h2>
-              <p style={{ margin: '4px 0 0', color: 'var(--fe-mute)', fontSize: 12 }}>Three ways to see how you’re connected</p>
-            </div>
-          </div>
+        <header className="fe-header fe-header-compact">
           <div className="fe-header-actions">
             <SearchBox members={members} onSelect={jumpToMember} />
             <button className="fe-icon-btn" onClick={onExport} aria-label="Export view" title="Export current view as SVG">
