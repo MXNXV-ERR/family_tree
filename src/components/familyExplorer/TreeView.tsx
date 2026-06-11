@@ -1,10 +1,21 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Member, Relationship } from '@/types/tree';
 import type { Adjacency } from '@/lib/familyExplorer/adjacency';
 import { Avatar, Icons } from './common';
-import { lifespan } from '@/lib/familyExplorer/adjacency';
+import { lifespan, yearOf } from '@/lib/familyExplorer/adjacency';
+
+/** Children ordered oldest to youngest for stable, natural sibling order. */
+function makeKidsOf(adjacency: Adjacency) {
+  return (id: string): string[] =>
+    adjacency.children(id).slice().sort((a, b) => {
+      const ya = yearOf(adjacency.get(a)?.birthDate) ?? 9999;
+      const yb = yearOf(adjacency.get(b)?.birthDate) ?? 9999;
+      if (ya !== yb) return ya - yb;
+      return a.localeCompare(b);
+    });
+}
 
 const NODE_W = 122, NODE_H = 76, COUPLE_GAP = 18;
 const COUPLE_W = NODE_W * 2 + COUPLE_GAP;
@@ -30,8 +41,8 @@ function makeGetPrimary(adjacency: Adjacency) {
       const aRoots = adjacency.parents(a).length > 0;
       const bRoots = adjacency.parents(b).length > 0;
       if (aRoots !== bRoots) return aRoots ? -1 : 1;
-      const A = adjacency.get(a)!, B = adjacency.get(b)!;
-      if ((A.gender === 'male') !== (B.gender === 'male')) return A.gender === 'male' ? -1 : 1;
+      const A = adjacency.get(a), B = adjacency.get(b);
+      if ((A?.gender === 'male') !== (B?.gender === 'male')) return A?.gender === 'male' ? -1 : 1;
       return a.localeCompare(b);
     });
     return sorted[0];
@@ -40,17 +51,28 @@ function makeGetPrimary(adjacency: Adjacency) {
 
 function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutResult {
   const getPrimary = makeGetPrimary(adjacency);
+  const kidsOf = makeKidsOf(adjacency);
   const roots = members.filter((m) => adjacency.parents(m.id).length === 0);
+
+  // A parentless member married to someone who HAS parents married into the
+  // family, they are placed beside their spouse, not as a root of their own
+  // tree. Without this, every in-law spawned a disconnected tree at the top.
+  const marriedIn = (id: string): boolean => {
+    const partners = [...adjacency.currentSpouses(id), ...adjacency.exSpouses(id)];
+    return partners.length > 0 && partners.some((pid) => adjacency.parents(pid).length > 0);
+  };
+  const trueRoots = roots.filter((r) => !marriedIn(r.id));
+  const effectiveRoots = trueRoots.length > 0 ? trueRoots : roots;
 
   const rootCouples: Array<{ id: string; partnerId?: string }> = [];
   const consumed = new Set<string>();
-  roots.forEach((r) => {
+  effectiveRoots.forEach((r) => {
     if (consumed.has(r.id)) return;
     consumed.add(r.id);
-    const partnerId = adjacency.currentSpouses(r.id).find((pid) => roots.find((p) => p.id === pid));
+    const partnerId = adjacency.currentSpouses(r.id).find((pid) => effectiveRoots.find((p) => p.id === pid));
     if (partnerId) consumed.add(partnerId);
-    const myKids = adjacency.children(r.id).filter((c) => getPrimary(c) === r.id).length;
-    const partnerKids = partnerId ? adjacency.children(partnerId).filter((c) => getPrimary(c) === partnerId).length : 0;
+    const myKids = kidsOf(r.id).filter((c) => getPrimary(c) === r.id).length;
+    const partnerKids = partnerId ? kidsOf(partnerId).filter((c) => getPrimary(c) === partnerId).length : 0;
     if (partnerId && partnerKids > myKids) rootCouples.push({ id: partnerId, partnerId: r.id });
     else rootCouples.push({ id: r.id, partnerId });
   });
@@ -65,7 +87,7 @@ function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutResult {
     if (positions.has(id)) { widths.set(id, 0); return 0; }
     const partner = adjacency.currentSpouses(id)[0] || adjacency.exSpouses(id)[0];
     const selfW = partner ? COUPLE_W : NODE_W;
-    const kids = adjacency.children(id).filter((c) => getPrimary(c) === id && !positions.has(c));
+    const kids = kidsOf(id).filter((c) => getPrimary(c) === id && !positions.has(c));
     if (kids.length === 0) { widths.set(id, selfW); return selfW; }
     const childW = kids.map(computeWidth).reduce((a, b) => a + b, 0) + SIB_GAP * (kids.length - 1);
     const w = Math.max(selfW, childW);
@@ -90,7 +112,7 @@ function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutResult {
       couplePills.push({ x: meX, y: meY, ids: [id, partner], status: isDivorced ? 'divorced' : 'current' });
     }
 
-    const kids = adjacency.children(id).filter((c) => getPrimary(c) === id && !positions.has(c));
+    const kids = kidsOf(id).filter((c) => getPrimary(c) === id && !positions.has(c));
     if (kids.length === 0) return;
 
     const childW = kids.map((k) => widths.get(k)!).reduce((a, b) => a + b, 0) + SIB_GAP * (kids.length - 1);
@@ -136,6 +158,20 @@ function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutResult {
     maxY = Math.max(maxY, p.y + NODE_H);
   });
 
+  // Safety net: anything still unplaced (e.g. a former spouse whose partner
+  // remarried) gets a row of its own at the bottom instead of vanishing.
+  const leftovers = members.filter((m) => !positions.has(m.id));
+  if (leftovers.length > 0) {
+    const y = maxY === 0 ? 0 : maxY + (ROW_H - NODE_H);
+    let x = 0;
+    leftovers.forEach((m) => {
+      positions.set(m.id, { x, y });
+      x += NODE_W + SIB_GAP;
+    });
+    maxX = Math.max(maxX, x - SIB_GAP);
+    maxY = y + NODE_H;
+  }
+
   return { positions, couplePills, lines, width: maxX + 40, height: maxY + 40 };
 }
 
@@ -166,8 +202,8 @@ function layoutInverted(focusId: string, adjacency: Adjacency, maxDepth = 4): La
     const ps = adjacency.parents(memberId);
     if (ps.length === 0) return;
     const sorted = ps.slice().sort((a, b) => {
-      const A = adjacency.get(a)!, B = adjacency.get(b)!;
-      if ((A.gender === 'male') !== (B.gender === 'male')) return A.gender === 'male' ? -1 : 1;
+      const A = adjacency.get(a), B = adjacency.get(b);
+      if ((A?.gender === 'male') !== (B?.gender === 'male')) return A?.gender === 'male' ? -1 : 1;
       return 0;
     }).slice(0, 2);
     const slotW = totalWidth / Math.pow(2, depth);
@@ -199,6 +235,7 @@ function shiftPath(d: string, dx: number, dy: number): string {
 
 function layoutHourglass(focusId: string, members: Member[], adjacency: Adjacency, maxAncestors = 3): LayoutResult {
   const ancestorLayout = layoutInverted(focusId, adjacency, maxAncestors);
+  const kidsOf = makeKidsOf(adjacency);
 
   // descendants (pyramid starting from focus)
   const widths = new Map<string, number>();
@@ -210,7 +247,7 @@ function layoutHourglass(focusId: string, members: Member[], adjacency: Adjacenc
     if (widths.has(id)) return widths.get(id)!;
     const p = adjacency.currentSpouses(id)[0] || adjacency.exSpouses(id)[0];
     const selfW = p ? COUPLE_W : NODE_W;
-    const kids = adjacency.children(id);
+    const kids = kidsOf(id);
     if (kids.length === 0) { widths.set(id, selfW); return selfW; }
     const cW = kids.map(w).reduce((a, b) => a + b, 0) + SIB_GAP * (kids.length - 1);
     const out = Math.max(selfW, cW);
@@ -231,7 +268,7 @@ function layoutHourglass(focusId: string, members: Member[], adjacency: Adjacenc
       positions.set(p, { x: meX + NODE_W + COUPLE_GAP, y: meY });
       couplePills.push({ x: meX, y: meY, ids: [id, p], status: isDiv ? 'divorced' : 'current' });
     }
-    const kids = adjacency.children(id);
+    const kids = kidsOf(id);
     if (!kids.length) return;
     const cW = kids.map((k) => w(k)).reduce((a, b) => a + b, 0) + SIB_GAP * (kids.length - 1);
     let cursor = leftX + (myW - cW) / 2;
@@ -348,16 +385,26 @@ export function TreeView({ members, adjacency, focusId, meId, setFocusId, onOpen
     setPan({ x: dragRef.current.pan.x + (e.clientX - dragRef.current.x), y: dragRef.current.pan.y + (e.clientY - dragRef.current.y) });
   };
   const onPointerUp = () => { dragRef.current = null; };
-  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const rect = (canvasRef.current as HTMLElement).getBoundingClientRect();
-    const localX = e.clientX - rect.left;
-    const localY = e.clientY - rect.top;
-    const next = Math.max(0.3, Math.min(2.5, zoom * (1 - e.deltaY * 0.0015)));
-    const scale = next / zoom;
-    setPan({ x: localX - (localX - pan.x) * scale, y: localY - (localY - pan.y) * scale });
-    setZoom(next);
-  };
+
+  // Native wheel listener (React wheel handlers are passive; preventDefault
+  // would be ignored and the page would scroll while zooming the canvas).
+  // Re-attached when zoom/pan change so the closure stays fresh.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const localX = e.clientX - rect.left;
+      const localY = e.clientY - rect.top;
+      const next = Math.max(0.3, Math.min(2.5, zoom * (1 - e.deltaY * 0.0015)));
+      const scale = next / zoom;
+      setPan({ x: localX - (localX - pan.x) * scale, y: localY - (localY - pan.y) * scale });
+      setZoom(next);
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [zoom, pan.x, pan.y]);
 
   return (
     <div className="fe-view">
@@ -384,7 +431,7 @@ export function TreeView({ members, adjacency, focusId, meId, setFocusId, onOpen
         </div>
       </div>
 
-      <div className="fe-tv-canvas" ref={canvasRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
+      <div className="fe-tv-canvas" ref={canvasRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
         <div className="fe-tv-stage" style={{ width, height, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
           <svg className="fe-tv-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
             {lines.map((l, i) => (

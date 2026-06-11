@@ -224,7 +224,9 @@ export function FamilyTreeGraph({ members, relationships, loading, treeId, focus
             connectable: false
         }));
 
-        // Transform relationships to edges
+        // Transform relationships to edges.
+        // Canonical parent edge is { fromId: child, toId: parent }; for the
+        // top-down graph we draw parent (source) -> child (target).
         const initialEdges: Edge[] = relationships
             .filter(r => r.type !== 'sibling') // Filter out siblings from visual graph
             .map(r => {
@@ -234,8 +236,8 @@ export function FamilyTreeGraph({ members, relationships, loading, treeId, focus
 
                 return {
                     id: r.id,
-                    source: r.fromId,
-                    target: r.toId,
+                    source: r.type === 'parent' ? r.toId : r.fromId,
+                    target: r.type === 'parent' ? r.fromId : r.toId,
                     type: 'smoothstep',
                     animated: false,
                     data: { type: r.type }, // Pass type to layout engine

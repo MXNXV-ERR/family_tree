@@ -5,13 +5,11 @@ import type { Member, Relationship } from '@/types/tree';
 import type { Adjacency } from '@/lib/familyExplorer/adjacency';
 import { MemberCard, Icons } from './common';
 
-const SECTORS: Record<string, { center: number; span: number }> = {
-  parent:       { center: -Math.PI / 2, span: Math.PI * 0.55 },
-  partner:      { center: 0,             span: Math.PI / 3 },
-  'ex-partner': { center: 0,             span: Math.PI / 3 },
-  child:        { center: Math.PI / 2,   span: Math.PI * 0.55 },
-  sibling:      { center: Math.PI,       span: Math.PI / 3 },
-  focus:        { center: 0,             span: 0 },
+const SECTORS: Record<string, { center: number; max: number }> = {
+  parent:  { center: -Math.PI / 2, max: Math.PI * 0.6 },
+  partner: { center: 0,            max: Math.PI * 0.4 },
+  child:   { center: Math.PI / 2,  max: Math.PI * 0.6 },
+  sibling: { center: Math.PI,      max: Math.PI * 0.5 },
 };
 
 function arc(center: number, span: number, count: number): number[] {
@@ -20,58 +18,107 @@ function arc(center: number, span: number, count: number): number[] {
   return Array.from({ length: count }, (_, i) => center - span / 2 + i * step);
 }
 
+/** Sort by angle and push apart until adjacent nodes are at least minGap
+ *  apart (circular), preserving the overall centre of each cluster. */
+function relaxRing(items: Array<{ id: string; angle: number }>, minGap: number) {
+  if (items.length < 2) return;
+  const TAU = Math.PI * 2;
+  items.sort((a, b) => a.angle - b.angle);
+  for (let pass = 0; pass < 3; pass++) {
+    let moved = false;
+    for (let i = 1; i < items.length; i++) {
+      const gap = items[i].angle - items[i - 1].angle;
+      if (gap < minGap) {
+        const push = (minGap - gap) / 2;
+        items[i - 1].angle -= push;
+        items[i].angle += push;
+        moved = true;
+      }
+    }
+    // wrap-around pair (last vs first + 2π)
+    const wrapGap = items[0].angle + TAU - items[items.length - 1].angle;
+    if (wrapGap < minGap && items.length * minGap < TAU) {
+      const push = (minGap - wrapGap) / 2;
+      items[0].angle += push;
+      items[items.length - 1].angle -= push;
+      moved = true;
+    }
+    if (!moved) break;
+    items.sort((a, b) => a.angle - b.angle);
+  }
+}
+
 type Pos = { x: number; y: number; depth: number; angle: number };
 
 function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: number) {
-  const RING1 = 240;
-  const STEP = 160;
   const nodes = adjacency.neighborhood(focusId, maxDepth);
 
+  // Ring-1 groups (current + former partners share one sector)
   const ring1: Record<string, string[]> = {};
+  let ring1Count = 0;
   for (const [id, n] of nodes) {
     if (n.depth !== 1) continue;
-    (ring1[n.label] = ring1[n.label] || []).push(id);
+    const key = n.label === 'ex-partner' ? 'partner' : n.label;
+    (ring1[key] = ring1[key] || []).push(id);
+    ring1Count++;
   }
+
+  // Ring radii adapt to crowding: cards are ~160px wide on ring 1.
+  const CARD_ARC_1 = 160 + 40;
+  const CARD_ARC_N = 110 + 30;
+  let ring1Radius = 250;
+  for (const key in ring1) {
+    const sec = SECTORS[key] || { center: Math.PI / 2, max: Math.PI / 2 };
+    const need = (CARD_ARC_1 * (ring1[key].length - 1)) / Math.max(sec.max, 0.1);
+    ring1Radius = Math.max(ring1Radius, Math.min(560, need));
+  }
+  ring1Radius += Math.max(0, ring1Count - 7) * 10;
+  const STEP = 180;
+  const radiusOf = (d: number) => (d <= 0 ? 0 : ring1Radius + (d - 1) * STEP);
 
   const pos = new Map<string, Pos>();
   pos.set(focusId, { x: 0, y: 0, depth: 0, angle: 0 });
 
+  // ── Ring 1: sector-centred, spacing driven by card width ──
+  const ring1Items: Array<{ id: string; angle: number }> = [];
+  const perNode1 = CARD_ARC_1 / ring1Radius;
   for (const key in ring1) {
-    const sec = SECTORS[key] || { center: Math.PI / 2, span: Math.PI / 3 };
-    const span = Math.min(sec.span * Math.max(1, Math.sqrt(ring1[key].length / 3)), Math.PI * 0.9);
-    const angles = arc(sec.center, span, ring1[key].length);
-    ring1[key].forEach((id, i) => {
-      pos.set(id, {
-        x: Math.cos(angles[i]) * RING1,
-        y: Math.sin(angles[i]) * RING1,
-        depth: 1, angle: angles[i],
-      });
-    });
+    const sec = SECTORS[key] || { center: Math.PI / 2, max: Math.PI / 2 };
+    const ids = ring1[key];
+    const span = Math.min(perNode1 * (ids.length - 1), sec.max);
+    const angles = arc(sec.center, span, ids.length);
+    ids.forEach((id, i) => ring1Items.push({ id, angle: angles[i] }));
   }
+  relaxRing(ring1Items, perNode1 * 0.9);
+  ring1Items.forEach(({ id, angle }) => {
+    pos.set(id, { x: Math.cos(angle) * ring1Radius, y: Math.sin(angle) * ring1Radius, depth: 1, angle });
+  });
 
+  // ── Rings 2+: fan out from the node we came through, then relax ──
   for (let d = 2; d <= maxDepth; d++) {
+    const r = radiusOf(d);
+    const minGap = CARD_ARC_N / r;
     const byVia: Record<string, string[]> = {};
     for (const [id, n] of nodes) {
       if (n.depth !== d || !n.viaId) continue;
       (byVia[n.viaId] = byVia[n.viaId] || []).push(id);
     }
+    const items: Array<{ id: string; angle: number }> = [];
     for (const viaId in byVia) {
       const via = pos.get(viaId);
       if (!via) continue;
-      const r = RING1 + (d - 1) * STEP;
-      const localSpan = Math.PI / 4 + (byVia[viaId].length - 1) * 0.18;
-      const angles = arc(via.angle, Math.min(localSpan, Math.PI / 2), byVia[viaId].length);
-      byVia[viaId].forEach((id, i) => {
-        pos.set(id, {
-          x: Math.cos(angles[i]) * r,
-          y: Math.sin(angles[i]) * r,
-          depth: d, angle: angles[i],
-        });
-      });
+      const ids = byVia[viaId];
+      const angles = arc(via.angle, minGap * (ids.length - 1), ids.length);
+      ids.forEach((id, i) => items.push({ id, angle: angles[i] }));
     }
+    relaxRing(items, minGap);
+    items.forEach(({ id, angle }) => {
+      pos.set(id, { x: Math.cos(angle) * r, y: Math.sin(angle) * r, depth: d, angle });
+    });
   }
 
-  return { positions: pos, nodes };
+  const ringRadii = Array.from({ length: maxDepth }, (_, i) => radiusOf(i + 1));
+  return { positions: pos, nodes, ringRadii };
 }
 
 export interface RadialViewProps {
@@ -94,7 +141,7 @@ export function RadialView({ adjacency, focusId, meId, setFocusId, onOpenProfile
   const dragRef = useRef<{ x: number; y: number; pan: { x: number; y: number } } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  const { positions, nodes } = useMemo(
+  const { positions, nodes, ringRadii } = useMemo(
     () => layoutRadial(adjacency, focusId, depth),
     [adjacency, focusId, depth],
   );
@@ -111,11 +158,11 @@ export function RadialView({ adjacency, focusId, meId, setFocusId, onOpenProfile
 
   useEffect(() => {
     const padding = 40;
-    const maxR = 240 + (depth - 1) * 160 + 100;
+    const maxR = (ringRadii[ringRadii.length - 1] ?? 250) + 110;
     const fitZoom = Math.min(1, (canvasSize.w - padding * 2) / (maxR * 2), (canvasSize.h - padding * 2) / (maxR * 2));
-    setZoom(Math.max(0.45, fitZoom));
+    setZoom(Math.max(0.4, fitZoom));
     setPan({ x: 0, y: 0 });
-  }, [focusId, depth, canvasSize.w, canvasSize.h]);
+  }, [focusId, depth, canvasSize.w, canvasSize.h, ringRadii]);
 
   const handleClick = (m: Member) => {
     if (recentreOnClick) setFocusId(m.id);
@@ -132,7 +179,9 @@ export function RadialView({ adjacency, focusId, meId, setFocusId, onOpenProfile
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    if ((e.target as HTMLElement).closest('.fe-mc')) return;
+    // Don't start a drag (and capture the pointer) on interactive overlays —
+    // capturing would swallow their click events.
+    if ((e.target as HTMLElement).closest('button, .fe-rv-status, .fe-rv-legend')) return;
     dragRef.current = { x: e.clientX, y: e.clientY, pan: { ...pan } };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -144,11 +193,20 @@ export function RadialView({ adjacency, focusId, meId, setFocusId, onOpenProfile
     });
   };
   const onPointerUp = () => { dragRef.current = null; };
-  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const delta = -e.deltaY * 0.0015;
-    setZoom((z) => Math.max(0.5, Math.min(2.5, z * (1 + delta))));
-  };
+
+  // Native wheel listener: React's synthetic wheel handlers are passive, so
+  // preventDefault() there can't stop the page from scrolling while zooming.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = -e.deltaY * 0.0015;
+      setZoom((z) => Math.max(0.5, Math.min(2.5, z * (1 + delta))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   const focusMember = adjacency.get(focusId);
 
@@ -195,13 +253,13 @@ export function RadialView({ adjacency, focusId, meId, setFocusId, onOpenProfile
         </div>
       </div>
 
-      <div className="fe-rv-canvas" ref={canvasRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
+      <div className="fe-rv-canvas" ref={canvasRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
         <div className="fe-rv-stage" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-          {[...Array(depth)].map((_, i) => (
+          {ringRadii.map((r, i) => (
             <div
               key={`ring${i}`}
               className="fe-rv-ring"
-              style={{ width: `${2 * (240 + i * 160)}px`, height: `${2 * (240 + i * 160)}px` }}
+              style={{ width: `${2 * r}px`, height: `${2 * r}px` }}
             />
           ))}
           <svg className="fe-rv-svg" width={1} height={1} style={{ overflow: 'visible' }}>

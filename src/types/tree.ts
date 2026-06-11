@@ -3,6 +3,8 @@ export interface Member {
     name: string;
     photoUrl?: string;
     birthDate?: string;
+    deathDate?: string;
+    location?: string;
     gender?: 'male' | 'female' | 'other';
     about?: string;
     associatedUserId?: string; // Links this node to a specific app user for "Me" identification

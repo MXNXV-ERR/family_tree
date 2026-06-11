@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from 'rea
 import type { Member, Relationship } from '@/types/tree';
 import type { Adjacency } from '@/lib/familyExplorer/adjacency';
 import { Avatar, Icons } from './common';
-import { yearOf, lifespan, computeGenerations } from '@/lib/familyExplorer/adjacency';
+import { yearOf, computeGenerations } from '@/lib/familyExplorer/adjacency';
 
 type Mode = 'dot' | 'bar' | 'events';
 
@@ -58,7 +58,7 @@ export function TimelineView({
     const years: number[] = [];
     members.forEach((m) => {
       const b = yearOf(m.birthDate);
-      const d = yearOf((m as Member & { deathDate?: string }).deathDate);
+      const d = yearOf(m.deathDate);
       if (b) years.push(b);
       if (d) years.push(d);
     });
@@ -93,21 +93,33 @@ export function TimelineView({
   };
   const onPointerUp = () => { dragRef.current = null; };
 
-  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      e.preventDefault();
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const localX = e.clientX - rect.left - 220;
-      const yearAtCursor = minY + (scroll + localX) / pxPerYear;
-      const next = Math.max(2, Math.min(100, pxPerYear * (1 - e.deltaY * 0.0018)));
-      const newContentW = (maxY - minY) * next;
-      const newScroll = (yearAtCursor - minY) * next - localX;
-      setPxPerYear(next);
-      setScroll(Math.max(0, Math.min(newContentW - (rect.width - 220), newScroll)));
-    } else {
-      setScroll((s) => Math.max(0, Math.min(contentWidth - (scrollRef.current?.clientWidth ?? 600) + 220, s + e.deltaX)));
-    }
-  };
+  // Wheel: Ctrl/Cmd+wheel zooms around the cursor, horizontal delta pans the
+  // years, plain vertical wheel falls through to the row list's native scroll.
+  // Attached natively (passive: false) because React wheel handlers are
+  // passive and preventDefault() would be ignored. Re-attached when the values
+  // the handler closes over change, so it always sees fresh state.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        const localX = e.clientX - rect.left - 220;
+        const yearAtCursor = minY + (scroll + localX) / pxPerYear;
+        const next = Math.max(2, Math.min(100, pxPerYear * (1 - e.deltaY * 0.0018)));
+        const newContentW = (maxY - minY) * next;
+        const newScroll = (yearAtCursor - minY) * next - localX;
+        setPxPerYear(next);
+        setScroll(Math.max(0, Math.min(newContentW - (rect.width - 220), newScroll)));
+      } else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        setScroll((s) => Math.max(0, Math.min(contentWidth - (el.clientWidth - 220), s + e.deltaX)));
+      }
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [minY, maxY, scroll, pxPerYear, contentWidth]);
 
   const ticks = useMemo(() => {
     const step = tickStep(pxPerYear);
@@ -157,7 +169,7 @@ export function TimelineView({
         </div>
       </div>
 
-      <div className="fe-tl-canvas" ref={scrollRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
+      <div className="fe-tl-canvas" ref={scrollRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
         <div className="fe-tl-axis">
           <div className="fe-tl-axis-spacer" />
           <div className="fe-tl-axis-track" style={{ width: contentWidth, transform: `translateX(${-scroll}px)` }}>
@@ -178,7 +190,7 @@ export function TimelineView({
             const prevGen = idx > 0 ? rows[idx - 1].gen : null;
             const newGen = prevGen !== row.gen;
             const b = yearOf(m.birthDate);
-            const dY = yearOf((m as Member & { deathDate?: string }).deathDate);
+            const dY = yearOf(m.deathDate);
             const d = dY ?? currentYear;
             const events = lifeEvents(m.id);
             const isMe = !!meId && m.id === meId;

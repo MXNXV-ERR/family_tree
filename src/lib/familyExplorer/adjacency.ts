@@ -61,13 +61,21 @@ export function buildAdjacency(
   });
 
   relationships.forEach((r) => {
+    // Skip dangling edges (member deleted but relationship left behind)
+    if (!byId.has(r.fromId) || !byId.has(r.toId)) return;
     if (r.type === 'parent') {
-      parents.get(r.fromId)?.push(r.toId);
-      children.get(r.toId)?.push(r.fromId);
+      // Convention: fromId = child, toId = parent
+      const ps = parents.get(r.fromId);
+      if (ps && !ps.includes(r.toId)) ps.push(r.toId);
+      const cs = children.get(r.toId);
+      if (cs && !cs.includes(r.fromId)) cs.push(r.fromId);
     } else if (r.type === 'spouse') {
-      const status = ((r as Relationship & { status?: 'current' | 'divorced' }).status ?? 'current') as 'current' | 'divorced';
-      spouses.get(r.fromId)?.push({ id: r.toId, status });
-      spouses.get(r.toId)?.push({ id: r.fromId, status });
+      const status = (r.status ?? 'current') as 'current' | 'divorced';
+      // Spouse edges are stored bidirectionally; dedupe so each side appears once
+      const a = spouses.get(r.fromId);
+      if (a && !a.some((s) => s.id === r.toId)) a.push({ id: r.toId, status });
+      const b = spouses.get(r.toId);
+      if (b && !b.some((s) => s.id === r.fromId)) b.push({ id: r.fromId, status });
     }
   });
 
@@ -236,7 +244,7 @@ export const yearOf = (d?: string): number | undefined => (d ? Number(d.slice(0,
 
 export const lifespan = (m: Member): string => {
   const b = yearOf(m.birthDate);
-  const d = yearOf((m as Member & { deathDate?: string }).deathDate);
+  const d = yearOf(m.deathDate);
   if (!b) return '';
   if (d) return `${b} – ${d}`;
   return `b. ${b}`;

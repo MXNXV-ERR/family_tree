@@ -1,8 +1,8 @@
 'use client';
 
-// Family Explorer — drop-in replacement for FamilyTreeGraph.
-// Wraps the 3 views (Radial / Timeline / Tree) in a tabbed shell, with
-// search, profile modal, dark-mode toggle, and SVG export.
+// Family Explorer — the app's primary tree visualizer.
+// Renders ONE unified panel: a single header (back + title, view tabs,
+// search, custom actions, export, theme toggle) above the active view.
 //
 // Usage from dashboard/page.tsx:
 //   <FamilyExplorer
@@ -12,9 +12,13 @@
 //     treeId={viewTreeId}
 //     focusNodeId={focusNodeId}
 //     userId={user.uid}
+//     title={treeMetadata?.name}
+//     subtitle={user.email}
+//     onBack={handleResetView}
+//     actions={<>…header buttons…</>}
 //   />
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Member, Relationship } from '@/types/tree';
 import { buildAdjacency } from '@/lib/familyExplorer/adjacency';
 import {
@@ -39,9 +43,19 @@ export interface FamilyExplorerProps {
   focusNodeId?: string | null;
   /** Current logged-in user id; the member whose associatedUserId === userId is marked "You". */
   userId?: string;
+  /** Title shown in the unified header (e.g. the tree name). */
+  title?: string;
+  /** Small line under the title (e.g. the signed-in email). */
+  subtitle?: string;
+  /** Renders a back button at the far left of the header. */
+  onBack?: () => void;
+  /** Extra action buttons rendered on the right side of the header. */
+  actions?: ReactNode;
 }
 
-export function FamilyExplorer({ members, relationships, loading, focusNodeId, userId }: FamilyExplorerProps) {
+export function FamilyExplorer({
+  members, relationships, loading, focusNodeId, userId, title, subtitle, onBack, actions,
+}: FamilyExplorerProps) {
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
 
   // "Me" = the member whose associatedUserId matches the logged-in user
@@ -62,6 +76,11 @@ export function FamilyExplorer({ members, relationships, loading, focusNodeId, u
     else if (meId) setFocusId(meId);
     else if (members[0]) setFocusId(members[0].id);
   }, [members, meId, focusNodeId, focusId, adjacency]);
+
+  // If the focused member was deleted, fall back gracefully
+  useEffect(() => {
+    if (focusId && members.length > 0 && !adjacency.get(focusId)) setFocusId(null);
+  }, [focusId, members.length, adjacency]);
 
   // External focus override (e.g. user clicked a face search result)
   useEffect(() => {
@@ -96,49 +115,35 @@ export function FamilyExplorer({ members, relationships, loading, focusNodeId, u
     }
   }, [view]);
 
-  if (loading) {
-    return (
-      <div className="family-explorer" style={{ alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
-        <div style={{ color: 'var(--fe-mute)', fontSize: 13, fontFamily: 'var(--fe-mono)' }}>Loading family…</div>
-      </div>
-    );
-  }
-
-  if (members.length === 0) {
-    return (
-      <div className="family-explorer" style={{ alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
-        <div style={{ textAlign: 'center', color: 'var(--fe-mute)' }}>
-          <p style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>No family members yet</p>
-          <p style={{ fontSize: 13, marginTop: 4 }}>Add your first family member to get started.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const sharedProps = {
+  const sharedProps = members.length > 0 ? {
     members,
     relationships,
     adjacency,
-    focusId: focusId ?? members[0].id,
+    focusId: focusId && adjacency.get(focusId) ? focusId : members[0].id,
     meId,
     setFocusId: (id: string) => setFocusId(id),
     onOpenProfile: (m: Member) => setProfileMember(m),
-  };
+  } : null;
 
   return (
     <FamilyExplorerThemeProvider>
       <div className="family-explorer">
-        <header className="fe-header fe-header-compact">
-          <div className="fe-header-actions">
-            <SearchBox members={members} onSelect={jumpToMember} />
-            <button className="fe-icon-btn" onClick={onExport} aria-label="Export view" title="Export current view as SVG">
-              <Icons.Share size={16} />
-            </button>
-            <ThemeToggle />
+        {/* Single unified header: title · tabs · search/actions */}
+        <header className="fe-topbar">
+          <div className="fe-topbar-left">
+            {onBack && (
+              <button className="fe-icon-btn" onClick={onBack} aria-label="Back" title="Back to tree selection">
+                <Icons.ArrowLeft size={17} />
+              </button>
+            )}
+            {(title || subtitle) && (
+              <div className="fe-topbar-titles">
+                {title && <div className="fe-topbar-title">{title}</div>}
+                {subtitle && <div className="fe-topbar-subtitle">{subtitle}</div>}
+              </div>
+            )}
           </div>
-        </header>
 
-        <div className="fe-tabs-wrap">
           <div className="fe-tabs" role="tablist">
             {([
               ['radial', 'Radial', Icons.Radial],
@@ -157,17 +162,40 @@ export function FamilyExplorer({ members, relationships, loading, focusNodeId, u
               </button>
             ))}
           </div>
-        </div>
+
+          <div className="fe-topbar-actions">
+            <SearchBox members={members} onSelect={jumpToMember} />
+            {actions}
+            <button className="fe-icon-btn" onClick={onExport} aria-label="Export view" title="Export current view as SVG">
+              <Icons.Share size={16} />
+            </button>
+            <ThemeToggle />
+          </div>
+        </header>
 
         <div className="fe-view-host" ref={viewRef}>
-          {view === 'radial' && <RadialView {...sharedProps} />}
-          {view === 'timeline' && <TimelineView {...sharedProps} />}
-          {view === 'tree' && <TreeView {...sharedProps} />}
+          {loading ? (
+            <div className="fe-placeholder">
+              <div className="fe-placeholder-sub">Loading family…</div>
+            </div>
+          ) : !sharedProps ? (
+            <div className="fe-placeholder">
+              <p className="fe-placeholder-title">No family members yet</p>
+              <p className="fe-placeholder-sub">Use “Add” in the toolbar above to create your first family member.</p>
+            </div>
+          ) : (
+            <>
+              {view === 'radial' && <RadialView {...sharedProps} />}
+              {view === 'timeline' && <TimelineView {...sharedProps} />}
+              {view === 'tree' && <TreeView {...sharedProps} />}
+            </>
+          )}
         </div>
 
         <ProfileModal
           member={profileMember}
           adjacency={adjacency}
+          meId={meId}
           onClose={() => setProfileMember(null)}
           onJumpTo={jumpToMember}
         />

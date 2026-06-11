@@ -70,6 +70,7 @@ export const Icons = {
     </SvgIcon>
   ),
   Moon:   (p: IconProps) => <SvgIcon {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></SvgIcon>,
+  ArrowLeft: (p: IconProps) => <SvgIcon {...p}><path d="M19 12H5" /><polyline points="12 19 5 12 12 5" /></SvgIcon>,
   Search: (p: IconProps) => <SvgIcon {...p}><circle cx={11} cy={11} r={7} /><line x1={21} y1={21} x2={16.65} y2={16.65} /></SvgIcon>,
   X:      (p: IconProps) => <SvgIcon {...p}><path d="M18 6 6 18 M6 6l12 12" /></SvgIcon>,
   Plus:   (p: IconProps) => <SvgIcon {...p}><path d="M12 5v14M5 12h14" /></SvgIcon>,
@@ -232,10 +233,11 @@ export function SearchBox({ members, onSelect }: { members: Member[]; onSelect?:
 
 // ── ProfileModal ─────────────────────────────────────────────────
 export function ProfileModal({
-  member, adjacency, onClose, onJumpTo,
+  member, adjacency, meId, onClose, onJumpTo,
 }: {
   member: Member | null;
   adjacency: Adjacency;
+  meId?: string;
   onClose: () => void;
   onJumpTo?: (m: Member) => void;
 }) {
@@ -282,11 +284,11 @@ export function ProfileModal({
           <div>
             <div className="fe-pm-name">
               {member.name}
-              {member.associatedUserId && <span className="fe-me-tag">You</span>}
+              {meId && member.id === meId && <span className="fe-me-tag">You</span>}
             </div>
             <div className="fe-pm-sub">
               {member.birthDate && <span><Icons.Calendar size={12} /> {lifespan(member)}</span>}
-              {(member as Member & { location?: string }).location && <span><Icons.Map size={12} /> {(member as Member & { location?: string }).location}</span>}
+              {member.location && <span><Icons.Map size={12} /> {member.location}</span>}
             </div>
           </div>
         </div>

@@ -1,18 +1,19 @@
 
-import {
-    addMember,
-    addRelationship,
-} from './firestore';
-import { Member, Relationship } from '@/types/tree';
+import { Member } from '@/types/tree';
 import { db } from './config';
-import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, writeBatch, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, writeBatch, setDoc } from 'firebase/firestore';
+
+// Relationship edge convention (see CLAUDE.md):
+//   parent  → directed, fromId = CHILD, toId = PARENT
+//   spouse  → bidirectional (two documents, one per direction), optional status
+//   sibling → bidirectional (two documents); inferred visually from shared parents
 
 // Helper to get verified tree ref
 const getVerifiedTreeRef = (userId: string) => doc(db, 'trees', userId);
 
 export const familyActions = {
     /**
-     * Add a child to a parent. 
+     * Add a child to a parent.
      */
     addChild: async (userId: string, parentId: string, childData: Omit<Member, 'id'>) => {
         // 1. Create Child
@@ -23,28 +24,25 @@ export const familyActions = {
         const relationshipsRef = collection(getVerifiedTreeRef(userId), 'relationships');
         const batch = writeBatch(db);
 
-        // 2. Link Parent -> Child
-        const p2cRef = doc(relationshipsRef);
-        batch.set(p2cRef, { fromId: parentId, toId: childId, type: 'parent' });
+        // 2. Link Child -> Parent
+        const c2pRef = doc(relationshipsRef);
+        batch.set(c2pRef, { fromId: childId, toId: parentId, type: 'parent' });
 
-        // 3. Find Parent's existing children (Siblings to be)
-        // Query: Find all relationships where fromId == parentId AND type == 'parent'
-        // This gives us all the BROTHERS/SISTERS of the new child.
-        const qSiblings = query(relationshipsRef, where('fromId', '==', parentId), where('type', '==', 'parent'));
+        // 3. Find Parent's existing children (siblings-to-be).
+        // Children of parentId are edges { fromId: child, toId: parentId, type: 'parent' }.
+        const qSiblings = query(relationshipsRef, where('toId', '==', parentId), where('type', '==', 'parent'));
         const siblingsSnap = await getDocs(qSiblings);
 
         const existingSiblingIds = new Set<string>();
-
         siblingsSnap.forEach(docSnap => {
-            const siblingId = docSnap.data().toId;
-            if (siblingId !== childId) { // Should not be itself (though unrelated in fresh insert)
+            const siblingId = docSnap.data().fromId;
+            if (siblingId !== childId) {
                 existingSiblingIds.add(siblingId);
             }
         });
 
-        // 4. Create Sibling Links
+        // 4. Create Sibling Links (bidirectional)
         existingSiblingIds.forEach(siblingId => {
-            // Bidirectional Sibling Link
             const s2c = doc(relationshipsRef);
             batch.set(s2c, { fromId: siblingId, toId: childId, type: 'sibling' });
 
@@ -52,20 +50,17 @@ export const familyActions = {
             batch.set(c2s, { fromId: childId, toId: siblingId, type: 'sibling' });
         });
 
-        // 5. Find Parent's spouse to link them too
+        // 5. Find Parent's current spouse and link the child to them too
         const qSpouse = query(relationshipsRef, where('fromId', '==', parentId), where('type', '==', 'spouse'));
         const spouseSnap = await getDocs(qSpouse);
 
         spouseSnap.forEach(docSnap => {
-            const spouseId = docSnap.data().toId;
-            // Link Spouse -> Child
-            const s2cRef = doc(relationshipsRef);
-            batch.set(s2cRef, { fromId: spouseId, toId: childId, type: 'parent' });
-
-            // Note: We don't need to check spouse's children for siblings because they should overlap with parent's children
-            // unless they are step-siblings from a previous marriage.
-            // Edge Case: Half-siblings from spouse's side? 
-            // User said "We are not dealing with that for now". So implicit trust in primary parent is enough.
+            const data = docSnap.data();
+            if (data.status === 'divorced') return; // don't auto-link ex-partners
+            const spouseId = data.toId;
+            // Link Child -> Spouse (second parent)
+            const c2sRef = doc(relationshipsRef);
+            batch.set(c2sRef, { fromId: childId, toId: spouseId, type: 'parent' });
         });
 
         await batch.commit();
@@ -86,20 +81,21 @@ export const familyActions = {
 
         // 2. Link Bidirectional
         const a2b = doc(relationshipsRef);
-        batch.set(a2b, { fromId: originalMemberId, toId: spouseId, type: 'spouse' });
+        batch.set(a2b, { fromId: originalMemberId, toId: spouseId, type: 'spouse', status: 'current' });
 
         const b2a = doc(relationshipsRef);
-        batch.set(b2a, { fromId: spouseId, toId: originalMemberId, type: 'spouse' });
+        batch.set(b2a, { fromId: spouseId, toId: originalMemberId, type: 'spouse', status: 'current' });
 
-        // 3. Link Spouse to Existing Children
-        const qChildren = query(relationshipsRef, where('fromId', '==', originalMemberId), where('type', '==', 'parent'));
+        // 3. Link Existing Children to the new Spouse.
+        // Children of originalMemberId are edges { fromId: child, toId: originalMemberId }.
+        const qChildren = query(relationshipsRef, where('toId', '==', originalMemberId), where('type', '==', 'parent'));
         const childrenSnap = await getDocs(qChildren);
 
         childrenSnap.forEach(docSnap => {
-            const childId = docSnap.data().toId;
-            // Link Spouse -> Child
-            const s2c = doc(relationshipsRef);
-            batch.set(s2c, { fromId: spouseId, toId: childId, type: 'parent' });
+            const childId = docSnap.data().fromId;
+            // Link Child -> Spouse
+            const c2s = doc(relationshipsRef);
+            batch.set(c2s, { fromId: childId, toId: spouseId, type: 'parent' });
         });
 
         await batch.commit();
@@ -118,8 +114,9 @@ export const familyActions = {
         const relationshipsRef = collection(getVerifiedTreeRef(userId), 'relationships');
         const batch = writeBatch(db);
 
-        // 2. Find Parents (Parent -> Original)
-        const qParents = query(relationshipsRef, where('toId', '==', originalMemberId), where('type', '==', 'parent'));
+        // 2. Find Parents of the original member.
+        // Parents are edges { fromId: originalMemberId, toId: parent, type: 'parent' }.
+        const qParents = query(relationshipsRef, where('fromId', '==', originalMemberId), where('type', '==', 'parent'));
         const parentsSnap = await getDocs(qParents);
 
         if (parentsSnap.empty) {
@@ -131,10 +128,10 @@ export const familyActions = {
             batch.set(o2s, { fromId: originalMemberId, toId: siblingId, type: 'sibling' });
         } else {
             parentsSnap.forEach(pDoc => {
-                const parentId = pDoc.data().fromId;
-                // Link Parent -> New Sibling
-                const p2s = doc(relationshipsRef);
-                batch.set(p2s, { fromId: parentId, toId: siblingId, type: 'parent' });
+                const parentId = pDoc.data().toId;
+                // Link New Sibling -> Parent
+                const s2p = doc(relationshipsRef);
+                batch.set(s2p, { fromId: siblingId, toId: parentId, type: 'parent' });
             });
 
             // Also link siblings explicitly
@@ -152,7 +149,7 @@ export const familyActions = {
     /**
      * Update tree metadata (e.g. invite code)
      */
-    updateTreeMetadata: async (userId: string, data: any) => {
+    updateTreeMetadata: async (userId: string, data: Record<string, unknown>) => {
         const treeRef = getVerifiedTreeRef(userId);
         await setDoc(treeRef, data, { merge: true });
     }

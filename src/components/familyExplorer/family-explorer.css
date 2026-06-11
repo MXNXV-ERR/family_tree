@@ -93,15 +93,68 @@
 .family-explorer ::-webkit-scrollbar-thumb { background: var(--fe-line); border-radius: 99px; }
 .family-explorer ::-webkit-scrollbar-track { background: transparent; }
 
-/* ── Header / tabs ──────────────────────────────────────────────── */
-.fe-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; padding: 16px 20px;
+/* ── Unified header (title · tabs · actions in one bar) ─────────── */
+.fe-topbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 12px 18px;
   border-bottom: 1px solid var(--fe-line);
   background: linear-gradient(180deg, var(--fe-paper), color-mix(in oklab, var(--fe-paper) 95%, var(--fe-bg)));
 }
-.fe-header-actions { display: flex; align-items: center; gap: 8px; }
-.fe-header.fe-header-compact { justify-content: flex-end; }
+.fe-topbar-left {
+  display: flex; align-items: center; gap: 10px;
+  flex: 0 1 auto; min-width: 0;
+}
+.fe-topbar-titles { min-width: 0; }
+.fe-topbar-title {
+  font-family: var(--fe-display); font-style: italic;
+  font-size: 22px; line-height: 1.1; color: var(--fe-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fe-topbar-subtitle {
+  font-family: var(--fe-mono); font-size: 10px; color: var(--fe-mute);
+  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fe-topbar-actions {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  flex: 0 1 auto; justify-content: flex-end;
+}
+.fe-topbar-actions .fe-search { width: 200px; }
+
+/* Scoped to out-specify the `.family-explorer button` reset above */
+.family-explorer .fe-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 14px;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+  background: var(--fe-paper); color: var(--fe-ink-soft);
+  border: 1px solid var(--fe-line);
+  box-shadow: var(--fe-shadow-sm);
+  transition: background .18s, color .18s, border-color .18s, transform .18s;
+  white-space: nowrap;
+}
+.family-explorer .fe-btn:hover {
+  color: var(--fe-ink);
+  border-color: color-mix(in oklab, var(--fe-accent) 35%, var(--fe-line));
+  background: color-mix(in oklab, var(--fe-accent-soft) 30%, var(--fe-paper));
+}
+.family-explorer .fe-btn:active { transform: scale(0.97); }
+.family-explorer .fe-btn-primary {
+  background: var(--fe-accent); border-color: var(--fe-accent); color: #fff;
+}
+.family-explorer .fe-btn-primary:hover {
+  background: color-mix(in oklab, var(--fe-accent) 88%, #fff);
+  border-color: var(--fe-accent); color: #fff;
+}
+
+.fe-placeholder {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  min-height: 300px; text-align: center; padding: 24px;
+}
+.fe-placeholder-title { font-size: 16px; font-weight: 600; color: var(--fe-ink); margin: 0; }
+.fe-placeholder-sub { font-size: 13px; color: var(--fe-mute); margin: 0; }
 
 .fe-icon-btn {
   width: 36px; height: 36px; border-radius: 10px;
@@ -148,17 +201,14 @@
 .fe-sr-name { color: var(--fe-ink); font-weight: 500; }
 .fe-sr-sub { color: var(--fe-mute); font-size: 11.5px; font-family: var(--fe-mono); }
 
-.fe-tabs-wrap {
-  padding: 14px 20px 12px; display: flex; justify-content: center;
-  background: var(--fe-bg);
-}
 .fe-tabs {
   display: inline-flex;
-  background: var(--fe-paper);
+  background: color-mix(in oklab, var(--fe-ink) 4%, var(--fe-bg));
   border: 1px solid var(--fe-line);
   border-radius: 999px;
   padding: 4px;
   box-shadow: var(--fe-shadow-sm);
+  flex: 0 0 auto;
 }
 .fe-tab {
   display: inline-flex; align-items: center; gap: 7px;
@@ -179,17 +229,13 @@
 /* ── View shell + toolbar ───────────────────────────────────────── */
 .fe-view-host {
   flex: 1 1 auto; min-height: 0;
-  padding: 0 20px 20px;
   display: flex;
 }
 .fe-view {
-  flex: 1; min-height: 0;
+  flex: 1; min-height: 0; min-width: 0;
   display: flex; flex-direction: column;
   background: var(--fe-paper);
-  border: 1px solid var(--fe-line);
-  border-radius: 18px;
   overflow: hidden;
-  box-shadow: var(--fe-shadow-sm);
 }
 .fe-toolbar {
   flex: 0 0 auto;
@@ -348,7 +394,8 @@
 .fe-rv-legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .fe-rv-legend-swatch { width: 14px; border-top: 2px solid currentColor; display: inline-block; }
 .fe-rv-status {
-  position: absolute; bottom: 18px; right: 18px;
+  /* top-right: the bottom-right corner is reserved for the app's chat FAB */
+  position: absolute; top: 16px; right: 16px;
   background: var(--fe-paper); border: 1px solid var(--fe-line); border-radius: 14px;
   padding: 14px 16px; box-shadow: var(--fe-shadow-md);
   text-align: right; z-index: 5;
@@ -591,12 +638,12 @@
 }
 
 /* ── Mobile ─────────────────────────────────────────────────────── */
-@media (max-width: 720px) {
-  .fe-header { padding: 12px 14px; flex-direction: column; align-items: stretch; gap: 10px; }
-  .fe-header-actions { width: 100%; }
-  .fe-search { width: 100%; flex: 1; }
-  .fe-view-host { padding: 0 10px 12px; }
-  .fe-tabs-wrap { padding: 10px 14px; }
+@media (max-width: 920px) {
+  .fe-topbar { padding: 10px 12px; gap: 10px; }
+  .fe-topbar-left { flex: 1 1 100%; }
+  .fe-tabs { order: 3; }
+  .fe-topbar-actions { order: 2; flex: 1 1 auto; }
+  .fe-search { width: 160px; flex: 1 1 120px; }
   .fe-tab { min-width: auto; padding: 8px 12px; }
   .fe-toolbar { padding: 10px 12px; gap: 8px; }
   .fe-tl-axis-spacer, .fe-tl-row-label { flex-basis: 130px; }

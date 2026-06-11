@@ -4,15 +4,14 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Link as LinkIcon, LogOut, Share2, X, Copy, ArrowLeft, Users, Settings, ScanFace } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus, Link as LinkIcon, LogOut, Users, Settings, ScanFace } from 'lucide-react';
 
 import { MemberDialog } from '@/components/tree/MemberDialog';
 import { useFamilyTree } from '@/hooks/useFamilyTree';
 import { AddRelationshipDialog } from '@/components/tree/AddRelationshipDialog';
 import { FamilyExplorer } from '@/components/familyExplorer/FamilyExplorer';
 import GeminiChat from '@/components/GeminiChat';
-import { familyActions } from '@/lib/firebase/familyActions';
 import { useTreeList } from '@/hooks/useTreeList';
 import { TreeSelector } from '@/components/dashboard/TreeSelector';
 import { TreeSettingsDialog } from '@/components/dashboard/TreeSettingsDialog';
@@ -24,7 +23,6 @@ export default function Dashboard() {
 
     // 1. Manage Active Tree View
     const [viewTreeId, setViewTreeId] = useState<string | null>(null);
-    const [selectedNode, setSelectedNode] = useState<any>(null); // For future use
 
     // Initialize viewTreeId from localStorage
     useEffect(() => {
@@ -45,9 +43,6 @@ export default function Dashboard() {
 
     // Use the hook with the ACTIVE tree ID (if selected)
     const { members, relationships, loading: treeLoading, treeMetadata } = useFamilyTree(viewTreeId || undefined);
-
-    // Find nodes matching members for graph (simplification)
-    const nodes = members.map(m => ({ id: m.id, data: { label: m.name } }));
 
     // Modal States
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
@@ -119,64 +114,46 @@ export default function Dashboard() {
     }
 
     return (
-        <main className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 sm:p-8 font-sans">
-            <div className="max-w-7xl mx-auto flex flex-col gap-6">
-
-                {/* Header */}
-                <header className="flex flex-col sm:flex-row items-center justify-between gap-4 glass-card p-6 rounded-3xl">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm" onClick={handleResetView} className="-ml-2 text-gray-400 hover:text-gray-600">
-                                <ArrowLeft className="h-4 w-4" /> Back
-                            </Button>
-                        </div>
-                        <h1 className="text-3xl font-bold tracking-tight mt-1">
-                            {treeMetadata?.name || (isMyTree ? 'My Family Tree' : 'Shared Family Tree')}
-                        </h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                            Welcome back, {user.email}
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="icon" onClick={() => setIsFaceSearchOpen(true)} title="Find by Face">
-                            <ScanFace className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                        </Button>
-                        {isMyTree && (
-                            <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)} title="Settings">
-                                <Settings className="h-5 w-5 text-gray-500" />
-                            </Button>
-                        )}
-                        <Button onClick={() => setIsMemberModalOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" /> Add Member
-                        </Button>
-                        <Button variant="outline" onClick={() => setIsRelModalOpen(true)}>
-                            <LinkIcon className="mr-2 h-4 w-4" /> Link
-                        </Button>
-                        <Button variant="ghost" onClick={handleResetView} title="Switch Tree">
-                            <Users className="h-5 w-5" />
-                        </Button>
-                    </div>
-                </header>
-
-                {/* Main Content Area */}
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col gap-6"
-                >
-                    {/* Graph View */}
-                    <section className="h-[650px] relative rounded-2xl overflow-hidden shadow-lg border border-white/30 dark:border-white/10">
-                        <FamilyExplorer
-                            members={members}
-                            relationships={relationships}
-                            loading={treeLoading}
-                            treeId={viewTreeId}
-                            focusNodeId={focusNodeId}
-                            userId={user.uid}
-                        />
-                    </section>
-                </motion.div>
-            </div>
+        <main className="min-h-dvh bg-gray-50 dark:bg-gray-950 p-3 sm:p-5 font-sans">
+            {/* Single unified panel: header + visualizer merged inside FamilyExplorer */}
+            <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-auto max-w-[1600px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-2.5rem)] relative rounded-3xl overflow-hidden shadow-xl border border-white/40 dark:border-white/10"
+            >
+                <FamilyExplorer
+                    members={members}
+                    relationships={relationships}
+                    loading={treeLoading}
+                    treeId={viewTreeId}
+                    focusNodeId={focusNodeId}
+                    userId={user.uid}
+                    title={treeMetadata?.name || (isMyTree ? 'My Family Tree' : 'Shared Family Tree')}
+                    subtitle={user.email ?? undefined}
+                    onBack={handleResetView}
+                    actions={
+                        <>
+                            <button className="fe-icon-btn" onClick={() => setIsFaceSearchOpen(true)} title="Find by face" aria-label="Find by face">
+                                <ScanFace size={17} strokeWidth={1.8} />
+                            </button>
+                            {isMyTree && (
+                                <button className="fe-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Tree settings" aria-label="Tree settings">
+                                    <Settings size={17} strokeWidth={1.8} />
+                                </button>
+                            )}
+                            <button className="fe-icon-btn" onClick={handleResetView} title="Switch tree" aria-label="Switch tree">
+                                <Users size={17} strokeWidth={1.8} />
+                            </button>
+                            <button className="fe-btn" onClick={() => setIsRelModalOpen(true)}>
+                                <LinkIcon size={14} strokeWidth={2} /> Link
+                            </button>
+                            <button className="fe-btn fe-btn-primary" onClick={() => setIsMemberModalOpen(true)}>
+                                <Plus size={15} strokeWidth={2.2} /> Add
+                            </button>
+                        </>
+                    }
+                />
+            </motion.section>
 
             {/* Modals */}
             <MemberDialog

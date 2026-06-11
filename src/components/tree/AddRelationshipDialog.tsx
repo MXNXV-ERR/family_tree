@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { addRelationship } from '@/lib/firebase/firestore';
 import { Member } from '@/types/tree';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
-import { useFamilyTree } from '@/hooks/useFamilyTree';
 
 interface AddRelationshipDialogProps {
     isOpen: boolean;
@@ -17,11 +16,11 @@ interface AddRelationshipDialogProps {
 
 export function AddRelationshipDialog({ isOpen, onClose, treeId, members }: AddRelationshipDialogProps) {
     const { user } = useAuth();
-    // Removed duplicate useFamilyTree hook
 
     const [fromId, setFromId] = useState('');
     const [toId, setToId] = useState('');
     const [type, setType] = useState<'parent' | 'spouse' | 'sibling'>('parent');
+    const [spouseStatus, setSpouseStatus] = useState<'current' | 'divorced'>('current');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -35,14 +34,22 @@ export function AddRelationshipDialog({ isOpen, onClose, treeId, members }: AddR
 
         setLoading(true);
         try {
-            await addRelationship(treeId, {
-                fromId,
-                toId,
-                type,
-            });
+            if (type === 'parent') {
+                // UI reads "A is Parent of B"; canonical storage is fromId = child, toId = parent.
+                await addRelationship(treeId, { fromId: toId, toId: fromId, type: 'parent' });
+            } else if (type === 'spouse') {
+                // Spouse edges are stored bidirectionally.
+                await addRelationship(treeId, { fromId, toId, type: 'spouse', status: spouseStatus });
+                await addRelationship(treeId, { fromId: toId, toId: fromId, type: 'spouse', status: spouseStatus });
+            } else {
+                // Sibling edges are stored bidirectionally.
+                await addRelationship(treeId, { fromId, toId, type: 'sibling' });
+                await addRelationship(treeId, { fromId: toId, toId: fromId, type: 'sibling' });
+            }
             onClose();
             setFromId('');
             setToId('');
+            setSpouseStatus('current');
         } catch (error) {
             console.error('Error adding relationship:', error);
             alert('Failed to add relationship');
@@ -50,6 +57,8 @@ export function AddRelationshipDialog({ isOpen, onClose, treeId, members }: AddR
             setLoading(false);
         }
     };
+
+    const typeLabel = type === 'parent' ? 'is Parent of' : type === 'spouse' ? 'is Spouse of' : 'is Sibling of';
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Define Relationship">
@@ -76,14 +85,25 @@ export function AddRelationshipDialog({ isOpen, onClose, treeId, members }: AddR
                         <select
                             className="w-full rounded-xl border p-3 bg-white/50 dark:bg-gray-900/50 font-bold"
                             value={type}
-                            onChange={(e: any) => setType(e.target.value)}
+                            onChange={(e) => setType(e.target.value as 'parent' | 'spouse' | 'sibling')}
                         >
                             <option value="parent">is Parent of</option>
                             <option value="spouse">is Spouse of</option>
+                            <option value="sibling">is Sibling of</option>
                         </select>
+                        {type === 'spouse' && (
+                            <select
+                                className="rounded-xl border p-3 bg-white/50 dark:bg-gray-900/50"
+                                value={spouseStatus}
+                                onChange={(e) => setSpouseStatus(e.target.value as 'current' | 'divorced')}
+                            >
+                                <option value="current">Current</option>
+                                <option value="divorced">Divorced</option>
+                            </select>
+                        )}
                     </div>
                     <p className="text-xs text-gray-500">
-                        Read as: [Person A] {type === 'parent' ? 'is Parent of' : 'is Spouse of'} [Person B]
+                        Read as: [Person A] {typeLabel} [Person B]
                     </p>
                 </div>
 

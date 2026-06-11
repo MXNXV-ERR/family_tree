@@ -16,13 +16,15 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
+            const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+            window.addEventListener('keydown', onKey);
+            return () => {
+                window.removeEventListener('keydown', onKey);
+                document.body.style.overflow = 'unset';
+            };
         }
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen]);
+        document.body.style.overflow = 'unset';
+    }, [isOpen, onClose]);
 
     if (typeof window === 'undefined') return null;
 

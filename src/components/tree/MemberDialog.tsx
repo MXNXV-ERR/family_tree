@@ -25,6 +25,7 @@ export function MemberDialog({ isOpen, onClose, member, members, treeId }: Membe
     const [name, setName] = useState('');
     const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
     const [birthDate, setBirthDate] = useState('');
+    const [deathDate, setDeathDate] = useState('');
     const [about, setAbout] = useState('');
     const [isSelf, setIsSelf] = useState(false);
 
@@ -45,6 +46,7 @@ export function MemberDialog({ isOpen, onClose, member, members, treeId }: Membe
                 setName(member.name);
                 setGender(member.gender || 'male');
                 setBirthDate(member.birthDate || '');
+                setDeathDate(member.deathDate || '');
                 setAbout(member.about || '');
                 setIsSelf(member.associatedUserId === user?.uid);
                 setPreviewUrl(member.photoUrl || null);
@@ -54,6 +56,7 @@ export function MemberDialog({ isOpen, onClose, member, members, treeId }: Membe
                 setName('');
                 setGender('male');
                 setBirthDate('');
+                setDeathDate('');
                 setAbout('');
                 setIsSelf(false);
                 setPreviewUrl(null);
@@ -147,6 +150,7 @@ export function MemberDialog({ isOpen, onClose, member, members, treeId }: Membe
                 name,
                 gender,
                 birthDate,
+                deathDate: deathDate || null,
                 about,
                 photoUrl: finalPhotoUrl || null,
                 associatedUserId: newAssociatedUserId || null
@@ -229,19 +233,27 @@ export function MemberDialog({ isOpen, onClose, member, members, treeId }: Membe
                             onChange={(e) => setBirthDate(e.target.value)}
                         />
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Gender
-                            </label>
-                            <select
-                                className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={gender}
-                                onChange={(e: any) => setGender(e.target.value)}
-                            >
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                            </select>                </div>
+                        <Input
+                            type="date"
+                            label="Death Date (optional)"
+                            value={deathDate}
+                            onChange={(e) => setDeathDate(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Gender
+                        </label>
+                        <select
+                            className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={gender}
+                            onChange={(e: any) => setGender(e.target.value)}
+                        >
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
                     </div>
 
                     <div className="space-y-2">
