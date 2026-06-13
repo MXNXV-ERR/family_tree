@@ -17,7 +17,12 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.mxnxverr.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -37,6 +42,14 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Family Tree to access your photos for member pictures and face match."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableSeparateBuildPerCPUArchitecture": true
+          }
         }
       ]
     ],
