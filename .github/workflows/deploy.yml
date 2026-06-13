@@ -51,6 +51,11 @@ jobs:
   android-build:
     name: Android APKs → GitHub Release
     runs-on: ubuntu-latest
+    # The `secrets` context is NOT available in a step `if:` (GitHub rejects it
+    # with "Unrecognized named-value: 'secrets'"). Capture the check once here as
+    # a job-level env — `env` is allowed in both this expression and step `if:`.
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -88,7 +93,7 @@ jobs:
 
       # Optional release signing — skip if secrets not set, falls back to debug key
       - name: Setup release keystore
-        if: secrets.ANDROID_KEYSTORE_BASE64 != ''
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: mobile/android
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
