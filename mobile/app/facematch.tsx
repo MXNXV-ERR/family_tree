@@ -7,10 +7,12 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
-import { useTheme, radius, space, type Palette } from '../src/theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
+import { Icon } from '../src/ui/Icon';
 import { GlassSurface } from '../src/theme/GlassSurface';
+import { useResponsive } from '../src/ui/useResponsive';
 import { pickFromGallery, takePhoto } from '../src/shared/photo';
 import { matchImage, buildMemberDescriptors, matchPrebuilt, clearMemberDescriptors } from '../src/face/faceRunner';
 import { initials } from '../src/shared/adjacency';
@@ -21,8 +23,9 @@ type Mode = 'upload' | 'capture' | 'live';
 
 export default function FaceMatch() {
   const { c } = useTheme();
-  const { user } = useAuth();
-  const { members } = useFamilyTree(user?.uid);
+  const { isDesktop } = useResponsive();
+  const { activeTreeId } = useFamily();
+  const { members } = useFamilyTree(activeTreeId);
   const router = useRouter();
 
   const [mode, setMode] = useState<Mode>('upload');
@@ -92,9 +95,10 @@ export default function FaceMatch() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingBottom: 6 }}>
-        <Pressable onPress={() => { stopLive(); router.back(); }} hitSlop={8}><Text style={{ color: c.accent, fontWeight: '600' }}>‹ Back</Text></Pressable>
-        <Text style={{ color: c.ink, fontSize: 20, fontWeight: '800' }}>Face match</Text>
+      <View style={{ flex: 1, width: '100%', maxWidth: isDesktop ? 760 : undefined, alignSelf: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingTop: isDesktop ? 24 : 16, paddingBottom: 6 }}>
+        <Pressable onPress={() => { stopLive(); router.back(); }} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
+        <Text style={{ color: c.ink, fontSize: 22, fontFamily: font.serifItalic }}>Face match</Text>
       </View>
 
       {/* Mode segment */}
@@ -116,7 +120,7 @@ export default function FaceMatch() {
           <>
             <Pressable onPress={mode === 'upload' ? onUpload : onCapture} disabled={busy}
               style={[styles.bigBtn, { borderColor: c.accent, backgroundColor: c.accentSoft, opacity: busy ? 0.6 : 1 }]}>
-              <Text style={{ fontSize: 30 }}>{mode === 'upload' ? '🖼️' : '📷'}</Text>
+              <Icon name={mode === 'upload' ? 'image' : 'camera'} size={30} color={c.accent} />
               <Text style={{ color: c.accent, fontWeight: '700', marginTop: 6 }}>
                 {mode === 'upload' ? 'Pick a photo to match' : 'Take a photo to match'}
               </Text>
@@ -160,6 +164,7 @@ export default function FaceMatch() {
           </View>
         ) : null}
       </ScrollView>
+      </View>
     </View>
   );
 }

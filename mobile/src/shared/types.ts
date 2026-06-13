@@ -37,6 +37,7 @@ export interface Relationship {
     toId: string;   //             for 'parent', toId   = PARENT
     type: RelationshipType;
     status?: 'current' | 'divorced';
+    marriageDate?: string; // spouse edges only — powers anniversary timeline events
 }
 
 export interface FamilyTreeData {
@@ -49,4 +50,41 @@ export interface TreeMetadata {
     name?: string;
     inviteCode?: string;
     allowedUsers?: string[];
+}
+
+// ---- Multi-family (membership restructure) ----
+export type FamilyRole = 'owner' | 'editor' | 'viewer';
+
+// A tree a user can belong to. `id` is the Firestore treeId — for the legacy
+// single tree it equals the owner's uid, so old data keeps loading unchanged.
+export interface FamilyTree {
+    id: string;
+    name: string;
+    mono?: string;          // monogram letter for the switcher
+    color?: string;         // accent colour for the monogram chip
+    ownerUid: string;
+    inviteCode?: string;
+    kind?: string;          // "Your bloodline", "Married in", …
+    surname?: string;
+    region?: string;
+    established?: string;
+    summary?: string;
+    role?: FamilyRole;      // the current user's role in this tree
+}
+
+// Index entry under users/{uid}/families/{treeId} — denormalised basics so the
+// switcher renders from a single listener.
+export interface Membership {
+    treeId: string;
+    role: FamilyRole;
+    name: string;
+    mono?: string;
+    color?: string;
+}
+
+export interface Collaborator {
+    uid: string;
+    email?: string;
+    role: FamilyRole;
+    online?: boolean;
 }

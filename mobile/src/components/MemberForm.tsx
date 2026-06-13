@@ -5,10 +5,11 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, Image, ScrollView,
-  ActivityIndicator, type KeyboardTypeOptions,
+  ActivityIndicator, Platform, type KeyboardTypeOptions,
 } from 'react-native';
-import { useTheme, radius, space, type Palette } from '../theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
+import { IconBtn } from '../ui/primitives';
 import { validateMember, hasErrors, type FieldErrors } from '../shared/validation';
 import { pickFromGallery, takePhoto } from '../shared/photo';
 import { initials } from '../shared/adjacency';
@@ -64,9 +65,17 @@ export function MemberForm({
   const av = d.gender === 'female' ? c.cardF : d.gender === 'other' ? c.paper : c.cardM;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
-      <Text style={[styles.h1, { color: c.ink }]}>{initial ? 'Edit member' : 'Add member'}</Text>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      {/* Fixed header — back (cancels the edit), title, and Save */}
+      <View style={[styles.header, { borderColor: c.lineSoft, paddingTop: Platform.OS === 'web' ? 16 : 52 }]}>
+        <IconBtn name="back" tone="glass" size={40} onPress={onCancel} />
+        <Text style={[styles.headerTitle, { color: c.ink }]}>{initial ? 'Edit member' : 'New member'}</Text>
+        <Pressable onPress={submit} disabled={saving} style={[styles.saveBtn, { backgroundColor: c.accent, opacity: saving ? 0.6 : 1 }]}>
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 14 }}>{initial ? 'Save' : 'Add'}</Text>}
+        </Pressable>
+      </View>
 
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
       {/* Photo */}
       <View style={{ alignItems: 'center', marginBottom: 20 }}>
         <View style={[styles.photo, { backgroundColor: av, borderColor: c.line }]}>
@@ -131,22 +140,13 @@ export function MemberForm({
         </Pressable>
       </Section>
 
-      {/* Actions */}
-      <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
-        <Pressable onPress={onCancel} style={[styles.btn, { borderWidth: 1, borderColor: c.line }]}>
-          <Text style={{ color: c.inkSoft, fontWeight: '700' }}>Cancel</Text>
-        </Pressable>
-        <Pressable onPress={submit} disabled={saving} style={[styles.btn, { backgroundColor: c.accent, opacity: saving ? 0.6 : 1 }]}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>{initial ? 'Save' : 'Add'}</Text>}
-        </Pressable>
-      </View>
-
       {initial && onDelete ? (
-        <Pressable onPress={onDelete} disabled={saving} style={[styles.btn, { borderWidth: 1, borderColor: c.danger, marginTop: 12 }]}>
-          <Text style={{ color: c.danger, fontWeight: '700' }}>Delete member</Text>
+        <Pressable onPress={onDelete} disabled={saving} style={[styles.btn, { borderWidth: 1, borderColor: c.danger, marginTop: 4 }]}>
+          <Text style={{ color: c.danger, fontFamily: font.sansBold }}>Delete member</Text>
         </Pressable>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -238,7 +238,9 @@ function SmallBtn({ label, onPress, c, danger }: { label: string; onPress: () =>
 }
 
 const styles = StyleSheet.create({
-  h1: { fontSize: 24, fontWeight: '800', marginBottom: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontFamily: font.serifItalic, fontSize: 19 },
+  saveBtn: { borderRadius: radius.md, paddingHorizontal: 18, paddingVertical: 9, minWidth: 64, alignItems: 'center', justifyContent: 'center' },
   section: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
   input: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },

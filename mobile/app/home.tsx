@@ -1,26 +1,68 @@
-import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Platform, Modal } from 'react-native';
+// Home — rebuilt to the "family tree reimagined" design: family header with
+// serif monogram + title, animated theme toggle, Visualize gradient hero,
+// animated stat counters, quick-tools row, search, staggered member list, and
+// a floating bottom nav with the raised tree button. All emoji → line icons.
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Platform, Modal, Animated, Easing } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
-import { useTheme, radius, space } from '../src/theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
+import { useSettings } from '../src/theme/SettingsContext';
 import { ChatPanel } from '../src/components/ChatPanel';
+import { BottomSheet } from '../src/components/BottomSheet';
+import { SettingsPanel } from '../src/components/SettingsPanel';
+import { FamilyPickerPanel } from '../src/components/FamilyPickerPanel';
+import { FamilyInfoPanel } from '../src/components/FamilyInfoPanel';
+import { Icon, type IconName } from '../src/ui/Icon';
+import { Avatar, IconBtn, SectionLabel, Counter, ThemeToggle, Rise } from '../src/ui/primitives';
+import { useResponsive } from '../src/ui/useResponsive';
+import { DesktopWorkspace } from '../src/desktop/DesktopWorkspace';
+import { lifespan, computeGenerations } from '../src/shared/adjacency';
 import type { Member } from '../src/shared/types';
 
+// On wide web viewports the home route becomes the desktop workspace; phones and
+// native always get the mobile home below.
 export default function Home() {
-  const { c, mode, toggle } = useTheme();
-  const { user, signOut } = useAuth();
-  const { members, relationships, treeMetadata, loading } = useFamilyTree(user?.uid);
+  const { isDesktop } = useResponsive();
+  return isDesktop ? <DesktopWorkspace /> : <MobileHome />;
+}
+
+function MobileHome() {
+  const { c } = useTheme();
+  const { user } = useAuth();
+  const { years } = useSettings();
+  const { activeTreeId, activeFamily, families } = useFamily();
+  const { members, relationships, treeMetadata, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [familyOpen, setFamilyOpen] = useState(false);
+  const [familyInfoOpen, setFamilyInfoOpen] = useState(false);
   const openChat = () => { if (Platform.OS === 'web') setChatOpen(true); else router.push('/chat'); };
-  const go = (path: '/tree' | '/facematch' | '/export') => { setMenuOpen(false); router.push(path); };
+
+  const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
+  const couples = useMemo(() => Math.round(relationships.filter((r) => r.type === 'spouse').length / 2), [relationships]);
+  const gens = useMemo(() => {
+    if (!members.length) return 0;
+    const g = computeGenerations(members, relationships);
+    return Math.max(...g.values()) + 1;
+  }, [members, relationships]);
+
   const shown = query.trim()
     ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase()))
     : members;
+
+  const treeName = activeFamily?.name ?? treeMetadata?.name ?? 'My Family Tree';
+  const mono = activeFamily?.mono ?? (treeName.trim().charAt(0).toUpperCase() || 'F');
+  const famColor = activeFamily?.color ?? c.accent;
+  const famSub = activeFamily?.role
+    ? `${activeFamily.role[0].toUpperCase()}${activeFamily.role.slice(1)}${families.length > 1 ? ` · ${families.length} families` : ''}`
+    : (user?.email ?? '');
 
   useEffect(() => {
     if (!user) router.replace('/login');
@@ -28,139 +70,229 @@ export default function Home() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ padding: 16 }}>
-      <GlassSurface style={{ marginBottom: 16 }} rounded={radius.xl}>
-        <View style={{ padding: space(5), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: c.ink }]}>{treeMetadata?.name ?? 'My Family Tree'}</Text>
-            <Text style={[styles.sub, { color: c.mute }]}>{user?.email}</Text>
-          </View>
-          <Pressable onPress={toggle} style={[styles.iconBtn, { backgroundColor: c.accentSoft, borderColor: c.accent, marginRight: 8 }]}>
-            <Text style={{ fontSize: 16 }}>{mode === 'dark' ? '☀️' : '🌙'}</Text>
-          </Pressable>
-          <Pressable onPress={() => setMenuOpen(true)} style={[styles.iconBtn, { backgroundColor: c.accent, borderColor: c.accent }]}>
-            <Text style={{ fontSize: 20, color: '#fff' }}>☰</Text>
-          </Pressable>
-        </View>
-      </GlassSurface>
-
-      <GlassSurface style={{ marginBottom: 16 }}>
-        <View style={{ padding: space(5), flexDirection: 'row', gap: 12 }}>
-          <Stat label="Members" value={loading ? '…' : members.length} c={c} />
-          <Stat label="Relationships" value={loading ? '…' : relationships.length} c={c} />
-        </View>
-      </GlassSurface>
-
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search members…"
-        placeholderTextColor={c.mute}
-        style={[styles.search, { color: c.ink, borderColor: c.line, backgroundColor: c.paper }]}
-      />
-
-      <GlassSurface>
-        <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: space(4) }}>
-          {shown.map((m) => (
-            <Pressable key={m.id} onPress={() => router.push({ pathname: '/profile', params: { id: m.id } })} style={[styles.row, { borderColor: c.lineSoft }]}>
-              <View style={[styles.avatar, { backgroundColor: m.gender === 'female' ? c.cardF : c.cardM }]}>
-                <Text style={{ color: c.inkSoft, fontWeight: '700', fontSize: 12 }}>
-                  {m.name.split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase()}
-                </Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}>
+        {/* header */}
+        <View style={{ paddingTop: Platform.OS === 'web' ? 18 : 54, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Pressable onPress={() => setFamilyOpen(true)} style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, opacity: pressed ? 0.7 : 1 })}>
+            <View style={{ width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: famColor }}>
+              <Text style={{ color: famColor, fontFamily: font.serifItalic, fontSize: 21 }}>{mono}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.serifItalic, fontSize: 23, lineHeight: 27, letterSpacing: -0.2, flexShrink: 1 }}>{treeName}</Text>
+                <Icon name="chevD" size={15} color={c.mute} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.ink, fontWeight: '600' }}>{m.name}</Text>
-                <Text style={{ color: c.mute, fontSize: 12 }}>{m.birthDate ? `b. ${m.birthDate.slice(0, 4)}` : '—'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 9, backgroundColor: c.teal }} />
+                <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>{famSub}</Text>
               </View>
-              <Text style={{ color: c.mute, fontSize: 18 }}>›</Text>
+            </View>
+          </Pressable>
+          <ThemeToggle />
+          <IconBtn name="tune" tone="glass" onPress={() => setSettingsOpen(true)} />
+        </View>
+
+        <View style={{ paddingHorizontal: 16, gap: 16 }}>
+          {/* HERO — the main tool */}
+          <Rise i={0}>
+            <Pressable onPress={() => router.push('/tree')} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+              <LinearGradient colors={[c.accent, c.accent2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={{ borderRadius: radius.xl, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 14, shadowColor: c.accent, shadowOpacity: 0.45, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.accentInk, opacity: 0.85, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.9, textTransform: 'uppercase' }}>The whole family, at a glance</Text>
+                  <Text style={{ color: c.accentInk, fontFamily: font.serifItalic, fontSize: 30, marginTop: 5, marginBottom: 10, lineHeight: 32 }}>Visualize</Text>
+                  <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.18)' }}>
+                    <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 13.5 }}>Open tree</Text>
+                    <Icon name="chevR" size={15} stroke={2.2} color={c.accentInk} />
+                  </View>
+                </View>
+                <FloatTile c={c} />
+              </LinearGradient>
             </Pressable>
-          ))}
-          {!loading && shown.length === 0 && (
-            <Text style={{ color: c.mute, textAlign: 'center', padding: 24 }}>
-              {query.trim() ? 'No matches.' : 'No members yet. Tap + to add.'}
-            </Text>
-          )}
-        </ScrollView>
-      </GlassSurface>
+          </Rise>
 
-      <Pressable onPress={signOut} style={[styles.signout, { borderColor: c.line }]}>
-        <Text style={{ color: c.inkSoft, fontWeight: '600' }}>Sign out</Text>
-      </Pressable>
-    </ScrollView>
-
-    <Pressable onPress={openChat} style={[styles.fab, styles.fabChat, { backgroundColor: c.paper, borderColor: c.line }]}>
-      <Text style={{ fontSize: 22 }}>✨</Text>
-    </Pressable>
-    <Pressable onPress={() => router.push('/link')} style={[styles.fab, styles.fabSecondary, { backgroundColor: c.paper, borderColor: c.line }]}>
-      <Text style={{ fontSize: 22 }}>🔗</Text>
-    </Pressable>
-    <Pressable onPress={() => router.push('/member')} style={[styles.fab, { backgroundColor: c.accent }]}>
-      <Text style={{ color: '#fff', fontSize: 32, fontWeight: '300', marginTop: -2 }}>+</Text>
-    </Pressable>
-
-    {/* Header menu */}
-    <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
-      <Pressable style={styles.sheetBackdrop} onPress={() => setMenuOpen(false)} />
-      <View style={styles.menuWrap} pointerEvents="box-none">
-        <GlassSurface rounded={radius.lg} intensity={70} style={{ overflow: 'hidden', borderColor: c.line }}>
-          <View style={{ backgroundColor: c.glassBg, paddingVertical: 6 }}>
-            {([['🌳', 'Visualize', () => go('/tree')], ['🔍', 'Face match', () => go('/facematch')], ['⤓', 'Export & import', () => go('/export')]] as const).map(([icon, label, fn]) => (
-              <Pressable key={label} onPress={fn} style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: c.accentSoft }]}>
-                <Text style={{ fontSize: 18, width: 28 }}>{icon}</Text>
-                <Text style={{ color: c.ink, fontWeight: '600', fontSize: 15 }}>{label}</Text>
-              </Pressable>
+          {/* stats */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {([['Members', members.length], ['Couples', couples], ['Generations', gens]] as [string, number][]).map(([lb, v], i) => (
+              <Rise key={lb} i={i + 1} style={{ flex: 1 }}>
+                <GlassSurface rounded={18}>
+                  <View style={{ padding: 14 }}>
+                    {loading
+                      ? <Text style={{ color: c.ink, fontFamily: font.serif, fontSize: 30, lineHeight: 32 }}>…</Text>
+                      : <Counter value={v} style={{ color: c.ink, fontFamily: font.serif, fontSize: 30, lineHeight: 32 }} />}
+                    <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginTop: 6 }}>{lb}</Text>
+                  </View>
+                </GlassSurface>
+              </Rise>
             ))}
           </View>
-        </GlassSurface>
-      </View>
-    </Modal>
 
-    {/* Web: floating glass chat sheet. Native uses the /chat route. */}
-    <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={() => setChatOpen(false)}>
-      <Pressable style={styles.sheetBackdrop} onPress={() => setChatOpen(false)} />
-      <View style={styles.sheetWrap} pointerEvents="box-none">
-        <GlassSurface rounded={radius.xl} intensity={70} style={{ flex: 1, overflow: 'hidden', borderColor: c.line }}>
-          <View style={{ flex: 1, backgroundColor: c.glassBg }}>
-            <ChatPanel
-              members={members}
-              relationships={relationships}
-              onOpenMember={(m: Member) => { setChatOpen(false); router.push({ pathname: '/profile', params: { id: m.id } }); }}
-              onClose={() => setChatOpen(false)}
-            />
+          {/* quick tools */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 9 }}>
+            {([
+              ['scan', 'Face match', () => router.push('/facematch')],
+              ['sparkles', 'Family AI', openChat],
+              ['plus', 'Add member', () => router.push('/member')],
+              ['link', 'Add link', () => router.push('/link')],
+              ['share', 'Export', () => router.push('/export')],
+            ] as [IconName, string, () => void][]).map(([ic, lb, fn]) => (
+              <Pressable key={lb} onPress={fn} style={({ pressed }) => ({
+                flexShrink: 0, alignItems: 'center', gap: 7, paddingVertical: 12, paddingHorizontal: 14,
+                borderRadius: 16, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, minWidth: 82,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              })}>
+                <Icon name={ic} size={20} color={c.accent} />
+                <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 11.5 }}>{lb}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {/* search */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 50, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: 14 }}>
+            <Icon name="search" size={19} color={c.mute} />
+            <TextInput value={query} onChangeText={setQuery} placeholder="Search family…" placeholderTextColor={c.mute}
+              style={{ flex: 1, color: c.ink, fontFamily: font.sansMed, fontSize: 15, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : null) }} />
+            {query ? <Pressable onPress={() => setQuery('')} hitSlop={8}><Icon name="close" size={17} color={c.mute} /></Pressable> : null}
           </View>
-        </GlassSurface>
-      </View>
-    </Modal>
+
+          {/* member list */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+            <SectionLabel c={c}>{query ? `${shown.length} matches` : 'All members'}</SectionLabel>
+            <Pressable onPress={() => router.push('/member')} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Icon name="plus" size={14} stroke={2.2} color={c.accent} />
+              <Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>Add</Text>
+            </Pressable>
+          </View>
+          <View style={{ gap: 8 }}>
+            {shown.map((m, i) => (
+              <Rise key={m.id} i={i}>
+                <Pressable onPress={() => router.push({ pathname: '/profile', params: { id: m.id } })}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: 15,
+                    backgroundColor: c.paper, borderWidth: 1, borderColor: c.line,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  })}>
+                  <Avatar m={m} size={44} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansSemi, fontSize: 15 }}>{m.name}</Text>
+                      {meId === m.id ? (
+                        <View style={{ backgroundColor: c.accent, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
+                          <Text style={{ color: c.accentInk, fontFamily: font.sansHeavy, fontSize: 8.5 }}>YOU</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11.5, marginTop: 2 }}>
+                      {[years ? lifespan(m) : '', m.occupation].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                  <Icon name="chevR" size={18} color={c.faint} />
+                </Pressable>
+              </Rise>
+            ))}
+            {!loading && shown.length === 0 && (
+              <GlassSurface><Text style={{ color: c.mute, fontFamily: font.sansMed, textAlign: 'center', padding: 24 }}>{query.trim() ? 'No matches found.' : 'No members yet. Tap Add.'}</Text></GlassSurface>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* bottom nav */}
+      <BottomNav c={c} meId={meId} onHome={() => {}} onScan={() => router.push('/facematch')} onTree={() => router.push('/tree')} onAI={openChat}
+        onMe={() => meId ? router.push({ pathname: '/profile', params: { id: meId } }) : router.push('/member')} />
+
+      {/* settings */}
+      <BottomSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} heightRatio={0.74}>
+        <SettingsPanel onClose={() => setSettingsOpen(false)} />
+      </BottomSheet>
+
+      {/* family switcher */}
+      <BottomSheet visible={familyOpen} onClose={() => setFamilyOpen(false)} heightRatio={0.7}>
+        <FamilyPickerPanel onClose={() => setFamilyOpen(false)} onOpenInfo={() => { setFamilyOpen(false); setFamilyInfoOpen(true); }} />
+      </BottomSheet>
+
+      {/* family info */}
+      <BottomSheet visible={familyInfoOpen} onClose={() => setFamilyInfoOpen(false)} heightRatio={0.88}>
+        {activeTreeId ? (
+          <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships} onClose={() => setFamilyInfoOpen(false)} />
+        ) : null}
+      </BottomSheet>
+
+      {/* Web: floating glass chat sheet. Native uses the /chat route. */}
+      <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={() => setChatOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setChatOpen(false)} />
+        <View style={styles.sheetWrap} pointerEvents="box-none">
+          <GlassSurface rounded={radius.xl} intensity={70} style={{ flex: 1, overflow: 'hidden', borderColor: c.line }}>
+            <View style={{ flex: 1, backgroundColor: c.glassBg }}>
+              <ChatPanel
+                members={members}
+                relationships={relationships}
+                onOpenMember={(m: Member) => { setChatOpen(false); router.push({ pathname: '/profile', params: { id: m.id } }); }}
+                onClose={() => setChatOpen(false)}
+              />
+            </View>
+          </GlassSurface>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function Stat({ label, value, c }: { label: string; value: number | string; c: ReturnType<typeof useTheme>['c'] }) {
+// Floating icon tile in the hero (design's ft-float animation).
+function FloatTile({ c }: { c: Palette }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ])).start();
+  }, []);
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={{ color: c.ink, fontSize: 28, fontWeight: '800' }}>{value}</Text>
-      <Text style={{ color: c.mute, fontSize: 12 }}>{label}</Text>
+    <Animated.View style={{
+      width: 78, height: 78, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+      transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) }],
+    }}>
+      <Icon name="tree" size={40} stroke={1.5} color={c.accentInk} />
+    </Animated.View>
+  );
+}
+
+function BottomNav({ c, meId, onHome, onScan, onTree, onAI, onMe }: {
+  c: Palette; meId?: string; onHome: () => void; onScan: () => void; onTree: () => void; onAI: () => void; onMe: () => void;
+}) {
+  const item = (ic: IconName, lb: string, fn: () => void, active = false) => (
+    <Pressable key={lb} onPress={fn} style={{ alignItems: 'center', gap: 3, paddingVertical: 6, paddingHorizontal: 12, minWidth: 52 }}>
+      <Icon name={ic} size={21} stroke={active ? 2 : 1.7} color={active ? c.accent : c.mute} />
+      <Text style={{ fontSize: 10, fontFamily: font.sansSemi, color: active ? c.accent : c.mute }}>{lb}</Text>
+    </Pressable>
+  );
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 14, paddingBottom: Platform.OS === 'web' ? 14 : 22 }} pointerEvents="box-none">
+      <GlassSurface rounded={radius.xl} intensity={60} style={{ overflow: 'visible' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: c.glassBg }}>
+          {item('home', 'Home', onHome, true)}
+          {item('scan', 'Scan', onScan)}
+          <Pressable onPress={onTree} style={({ pressed }) => ({
+            width: 60, height: 60, borderRadius: 20, marginTop: -28,
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 3, borderColor: c.bg, overflow: 'hidden',
+            transform: [{ scale: pressed ? 0.95 : 1 }],
+          })}>
+            <LinearGradient colors={[c.accent, c.accent2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="tree" size={27} color={c.accentInk} />
+            </LinearGradient>
+          </Pressable>
+          {item('sparkles', 'AI', onAI)}
+          {item('user', 'Me', onMe)}
+        </View>
+      </GlassSurface>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: '800' },
-  sub: { fontSize: 12, marginTop: 2 },
-  iconBtn: { width: 40, height: 40, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  signout: { marginTop: 16, borderWidth: 1, borderRadius: radius.md, padding: 14, alignItems: 'center' },
-  search: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, marginBottom: 12 },
-  fab: {
-    position: 'absolute', right: 20, bottom: 28, width: 60, height: 60, borderRadius: 30,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6,
-  },
-  fabSecondary: { right: 24, bottom: 98, width: 52, height: 52, borderRadius: 26, borderWidth: 1 },
-  fabChat: { right: 24, bottom: 160, width: 52, height: 52, borderRadius: 26, borderWidth: 1 },
-  sheetBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheetWrap: { position: 'absolute', right: 16, bottom: 16, top: 80, width: 400, maxWidth: '94%', alignSelf: 'flex-end' },
-  menuWrap: { position: 'absolute', right: 16, top: 76, width: 230 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
 });

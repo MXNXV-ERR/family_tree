@@ -5,13 +5,14 @@ import { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import Svg, { Path, Rect, Text as SvgText } from 'react-native-svg';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
-import { useTheme, radius, space, type Palette } from '../src/theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
 import { buildAdjacency, lifespan } from '../src/shared/adjacency';
 import { layoutPyramid, NODE_W, NODE_H } from '../src/shared/treeLayout';
-import { buildJSON, buildCSV, buildXLSXBase64, buildTreeSVG, buildDirectoryHTML } from '../src/shared/exportData';
+import { buildJSON, buildCSV, buildXLSXBase64, buildTreeSVG, buildDirectoryHTML, buildCSVTemplate } from '../src/shared/exportData';
+import { Icon, type IconName } from '../src/ui/Icon';
 import { parseJSON, parseCSV, parseXLSXBase64, planMerge } from '../src/shared/importData';
 import { saveText, saveBase64, exportPDF, pickImportFile } from '../src/export/fileExport';
 import { treeToPngDataUri } from '../src/export/treeImage';
@@ -21,12 +22,13 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 export default function ExportScreen() {
   const { c } = useTheme();
-  const { user } = useAuth();
-  const { members, relationships } = useFamilyTree(user?.uid);
+  const { activeTreeId } = useFamily();
+  const { members, relationships, treeMetadata } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const shotRef = useRef<View>(null);
+  const treeName = treeMetadata?.name ?? 'Family Tree';
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label); setStatus(null);
@@ -35,13 +37,13 @@ export default function ExportScreen() {
     finally { setBusy(null); }
   }
 
-  const exporters: { key: string; label: string; icon: string; fn: () => Promise<void> }[] = [
-    { key: 'json', label: 'JSON', icon: '{ }', fn: () => saveText('family-tree.json', buildJSON(members, relationships), 'application/json') },
-    { key: 'csv', label: 'CSV', icon: '▤', fn: () => saveText('family-tree.csv', buildCSV(members, relationships), 'text/csv') },
-    { key: 'excel', label: 'Excel', icon: '▦', fn: () => saveBase64('family-tree.xlsx', buildXLSXBase64(members, relationships), XLSX_MIME) },
-    { key: 'svg', label: 'SVG', icon: '✎', fn: () => saveText('family-tree.svg', buildTreeSVG(members, relationships), 'image/svg+xml') },
-    { key: 'png', label: 'PNG', icon: '🖼', fn: async () => { const d = await treeToPngDataUri(members, relationships, shotRef.current); await saveBase64('family-tree.png', d.split(',')[1], 'image/png'); } },
-    { key: 'pdf', label: 'PDF', icon: '📄', fn: async () => { const img = await treeToPngDataUri(members, relationships, shotRef.current).catch(() => undefined); await exportPDF(buildDirectoryHTML(members, relationships, img)); } },
+  const exporters: { key: string; label: string; icon: IconName; fn: () => Promise<void> }[] = [
+    { key: 'json', label: 'JSON', icon: 'file', fn: () => saveText('family-tree.json', buildJSON(members, relationships), 'application/json') },
+    { key: 'csv', label: 'CSV', icon: 'grid', fn: () => saveText('family-tree.csv', buildCSV(members, relationships), 'text/csv') },
+    { key: 'excel', label: 'Excel', icon: 'grid', fn: () => saveBase64('family-tree.xlsx', buildXLSXBase64(members, relationships), XLSX_MIME) },
+    { key: 'svg', label: 'SVG', icon: 'edit', fn: () => saveText('family-tree.svg', buildTreeSVG(members, relationships), 'image/svg+xml') },
+    { key: 'png', label: 'PNG', icon: 'image', fn: async () => { const d = await treeToPngDataUri(members, relationships, shotRef.current); await saveBase64('family-tree.png', d.split(',')[1], 'image/png'); } },
+    { key: 'pdf', label: 'PDF', icon: 'download', fn: async () => { const img = await treeToPngDataUri(members, relationships, shotRef.current).catch(() => undefined); await exportPDF(buildDirectoryHTML(members, relationships, img, treeName)); } },
   ];
 
   async function doImport() {
@@ -56,8 +58,8 @@ export default function ExportScreen() {
       const plan = planMerge(members, parsed, relationships);
       if (!plan.newMembers.length && !plan.newRelationships.length) {
         setStatus(`Nothing new to import (${plan.skipped} duplicate${plan.skipped === 1 ? '' : 's'} skipped).`);
-      } else {
-        const res = await commitMerge(user!.uid, plan);
+      } else if (activeTreeId) {
+        const res = await commitMerge(activeTreeId, plan);
         setStatus(`Imported ${res.added} member${res.added === 1 ? '' : 's'}, ${res.links} link${res.links === 1 ? '' : 's'}. Skipped ${plan.skipped} duplicate${plan.skipped === 1 ? '' : 's'}.`);
       }
     } catch (e) {
@@ -83,8 +85,8 @@ export default function ExportScreen() {
             <View style={styles.grid}>
               {exporters.map((e) => (
                 <Pressable key={e.key} disabled={!!busy} onPress={() => run(e.label, e.fn)} style={[styles.cell, { borderColor: c.line, backgroundColor: c.paper, opacity: busy && busy !== e.label ? 0.5 : 1 }]}>
-                  {busy === e.label ? <ActivityIndicator color={c.accent} /> : <Text style={{ fontSize: 22 }}>{e.icon}</Text>}
-                  <Text style={{ color: c.ink, fontWeight: '700', marginTop: 6 }}>{e.label}</Text>
+                  {busy === e.label ? <ActivityIndicator color={c.accent} /> : <Icon name={e.icon} size={22} color={c.accent} />}
+                  <Text style={{ color: c.ink, fontFamily: font.sansBold, marginTop: 6 }}>{e.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -94,9 +96,14 @@ export default function ExportScreen() {
         <GlassSurface>
           <View style={{ padding: space(4) }}>
             <Text style={[styles.h, { color: c.mute }]}>IMPORT</Text>
-            <Text style={{ color: c.mute, fontSize: 13, marginBottom: 12 }}>Pick a JSON, CSV or Excel file. New members merge in; duplicates (same name + birth date) are skipped.</Text>
+            <Text style={{ color: c.mute, fontSize: 13, marginBottom: 12 }}>Pick a JSON, CSV or Excel file. New members merge in; duplicates (same name + birth date) are skipped. A plain spreadsheet with a "name" column works too.</Text>
             <Pressable disabled={!!busy} onPress={doImport} style={[styles.importBtn, { borderColor: c.accent, backgroundColor: c.accentSoft, opacity: busy ? 0.6 : 1 }]}>
               {busy === 'Import' ? <ActivityIndicator color={c.accent} /> : <Text style={{ color: c.accent, fontWeight: '800' }}>Choose file to import</Text>}
+            </Pressable>
+            <Pressable disabled={!!busy} onPress={() => run('Template', () => saveText('family-tree-template.csv', buildCSVTemplate(), 'text/csv'))}
+              style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: c.line }}>
+              <Icon name="download" size={16} color={c.inkSoft} />
+              <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 13.5 }}>Download CSV template</Text>
             </Pressable>
           </View>
         </GlassSurface>

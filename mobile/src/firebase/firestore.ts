@@ -70,7 +70,7 @@ export async function commitMerge(
   uid: string,
   plan: {
     newMembers: { importId: string; data: Record<string, any> }[];
-    newRelationships: { fromId: string; toId: string; type: string; status?: string }[];
+    newRelationships: { fromId: string; toId: string; type: string; status?: string; marriageDate?: string }[];
   },
 ): Promise<{ added: number; links: number }> {
   const batch = writeBatch(db);
@@ -92,6 +92,7 @@ export async function commitMerge(
     const ref = doc(relsCol);
     const edge: Record<string, any> = { fromId, toId, type: r.type };
     if (r.status) edge.status = r.status;
+    if (r.marriageDate) edge.marriageDate = r.marriageDate;
     batch.set(ref, edge);
     links++;
   });

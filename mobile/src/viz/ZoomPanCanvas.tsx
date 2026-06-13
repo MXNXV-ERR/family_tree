@@ -1,8 +1,8 @@
 // Reusable pan + pinch-zoom canvas for the visualizations. Pan & pinch drive
 // reanimated shared values; children render inside a transformed View. A tap on
 // empty canvas calls onTapEmpty (used to dismiss the timeline/radial tooltip).
-import { type ReactNode, useImperativeHandle, forwardRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { type ReactNode, useImperativeHandle, forwardRef, useRef, useEffect } from 'react';
+import { StyleSheet, View, Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 
@@ -50,6 +50,22 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
 
   const gesture = Gesture.Simultaneous(pan, pinch, tap);
 
+  // Desktop: scroll-wheel zoom (center-anchored, like the zoom buttons). RNW
+  // doesn't surface onWheel as a prop, so attach a passive:false DOM listener.
+  const hostRef = useRef<View>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = hostRef.current as unknown as HTMLElement | null;
+    if (!el || !el.addEventListener) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      scale.value = Math.max(minScale, Math.min(maxScale, scale.value * factor));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [minScale, maxScale]);
+
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }],
   }));
@@ -58,7 +74,7 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
   // centre, so centring makes pinch-zoom anchor on the middle of the diagram.
   return (
     <GestureDetector gesture={gesture}>
-      <View style={[styles.canvas, style]}>
+      <View ref={hostRef} style={[styles.canvas, style]}>
         <Animated.View style={animStyle}>{children}</Animated.View>
       </View>
     </GestureDetector>

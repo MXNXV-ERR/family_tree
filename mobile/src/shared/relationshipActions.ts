@@ -57,6 +57,7 @@ export function planRelationship(
   bId: string,
   kind: LinkKind,
   status: 'current' | 'divorced' = 'current',
+  marriageDate?: string,
 ): LinkPlan {
   const warnings: string[] = [];
   const A = nameOf(members, aId);
@@ -68,7 +69,7 @@ export function planRelationship(
   // Normalize to a canonical child→parent pair for parent/child kinds.
   if (kind === 'parent') return planRelationship(members, rels, bId, aId, 'child', status); // A parent of B == B child of A
   if (kind === 'child') return planParent(members, rels, aId, bId, A, B, warnings);
-  if (kind === 'spouse') return planSpouse(members, rels, aId, bId, A, B, status, warnings);
+  if (kind === 'spouse') return planSpouse(members, rels, aId, bId, A, B, status, warnings, marriageDate);
   return planSibling(members, rels, aId, bId, A, B, warnings);
 }
 
@@ -103,7 +104,7 @@ function planParent(members: Member[], rels: Relationship[], childId: string, pa
   return { ok: true, warnings, edges };
 }
 
-function planSpouse(members: Member[], rels: Relationship[], aId: string, bId: string, A: string, B: string, status: 'current' | 'divorced', warnings: string[]): LinkPlan {
+function planSpouse(members: Member[], rels: Relationship[], aId: string, bId: string, A: string, B: string, status: 'current' | 'divorced', warnings: string[], marriageDate?: string): LinkPlan {
   if (hasSpouseEdge(rels, aId, bId) || hasSpouseEdge(rels, bId, aId))
     return { ok: false, error: `${A} and ${B} are already linked as spouses.`, warnings, edges: [] };
 
@@ -114,9 +115,10 @@ function planSpouse(members: Member[], rels: Relationship[], aId: string, bId: s
     if (bSp) return { ok: false, error: `${B} already has a current spouse (${nameOf(members, bSp)}). Mark that marriage divorced first.`, warnings, edges: [] };
   }
 
+  const md = marriageDate?.trim() || undefined;
   const edges: NewEdge[] = [
-    { fromId: aId, toId: bId, type: 'spouse', status },
-    { fromId: bId, toId: aId, type: 'spouse', status },
+    { fromId: aId, toId: bId, type: 'spouse', status, ...(md ? { marriageDate: md } : {}) },
+    { fromId: bId, toId: aId, type: 'spouse', status, ...(md ? { marriageDate: md } : {}) },
   ];
   // Cascade only for a current marriage: each partner becomes a parent of the other's existing children.
   if (status === 'current') {

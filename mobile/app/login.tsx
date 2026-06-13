@@ -4,11 +4,14 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { useAuth } from '../src/firebase/AuthContext';
-import { useTheme, radius, space } from '../src/theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
+import { Icon } from '../src/ui/Icon';
+import { useResponsive } from '../src/ui/useResponsive';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -22,6 +25,7 @@ const GOOGLE = {
 
 export default function Login() {
   const { c } = useTheme();
+  const { isDesktop } = useResponsive();
   const { signIn, signInWithGoogleIdToken } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -44,15 +48,11 @@ export default function Login() {
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.root, { backgroundColor: c.bg }]}
-    >
+  const card = (
       <GlassSurface style={styles.card} rounded={radius.xl}>
         <View style={{ padding: space(7) }}>
-          <Text style={[styles.title, { color: c.ink }]}>Family Tree</Text>
-          <Text style={[styles.sub, { color: c.mute }]}>Welcome back</Text>
+          <Text style={[styles.title, { color: c.ink, fontFamily: font.serifItalic }]}>{isDesktop ? 'Sign in' : 'Family Tree'}</Text>
+          <Text style={[styles.sub, { color: c.mute, fontFamily: font.mono, letterSpacing: 1.5, textTransform: 'uppercase', fontSize: 11 }]}>Welcome back</Text>
 
           <TextInput
             placeholder="Email"
@@ -106,7 +106,56 @@ export default function Login() {
           )}
         </View>
       </GlassSurface>
+  );
+
+  if (isDesktop) {
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: c.bg }}>
+        <LoginHero c={c} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48 }}>{card}</View>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[styles.root, { backgroundColor: c.bg }]}
+    >
+      {card}
     </KeyboardAvoidingView>
+  );
+}
+
+// Desktop-only branded hero panel (left). Generic app branding — no single
+// family name, since a user can belong to several families.
+function LoginHero({ c }: { c: Palette }) {
+  return (
+    <LinearGradient colors={[c.accent, c.accent2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, padding: 56, justifyContent: 'space-between', maxWidth: 560 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="branch" size={26} color={c.accentInk} />
+        </View>
+        <Text style={{ color: c.accentInk, fontFamily: font.mono, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.85 }}>Family Tree</Text>
+      </View>
+
+      <View>
+        <Text style={{ color: c.accentInk, fontFamily: font.serifItalic, fontSize: 52, lineHeight: 56 }}>Every name{'\n'}has a story.</Text>
+        <Text style={{ color: c.accentInk, opacity: 0.86, fontFamily: font.sans, fontSize: 17, lineHeight: 26, marginTop: 18, maxWidth: 420 }}>
+          Map every branch of your family, switch between the trees you belong to, and keep their stories in one place.
+        </Text>
+      </View>
+
+      {/* simple node motif */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' }} />
+            {i < 2 ? <View style={{ width: 26, height: 2, backgroundColor: 'rgba(255,255,255,0.4)' }} /> : null}
+          </View>
+        ))}
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -127,7 +176,7 @@ function GoogleButton({ onToken, loading, c }: { onToken: (idToken: string) => v
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   card: { width: '100%', maxWidth: 420 },
-  title: { fontSize: 30, fontWeight: '800', textAlign: 'center' },
+  title: { fontSize: 34, textAlign: 'center' },
   sub: { fontSize: 14, textAlign: 'center', marginTop: 4, marginBottom: 24 },
   input: { borderWidth: 1, borderRadius: radius.md, padding: 14, fontSize: 15, marginBottom: 12 },
   btn: { borderRadius: radius.md, padding: 15, alignItems: 'center', marginTop: 4 },

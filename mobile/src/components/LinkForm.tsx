@@ -39,10 +39,11 @@ export function LinkForm({
   const [bId, setBId] = useState<string | undefined>();
   const [kind, setKind] = useState<LinkKind>(presetKind ?? 'child');
   const [status, setStatus] = useState<'current' | 'divorced'>('current');
+  const [marriageDate, setMarriageDate] = useState('');
 
   const plan = useMemo(
-    () => (aId && bId ? planRelationship(members, relationships, aId, bId, kind, status) : null),
-    [aId, bId, kind, status, members, relationships],
+    () => (aId && bId ? planRelationship(members, relationships, aId, bId, kind, status, marriageDate) : null),
+    [aId, bId, kind, status, marriageDate, members, relationships],
   );
 
   const A = members.find((m) => m.id === aId);
@@ -73,16 +74,26 @@ export function LinkForm({
           {A ? A.name : 'A'} {kindMeta.hint(B ? B.name : 'B')}.
         </Text>
         {kind === 'spouse' && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            {(['current', 'divorced'] as const).map((s) => {
-              const on = status === s;
-              return (
-                <Pressable key={s} onPress={() => setStatus(s)} style={[styles.seg, { flex: 1, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.accentSoft : 'transparent' }]}>
-                  <Text style={{ color: on ? c.accent : c.inkSoft, fontWeight: '600', textTransform: 'capitalize' }}>{s}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              {(['current', 'divorced'] as const).map((s) => {
+                const on = status === s;
+                return (
+                  <Pressable key={s} onPress={() => setStatus(s)} style={[styles.seg, { flex: 1, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.accentSoft : 'transparent' }]}>
+                    <Text style={{ color: on ? c.accent : c.inkSoft, fontWeight: '600', textTransform: 'capitalize' }}>{s}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {/* Optional wedding date — drives anniversary events on the timeline */}
+            <TextInput
+              value={marriageDate}
+              onChangeText={setMarriageDate}
+              placeholder="Married on (YYYY-MM-DD, optional)"
+              placeholderTextColor={c.mute}
+              style={[styles.input, { color: c.ink, borderColor: c.line, backgroundColor: c.paper, marginTop: 10 }]}
+            />
+          </>
         )}
       </Section>
 

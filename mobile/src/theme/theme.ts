@@ -1,5 +1,7 @@
-// Design tokens. Dark is the DEFAULT (requirement #1). Palette ported from the
-// web app's `--fe-*` variables so the visual language carries over.
+// Design tokens — ported from the "family tree reimagined" design bundle.
+// Dark is the DEFAULT; light is a warm paper tone, not a cold white.
+// Type system: Newsreader (italic serif display) · Plus Jakarta Sans (body) ·
+// Spline Sans Mono (meta labels). Families loaded in src/theme/fonts.ts.
 import { createContext, useContext } from 'react';
 
 export type ThemeMode = 'dark' | 'light';
@@ -7,22 +9,32 @@ export type ThemeMode = 'dark' | 'light';
 export interface Palette {
   mode: ThemeMode;
   bg: string;
+  bg2: string;
   paper: string;        // solid card background
+  paper2: string;
   glassTint: 'dark' | 'light'; // BlurView tint
   glassBg: string;      // translucent fallback / overlay color
+  glassBrd: string;
   ink: string;
   inkSoft: string;
   mute: string;
+  faint: string;
   line: string;
   lineSoft: string;
   accent: string;
+  accent2: string;
+  accentInk: string;
   accentSoft: string;
   rose: string;
   roseSoft: string;
+  teal: string;
+  amber: string;
   cardM: string;        // male card bg
   cardMBorder: string;
   cardF: string;        // female card bg
   cardFBorder: string;
+  cardO: string;        // other/unknown card bg
+  cardOBorder: string;
   relParent: string;
   relChild: string;
   relPartner: string;
@@ -31,68 +43,115 @@ export interface Palette {
   relOther: string;
   danger: string;
   success: string;
+  scrim: string;        // modal/drawer backdrop
 }
 
 export const dark: Palette = {
   mode: 'dark',
-  bg: '#0d0d14',
-  paper: '#15151f',
+  bg: '#0c0c12',
+  bg2: '#101019',
+  paper: '#16161f',
+  paper2: '#1c1c27',
   glassTint: 'dark',
-  glassBg: 'rgba(30,30,46,0.55)',
+  glassBg: 'rgba(28,28,42,0.55)',
+  glassBrd: 'rgba(255,255,255,0.07)',
   ink: '#ece6d6',
-  inkSoft: '#c4bda9',
+  inkSoft: '#c2bba7',
   mute: '#847d6c',
+  faint: '#5a5446',
   line: '#2a2a36',
-  lineSoft: '#1d1d28',
-  accent: '#8b8bff',
-  accentSoft: '#1f1f3a',
+  lineSoft: '#1e1e29',
+  accent: '#8f8bff',
+  accent2: '#b1a6ff',
+  accentInk: '#ffffff',
+  accentSoft: 'rgba(143,139,255,0.15)',
   rose: '#ff8caf',
-  roseSoft: '#3a1a26',
-  cardM: '#1a1f2e',
-  cardMBorder: '#2a3554',
-  cardF: '#28181d',
-  cardFBorder: '#4a2730',
-  relParent: '#a99bf5',
+  roseSoft: 'rgba(255,140,175,0.14)',
+  teal: '#5fd0b0',
+  amber: '#e0b873',
+  cardM: '#181d2b',
+  cardMBorder: '#2c3858',
+  cardF: '#271820',
+  cardFBorder: '#4d2733',
+  cardO: '#1d1d28',
+  cardOBorder: '#34343f',
+  relParent: '#8f8bff',
   relChild: '#5fd0b0',
-  relPartner: '#ff9bb0',
-  relEx: '#d8a37e',
-  relSibling: '#d39bf0',
-  relOther: '#9b9bb0',
+  relPartner: '#ff8caf',
+  relEx: '#e0b873',
+  relSibling: '#6fb1ff',
+  relOther: '#847d6c',
   danger: '#ff6b6b',
   success: '#5fd0b0',
+  scrim: 'rgba(0,0,0,0.55)',
 };
 
 export const light: Palette = {
   mode: 'light',
-  bg: '#f8fafc',
-  paper: '#ffffff',
+  bg: '#f4f1ea',
+  bg2: '#ece8de',
+  paper: '#fffdf8',
+  paper2: '#f8f5ec',
   glassTint: 'light',
-  glassBg: 'rgba(255,255,255,0.6)',
-  ink: '#111827',
-  inkSoft: '#374151',
-  mute: '#6b7280',
-  line: '#e5e7eb',
-  lineSoft: '#f3f4f6',
-  accent: '#3a3aef',
-  accentSoft: '#e6e6ff',
-  rose: '#c92354',
-  roseSoft: '#ffe2eb',
-  cardM: '#eff6ff',
-  cardMBorder: '#bfdbfe',
-  cardF: '#fdf2f8',
-  cardFBorder: '#fbcfe8',
-  relParent: '#5b4fc4',
+  glassBg: 'rgba(255,253,248,0.7)',
+  glassBrd: 'rgba(40,34,24,0.08)',
+  ink: '#2b2620',
+  inkSoft: '#564e42',
+  mute: '#8c8475',
+  faint: '#b3aa98',
+  line: '#e3ddcf',
+  lineSoft: '#ece7da',
+  accent: '#5a4ce0',
+  accent2: '#6f5cf0',
+  accentInk: '#ffffff',
+  accentSoft: 'rgba(90,76,224,0.11)',
+  rose: '#c8456f',
+  roseSoft: 'rgba(200,69,111,0.10)',
+  teal: '#1f9d7e',
+  amber: '#b5793f',
+  cardM: '#eef3fe',
+  cardMBorder: '#cdddf9',
+  cardF: '#fdeef3',
+  cardFBorder: '#f6cdda',
+  cardO: '#f3f0e8',
+  cardOBorder: '#e2dcce',
+  relParent: '#5a4ce0',
   relChild: '#1f9d7e',
-  relPartner: '#d6557a',
+  relPartner: '#c8456f',
   relEx: '#b5793f',
-  relSibling: '#9a4fc4',
-  relOther: '#6b7280',
+  relSibling: '#3f72c8',
+  relOther: '#8c8475',
   danger: '#dc2626',
-  success: '#16a34a',
+  success: '#1f9d7e',
+  scrim: 'rgba(40,34,24,0.4)',
 };
 
-export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };
+export const radius = { sm: 8, md: 13, lg: 16, xl: 24, pill: 999 };
 export const space = (n: number) => n * 4;
+
+// Font family map (loaded via expo-google-fonts in fonts.ts). RN custom fonts
+// need an exact family per weight — never rely on fontWeight synthesis.
+export const font = {
+  serif: 'Newsreader_600SemiBold',
+  serifItalic: 'Newsreader_600SemiBold_Italic',
+  serifMedItalic: 'Newsreader_500Medium_Italic',
+  sans: 'PlusJakartaSans_400Regular',
+  sansMed: 'PlusJakartaSans_500Medium',
+  sansSemi: 'PlusJakartaSans_600SemiBold',
+  sansBold: 'PlusJakartaSans_700Bold',
+  sansHeavy: 'PlusJakartaSans_800ExtraBold',
+  mono: 'SplineSansMono_400Regular',
+  monoMed: 'SplineSansMono_500Medium',
+  monoSemi: 'SplineSansMono_600SemiBold',
+};
+
+// Gendered card tint helper (matches design's genderTint()).
+export const genderTint = (c: Palette, g?: string) =>
+  g === 'female'
+    ? { bg: c.cardF, brd: c.cardFBorder, ink: c.rose }
+    : g === 'other'
+    ? { bg: c.cardO, brd: c.cardOBorder, ink: c.mute }
+    : { bg: c.cardM, brd: c.cardMBorder, ink: c.accent };
 
 export interface ThemeCtx {
   c: Palette;

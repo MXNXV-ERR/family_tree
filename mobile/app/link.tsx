@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { addRelationships } from '../src/firebase/firestore';
 import { LinkForm } from '../src/components/LinkForm';
@@ -12,8 +12,8 @@ import type { LinkKind } from '../src/shared/relationshipActions';
 
 export default function LinkRoute() {
   const { c } = useTheme();
-  const { user } = useAuth();
-  const { members, relationships, loading } = useFamilyTree(user?.uid);
+  const { activeTreeId } = useFamily();
+  const { members, relationships, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const { a, kind } = useLocalSearchParams<{ a?: string; kind?: string }>();
   const [saving, setSaving] = useState(false);
@@ -27,10 +27,10 @@ export default function LinkRoute() {
   }
 
   async function handleSubmit(edges: Omit<Relationship, 'id'>[]) {
-    if (!user) return;
+    if (!activeTreeId) return;
     setSaving(true);
     try {
-      await addRelationships(user.uid, edges);
+      await addRelationships(activeTreeId, edges);
       router.back();
     } finally {
       setSaving(false);

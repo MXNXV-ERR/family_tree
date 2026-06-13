@@ -6,10 +6,12 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Image, Linking, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
-import { useTheme, radius, space, type Palette } from '../src/theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
+import { useSettings } from '../src/theme/SettingsContext';
 import { GlassSurface } from '../src/theme/GlassSurface';
+import { Icon } from '../src/ui/Icon';
 import { buildAdjacency, initials, lifespan } from '../src/shared/adjacency';
 import type { Member } from '../src/shared/types';
 
@@ -17,8 +19,9 @@ type Tab = 'info' | 'relations' | 'story';
 
 export default function Profile() {
   const { c } = useTheme();
-  const { user } = useAuth();
-  const { members, relationships, loading } = useFamilyTree(user?.uid);
+  const { years } = useSettings();
+  const { activeTreeId } = useFamily();
+  const { members, relationships, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [tab, setTab] = useState<Tab>('info');
@@ -39,7 +42,10 @@ export default function Profile() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Pressable onPress={() => router.back()} style={{ marginBottom: 12 }}>
-          <Text style={{ color: c.accent, fontWeight: '600' }}>‹ Back</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Icon name="back" size={18} color={c.accent} />
+            <Text style={{ color: c.accent, fontWeight: '600' }}>Back</Text>
+          </View>
         </Pressable>
 
         {/* Header */}
@@ -50,9 +56,14 @@ export default function Profile() {
                 <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: 30 }}>{initials(m.name)}</Text>}
             </View>
             <Text style={[styles.name, { color: c.ink }]}>{m.name}</Text>
-            <Text style={{ color: c.mute, marginTop: 2 }}>{lifespan(m)}</Text>
+            {years ? <Text style={{ color: c.mute, marginTop: 2 }}>{lifespan(m)}</Text> : null}
             {m.occupation ? <Text style={{ color: c.inkSoft, marginTop: 2 }}>{m.occupation}</Text> : null}
-            {m.location ? <Text style={{ color: c.mute, fontSize: 13, marginTop: 2 }}>📍 {m.location}</Text> : null}
+            {m.location ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Icon name="pin" size={13} color={c.mute} />
+                <Text style={{ color: c.mute, fontSize: 13 }}>{m.location}</Text>
+              </View>
+            ) : null}
             <Pressable onPress={() => router.push({ pathname: '/member', params: { id: m.id } })} style={[styles.editBtn, { borderColor: c.accent }]}>
               <Text style={{ color: c.accent, fontWeight: '700' }}>Edit</Text>
             </Pressable>
@@ -208,7 +219,7 @@ const Empty = ({ c, text }: { c: Palette; text: string }) => (
 const styles = StyleSheet.create({
   avatar: { width: 92, height: 92, borderRadius: 46, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
-  name: { fontSize: 24, fontWeight: '800', marginTop: 12, textAlign: 'center' },
+  name: { fontSize: 27, fontFamily: font.serifItalic, marginTop: 12, textAlign: 'center' },
   editBtn: { marginTop: 14, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 28, paddingVertical: 8 },
   tabbar: { flexDirection: 'row', borderWidth: 1, borderRadius: radius.md, padding: 4, marginBottom: 14, gap: 4 },
   tab: { flex: 1, paddingVertical: 9, borderRadius: radius.sm, alignItems: 'center' },

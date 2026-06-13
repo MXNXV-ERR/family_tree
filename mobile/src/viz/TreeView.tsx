@@ -2,25 +2,28 @@
 // layouts: an SVG layer for connector lines + couple pills, glass node cards on
 // top. Tap a card to focus (re-centres inverted/hourglass) and highlight its
 // neighbours; the focus bar opens the profile.
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme, radius, type Palette } from '../theme/theme';
+import { useSettings } from '../theme/SettingsContext';
 import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
-import { VizSegment, FocusBar, ZoomButtons } from './vizChrome';
+import { VizSegment, FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import {
   layoutPyramid, layoutInverted, layoutHourglass,
   NODE_W, NODE_H, COUPLE_W, type LayoutResult,
 } from '../shared/treeLayout';
 import { initials, lifespan } from '../shared/adjacency';
 import type { Adjacency } from '../shared/adjacency';
-import type { Member } from '../shared/types';
+import { relToMe } from '../shared/relationTo';
+import type { Member, Relationship } from '../shared/types';
 
 type TreeLayout = 'pyramid' | 'inverted' | 'hourglass';
 
-export function TreeView({ members, adjacency, focusId, meId, setFocusId, onOpenProfile }: {
-  members: Member[]; adjacency: Adjacency; focusId: string; meId?: string;
+export function TreeView({ members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI }: {
+  members: Member[]; relationships: Relationship[]; adjacency: Adjacency; focusId: string; meId?: string;
   setFocusId: (id: string) => void; onOpenProfile: (m: Member) => void;
+  onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
 }) {
   const { c } = useTheme();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -47,6 +50,16 @@ export function TreeView({ members, adjacency, focusId, meId, setFocusId, onOpen
   }, [selId, adjacency]);
 
   const sel = selId ? adjacency.get(selId) : undefined;
+
+  // Expose zoom so a shared control (desktop sub-bar) can drive this view.
+  const fitRef = useRef(fit); fitRef.current = fit;
+  useEffect(() => {
+    onZoomReady?.({
+      in: () => canvasRef.current?.zoomBy(1.25),
+      out: () => canvasRef.current?.zoomBy(0.8),
+      fit: () => canvasRef.current?.reset(fitRef.current, 0, 0),
+    });
+  }, [onZoomReady]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -88,8 +101,8 @@ export function TreeView({ members, adjacency, focusId, meId, setFocusId, onOpen
         </View>
       </ZoomPanCanvas>
 
-      <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(fit, 0, 0)} />
-      {sel ? <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} /> : null}
+      {!hideZoomUI && <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(fit, 0, 0)} />}
+      {sel ? <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId) ?? undefined} /> : null}
     </View>
   );
 }
@@ -97,6 +110,7 @@ export function TreeView({ members, adjacency, focusId, meId, setFocusId, onOpen
 function NodeCard({ m, c, x, y, isFocus, isMe, dim, hl, onPress }: {
   m: Member; c: Palette; x: number; y: number; isFocus: boolean; isMe: boolean; dim: boolean; hl: boolean; onPress: () => void;
 }) {
+  const { years } = useSettings();
   const bg = m.gender === 'female' ? c.cardF : m.gender === 'male' ? c.cardM : c.paper;
   const border = isFocus ? c.accent : hl ? c.relChild : m.gender === 'female' ? c.cardFBorder : c.cardMBorder;
   return (
@@ -104,13 +118,19 @@ function NodeCard({ m, c, x, y, isFocus, isMe, dim, hl, onPress }: {
       position: 'absolute', left: x, top: y, width: NODE_W, height: NODE_H,
       borderRadius: radius.md, borderWidth: isFocus ? 2 : 1, borderColor: border, backgroundColor: bg,
       opacity: dim ? 0.35 : 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8,
+      // depth + accent glow on the focused card (design look)
+      shadowColor: isFocus ? c.accent : '#000',
+      shadowOpacity: isFocus ? 0.5 : (c.mode === 'dark' ? 0.35 : 0.12),
+      shadowRadius: isFocus ? 16 : 5,
+      shadowOffset: { width: 0, height: isFocus ? 8 : 2 },
+      elevation: isFocus ? 8 : 2,
     }}>
       <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: 13 }}>{initials(m.name)}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '700', fontSize: 12 }}>{m.name}</Text>
-        <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text>
+        {years ? <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text> : null}
         {isMe ? <Text style={{ color: c.accent, fontSize: 9, fontWeight: '700' }}>YOU</Text> : null}
       </View>
     </Pressable>

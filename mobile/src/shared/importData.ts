@@ -26,11 +26,14 @@ function parseCsvLine(line: string): string[] {
   return out;
 }
 
-// Parse the two-section CSV produced by buildCSV.
+// Parse the two-section CSV produced by buildCSV / the template. Also accepts
+// a plain members-only CSV (just a header row containing `name`, no section
+// markers) so spreadsheets exported elsewhere import directly.
 export function parseCSV(text: string): ParsedTree {
   const lines = text.split(/\r?\n/);
+  const hasSections = /^#\s*MEMBERS/im.test(text);
   const members: Member[] = []; const relationships: Relationship[] = [];
-  let section: 'none' | 'members' | 'rels' = 'none';
+  let section: 'none' | 'members' | 'rels' = hasSections ? 'none' : 'members';
   let header: string[] = [];
   for (const raw of lines) {
     const line = raw.trim();
@@ -63,7 +66,7 @@ export function parseXLSXBase64(b64: string): ParsedTree {
 
 export interface MergePlan {
   newMembers: { importId: string; data: Omit<Member, 'id'> }[]; // to add; placeholder = `new:${importId}`
-  newRelationships: { fromId: string; toId: string; type: Relationship['type']; status?: Relationship['status'] }[];
+  newRelationships: { fromId: string; toId: string; type: Relationship['type']; status?: Relationship['status']; marriageDate?: string }[];
   skipped: number;                          // duplicate members skipped
   idMap: Record<string, string>;            // imported member id -> existing id or `new:<importId>`
 }
@@ -79,17 +82,18 @@ export function planMerge(existing: Member[], incoming: ParsedTree, existingRels
   const newMembers: MergePlan['newMembers'] = [];
   let skipped = 0;
 
-  for (const m of incoming.members) {
+  incoming.members.forEach((m, i) => {
+    const importId = m.id || `row${i}`; // members-only CSVs may have no id column
     const k = keyOf(m);
     const dup = existingByKey.get(k);
-    if (dup) { idMap[m.id] = dup; skipped++; continue; }
+    if (dup) { idMap[importId] = dup; skipped++; return; }
     // Placeholder id: marks "will be created"; real id assigned at write time.
-    const placeholder = `new:${m.id}`;
-    idMap[m.id] = placeholder;
+    const placeholder = `new:${importId}`;
+    idMap[importId] = placeholder;
     const { id, ...rest } = m as any;
-    newMembers.push({ importId: m.id, data: rest });
+    newMembers.push({ importId, data: rest });
     existingByKey.set(k, placeholder);
-  }
+  });
 
   // Seed the seen-set with edges that already exist so re-imports don't double them.
   const seenEdge = new Set<string>(existingRels.map((r) => `${r.fromId}|${r.toId}|${r.type}`));
@@ -100,7 +104,7 @@ export function planMerge(existing: Member[], incoming: ParsedTree, existingRels
     const sig = `${from}|${to}|${r.type}`;
     if (seenEdge.has(sig)) continue;
     seenEdge.add(sig);
-    newRelationships.push({ fromId: from, toId: to, type: r.type, status: r.status });
+    newRelationships.push({ fromId: from, toId: to, type: r.type, status: r.status, marriageDate: r.marriageDate });
   }
 
   return { newMembers, newRelationships, skipped, idMap };

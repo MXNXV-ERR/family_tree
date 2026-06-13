@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { View, Text, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { addMember, updateMember, deleteMember, deleteRelationship } from '../src/firebase/firestore';
 import { MemberForm } from '../src/components/MemberForm';
@@ -11,8 +11,8 @@ import type { Member } from '../src/shared/types';
 
 export default function MemberRoute() {
   const { c } = useTheme();
-  const { user } = useAuth();
-  const { members, relationships, loading } = useFamilyTree(user?.uid);
+  const { activeTreeId } = useFamily();
+  const { members, relationships, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [saving, setSaving] = useState(false);
@@ -36,11 +36,11 @@ export default function MemberRoute() {
   }
 
   async function handleSubmit(data: Omit<Member, 'id'>) {
-    if (!user) return;
+    if (!activeTreeId) return;
     setSaving(true);
     try {
-      if (id) await updateMember(user.uid, id, data);
-      else await addMember(user.uid, data);
+      if (id) await updateMember(activeTreeId, id, data);
+      else await addMember(activeTreeId, data);
       router.back();
     } finally {
       setSaving(false);
@@ -48,13 +48,13 @@ export default function MemberRoute() {
   }
 
   async function doDelete() {
-    if (!user || !id) return;
+    if (!activeTreeId || !id) return;
     setSaving(true);
     try {
       // Cascade: remove every relationship edge touching this member first.
       const edges = relationships.filter((r) => r.fromId === id || r.toId === id);
-      await Promise.all(edges.map((r) => deleteRelationship(user.uid, r.id)));
-      await deleteMember(user.uid, id);
+      await Promise.all(edges.map((r) => deleteRelationship(activeTreeId, r.id)));
+      await deleteMember(activeTreeId, id);
       router.back();
     } finally {
       setSaving(false);

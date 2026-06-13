@@ -5,8 +5,10 @@ import { useMemo, useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
+import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { useTheme, radius } from '../src/theme/theme';
+import { Icon } from '../src/ui/Icon';
 import { buildAdjacency } from '../src/shared/adjacency';
 import { TreeView } from '../src/viz/TreeView';
 import { RadialView } from '../src/viz/RadialView';
@@ -18,7 +20,8 @@ type ViewKind = 'tree' | 'radial' | 'timeline';
 export default function VizScreen() {
   const { c } = useTheme();
   const { user } = useAuth();
-  const { members, relationships, loading } = useFamilyTree(user?.uid);
+  const { activeTreeId } = useFamily();
+  const { members, relationships, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [view, setView] = useState<ViewKind>('tree');
   const [focusId, setFocusId] = useState<string>('');
@@ -41,7 +44,7 @@ export default function VizScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 8 }}>
-        <Pressable onPress={() => router.back()} hitSlop={8}><Text style={{ color: c.accent, fontWeight: '600' }}>‹ Back</Text></Pressable>
+        <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
         <View style={[styles.switch, { backgroundColor: c.paper, borderColor: c.line }]}>
           {(['tree', 'radial', 'timeline'] as ViewKind[]).map((v) => {
             const on = view === v;

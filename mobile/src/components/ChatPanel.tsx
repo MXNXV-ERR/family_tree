@@ -4,8 +4,9 @@
 // the floating glass sheet (web).
 import { useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { useTheme, radius, space, type Palette } from '../theme/theme';
+import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
+import { Icon } from '../ui/Icon';
 import { chat, type ChatTurn } from '../shared/gemini';
 import type { Member, Relationship } from '../shared/types';
 
@@ -41,7 +42,10 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 }}>
-        <Text style={{ color: c.ink, fontSize: 18, fontWeight: '800', flex: 1 }}>✨ Family assistant</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          <Icon name="sparkles" size={19} color={c.accent} />
+          <Text style={{ color: c.ink, fontSize: 19, fontFamily: font.serifItalic }}>Family assistant</Text>
+        </View>
         {onClose ? <Pressable onPress={onClose} hitSlop={10}><Text style={{ color: c.mute, fontSize: 22 }}>×</Text></Pressable> : null}
       </View>
 
@@ -75,7 +79,7 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
           style={[styles.input, { color: c.ink, borderColor: c.line, backgroundColor: c.paper }]}
         />
         <Pressable onPress={() => send(input)} disabled={busy || !input.trim()} style={[styles.sendBtn, { backgroundColor: c.accent, opacity: busy || !input.trim() ? 0.4 : 1 }]}>
-          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>↑</Text>
+          <Icon name="send" size={18} color={c.accentInk} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
