@@ -1,0 +1,162 @@
+# MEMBERS
+id,name,gender,birthDate,deathDate,phone,email,address,location,occupation,maidenName,placeOfBirth
+1oXzwtLSPb2krvfyKbWx,Diya Mehta,female,2023-03-03,,,,,Mumbai,,,
+35Gu4KbGn5xvfEspSnH4,Rohan Mehta,male,2000-10-05,,,,,Rajkot,,,
+4Xbeyzzi8yP5U8uOezNL,Mahesh Mehta,male,1971-06-21,,,,,Rajkot,,,
+4v5C2Xnfsz5tC51FXXgf,Suresh Mehta,male,1968-02-14,,,,,Mumbai,,,
+517dQFRUNU8TfNTScB6W,Jatin,male,1995-06-18,,,,,Mumbai,,,
+6xvLGVsPfd1o3oJP5QTP,Kiran Patel,male,1976-04-11,,,,,Ahmedabad,,,
+8xptIAI4kBu6Te65Owlh,Neha Mehta,female,1996-09-09,,,,,Mumbai,,,
+C75sCqpzIDSzEJRsiiLp,Kashiben Mehta,female,1924-07-19,2001-02-27,,,,Porbandar,,,
+GTFF58jWGk72IaUhJpaQ,Sameer Desai,male,1990-12-12,,,,,Bengaluru,,,
+HICicVngLIzPCSOiZb3V,Karan Sharma,male,2002-02-28,,,,,Pune,,,
+HvqmkjmF01QjM3RudppR,manav mehta,male,2017-06-12,,,,,,,,
+INtBZkTBX2hKeiFDu2XO,Meena Mehta,female,1972-10-30,,,,,Mumbai,,,
+JCCQRbKR4oumT70Tx4qw,Kokilaben Patel,female,1953-12-08,,,,,Ahmedabad,,,
+MXe5NJXDSC3cNorf2BfM,Aarav Mehta,male,2020-08-14,,,,,Mumbai,,,
+QYDkuHc1NDil8HKLVIwI,Ramesh Patel,male,1948-09-15,2020-04-21,,,,Ahmedabad,,,
+ZdSqthKU0otWGbKA95tv,Savitaben Mehta,female,1951-05-02,,,,,Rajkot,,,
+afMzfJabhVN6BotbxnjT,Anjali Desai,female,1993-04-02,,,,,Bengaluru,,,
+bWa4o8F5YMeesnD1hlAN,Dhirubhai Mehta,male,1918-03-12,1992-11-04,,,,Porbandar,,,
+bYlI40xFU5sjC7OwSDhb,Rekha Mehta,female,1974-03-17,,,,,Rajkot,,,
+bphC5SEOngcuAgWgn1dD,Harilal Mehta,male,1946-01-26,2015-08-09,,,,Rajkot,,,
+ottxqfqjuVPZgszF0p7s,Vikram Mehta,male,1999-07-27,,,,,Mumbai,,,
+pCI3IZx0L5ZFQ1KCMVLj,Vinod Sharma,male,1972-08-05,,,,,Pune,,,
+rXpY10zFyaj7cA8T8cRU,Lata Sharma,female,1975-11-23,,,,,Pune,,,
+tVWYhR8CpVjBdwE35dtL,Ishaan Desai,male,2019-05-20,,,,,Bengaluru,,,
+wbI9HUppr2uGJhMlPFe2,Priya Mehta,female,1997-01-15,,,,,Rajkot,,,
+
+# RELATIONSHIPS
+fromId,toId,type,status
+ottxqfqjuVPZgszF0p7s,INtBZkTBX2hKeiFDu2XO,parent,
+ottxqfqjuVPZgszF0p7s,afMzfJabhVN6BotbxnjT,sibling,
+35Gu4KbGn5xvfEspSnH4,4Xbeyzzi8yP5U8uOezNL,parent,
+rXpY10zFyaj7cA8T8cRU,ZdSqthKU0otWGbKA95tv,parent,
+wbI9HUppr2uGJhMlPFe2,bYlI40xFU5sjC7OwSDhb,parent,
+4Xbeyzzi8yP5U8uOezNL,ZdSqthKU0otWGbKA95tv,parent,
+INtBZkTBX2hKeiFDu2XO,QYDkuHc1NDil8HKLVIwI,parent,
+4Xbeyzzi8yP5U8uOezNL,4v5C2Xnfsz5tC51FXXgf,sibling,
+1oXzwtLSPb2krvfyKbWx,517dQFRUNU8TfNTScB6W,parent,
+ZdSqthKU0otWGbKA95tv,bphC5SEOngcuAgWgn1dD,spouse,current
+4Xbeyzzi8yP5U8uOezNL,bYlI40xFU5sjC7OwSDhb,spouse,current
+bphC5SEOngcuAgWgn1dD,ZdSqthKU0otWGbKA95tv,spouse,current
+35Gu4KbGn5xvfEspSnH4,wbI9HUppr2uGJhMlPFe2,sibling,
+wbI9HUppr2uGJhMlPFe2,35Gu4KbGn5xvfEspSnH4,sibling,
+afMzfJabhVN6BotbxnjT,ottxqfqjuVPZgszF0p7s,sibling,
+ottxqfqjuVPZgszF0p7s,afMzfJabhVN6BotbxnjT,sibling,
+517dQFRUNU8TfNTScB6W,INtBZkTBX2hKeiFDu2XO,parent,
+rXpY10zFyaj7cA8T8cRU,pCI3IZx0L5ZFQ1KCMVLj,spouse,divorced
+rXpY10zFyaj7cA8T8cRU,bphC5SEOngcuAgWgn1dD,parent,
+MXe5NJXDSC3cNorf2BfM,517dQFRUNU8TfNTScB6W,parent,
+6xvLGVsPfd1o3oJP5QTP,JCCQRbKR4oumT70Tx4qw,parent,
+4v5C2Xnfsz5tC51FXXgf,INtBZkTBX2hKeiFDu2XO,spouse,current
+1oXzwtLSPb2krvfyKbWx,MXe5NJXDSC3cNorf2BfM,sibling,
+bWa4o8F5YMeesnD1hlAN,C75sCqpzIDSzEJRsiiLp,spouse,current
+tVWYhR8CpVjBdwE35dtL,afMzfJabhVN6BotbxnjT,parent,
+ottxqfqjuVPZgszF0p7s,517dQFRUNU8TfNTScB6W,sibling,
+afMzfJabhVN6BotbxnjT,INtBZkTBX2hKeiFDu2XO,parent,
+6xvLGVsPfd1o3oJP5QTP,INtBZkTBX2hKeiFDu2XO,sibling,
+1oXzwtLSPb2krvfyKbWx,8xptIAI4kBu6Te65Owlh,parent,
+HvqmkjmF01QjM3RudppR,bYlI40xFU5sjC7OwSDhb,spouse,current
+517dQFRUNU8TfNTScB6W,8xptIAI4kBu6Te65Owlh,spouse,current
+rXpY10zFyaj7cA8T8cRU,bphC5SEOngcuAgWgn1dD,parent,
+wbI9HUppr2uGJhMlPFe2,35Gu4KbGn5xvfEspSnH4,sibling,
+6xvLGVsPfd1o3oJP5QTP,JCCQRbKR4oumT70Tx4qw,parent,
+pCI3IZx0L5ZFQ1KCMVLj,rXpY10zFyaj7cA8T8cRU,spouse,divorced
+4v5C2Xnfsz5tC51FXXgf,4Xbeyzzi8yP5U8uOezNL,sibling,
+4v5C2Xnfsz5tC51FXXgf,bphC5SEOngcuAgWgn1dD,parent,
+MXe5NJXDSC3cNorf2BfM,1oXzwtLSPb2krvfyKbWx,sibling,
+517dQFRUNU8TfNTScB6W,ottxqfqjuVPZgszF0p7s,sibling,
+4v5C2Xnfsz5tC51FXXgf,INtBZkTBX2hKeiFDu2XO,spouse,current
+bYlI40xFU5sjC7OwSDhb,HvqmkjmF01QjM3RudppR,spouse,current
+bYlI40xFU5sjC7OwSDhb,HvqmkjmF01QjM3RudppR,spouse,current
+bYlI40xFU5sjC7OwSDhb,4Xbeyzzi8yP5U8uOezNL,spouse,current
+pCI3IZx0L5ZFQ1KCMVLj,rXpY10zFyaj7cA8T8cRU,spouse,divorced
+517dQFRUNU8TfNTScB6W,4v5C2Xnfsz5tC51FXXgf,parent,
+1oXzwtLSPb2krvfyKbWx,8xptIAI4kBu6Te65Owlh,parent,
+4Xbeyzzi8yP5U8uOezNL,ZdSqthKU0otWGbKA95tv,parent,
+ZdSqthKU0otWGbKA95tv,bphC5SEOngcuAgWgn1dD,spouse,current
+6xvLGVsPfd1o3oJP5QTP,QYDkuHc1NDil8HKLVIwI,parent,
+JCCQRbKR4oumT70Tx4qw,QYDkuHc1NDil8HKLVIwI,spouse,current
+517dQFRUNU8TfNTScB6W,8xptIAI4kBu6Te65Owlh,spouse,current
+517dQFRUNU8TfNTScB6W,ottxqfqjuVPZgszF0p7s,sibling,
+afMzfJabhVN6BotbxnjT,4v5C2Xnfsz5tC51FXXgf,parent,
+INtBZkTBX2hKeiFDu2XO,JCCQRbKR4oumT70Tx4qw,parent,
+4Xbeyzzi8yP5U8uOezNL,bphC5SEOngcuAgWgn1dD,parent,
+ottxqfqjuVPZgszF0p7s,4v5C2Xnfsz5tC51FXXgf,parent,
+INtBZkTBX2hKeiFDu2XO,QYDkuHc1NDil8HKLVIwI,parent,
+4Xbeyzzi8yP5U8uOezNL,bYlI40xFU5sjC7OwSDhb,spouse,current
+GTFF58jWGk72IaUhJpaQ,afMzfJabhVN6BotbxnjT,spouse,current
+ottxqfqjuVPZgszF0p7s,517dQFRUNU8TfNTScB6W,sibling,
+C75sCqpzIDSzEJRsiiLp,bWa4o8F5YMeesnD1hlAN,spouse,current
+afMzfJabhVN6BotbxnjT,ottxqfqjuVPZgszF0p7s,sibling,
+6xvLGVsPfd1o3oJP5QTP,QYDkuHc1NDil8HKLVIwI,parent,
+HICicVngLIzPCSOiZb3V,pCI3IZx0L5ZFQ1KCMVLj,parent,
+rXpY10zFyaj7cA8T8cRU,4v5C2Xnfsz5tC51FXXgf,sibling,
+bphC5SEOngcuAgWgn1dD,C75sCqpzIDSzEJRsiiLp,parent,
+rXpY10zFyaj7cA8T8cRU,4Xbeyzzi8yP5U8uOezNL,sibling,
+ottxqfqjuVPZgszF0p7s,4v5C2Xnfsz5tC51FXXgf,parent,
+QYDkuHc1NDil8HKLVIwI,JCCQRbKR4oumT70Tx4qw,spouse,current
+INtBZkTBX2hKeiFDu2XO,6xvLGVsPfd1o3oJP5QTP,sibling,
+bphC5SEOngcuAgWgn1dD,bWa4o8F5YMeesnD1hlAN,parent,
+MXe5NJXDSC3cNorf2BfM,1oXzwtLSPb2krvfyKbWx,sibling,
+ottxqfqjuVPZgszF0p7s,INtBZkTBX2hKeiFDu2XO,parent,
+HvqmkjmF01QjM3RudppR,bYlI40xFU5sjC7OwSDhb,spouse,current
+afMzfJabhVN6BotbxnjT,517dQFRUNU8TfNTScB6W,sibling,
+MXe5NJXDSC3cNorf2BfM,8xptIAI4kBu6Te65Owlh,parent,
+afMzfJabhVN6BotbxnjT,INtBZkTBX2hKeiFDu2XO,parent,
+bYlI40xFU5sjC7OwSDhb,4Xbeyzzi8yP5U8uOezNL,spouse,current
+bphC5SEOngcuAgWgn1dD,C75sCqpzIDSzEJRsiiLp,parent,
+INtBZkTBX2hKeiFDu2XO,JCCQRbKR4oumT70Tx4qw,parent,
+afMzfJabhVN6BotbxnjT,517dQFRUNU8TfNTScB6W,sibling,
+HICicVngLIzPCSOiZb3V,rXpY10zFyaj7cA8T8cRU,parent,
+517dQFRUNU8TfNTScB6W,afMzfJabhVN6BotbxnjT,sibling,
+35Gu4KbGn5xvfEspSnH4,4Xbeyzzi8yP5U8uOezNL,parent,
+afMzfJabhVN6BotbxnjT,4v5C2Xnfsz5tC51FXXgf,parent,
+4v5C2Xnfsz5tC51FXXgf,rXpY10zFyaj7cA8T8cRU,sibling,
+HICicVngLIzPCSOiZb3V,pCI3IZx0L5ZFQ1KCMVLj,parent,
+wbI9HUppr2uGJhMlPFe2,bYlI40xFU5sjC7OwSDhb,parent,
+tVWYhR8CpVjBdwE35dtL,GTFF58jWGk72IaUhJpaQ,parent,
+4v5C2Xnfsz5tC51FXXgf,ZdSqthKU0otWGbKA95tv,parent,
+afMzfJabhVN6BotbxnjT,GTFF58jWGk72IaUhJpaQ,spouse,current
+4v5C2Xnfsz5tC51FXXgf,ZdSqthKU0otWGbKA95tv,parent,
+4v5C2Xnfsz5tC51FXXgf,4Xbeyzzi8yP5U8uOezNL,sibling,
+517dQFRUNU8TfNTScB6W,INtBZkTBX2hKeiFDu2XO,parent,
+1oXzwtLSPb2krvfyKbWx,517dQFRUNU8TfNTScB6W,parent,
+tVWYhR8CpVjBdwE35dtL,afMzfJabhVN6BotbxnjT,parent,
+bWa4o8F5YMeesnD1hlAN,C75sCqpzIDSzEJRsiiLp,spouse,current
+MXe5NJXDSC3cNorf2BfM,8xptIAI4kBu6Te65Owlh,parent,
+517dQFRUNU8TfNTScB6W,afMzfJabhVN6BotbxnjT,sibling,
+wbI9HUppr2uGJhMlPFe2,4Xbeyzzi8yP5U8uOezNL,parent,
+rXpY10zFyaj7cA8T8cRU,ZdSqthKU0otWGbKA95tv,parent,
+MXe5NJXDSC3cNorf2BfM,517dQFRUNU8TfNTScB6W,parent,
+QYDkuHc1NDil8HKLVIwI,JCCQRbKR4oumT70Tx4qw,spouse,current
+rXpY10zFyaj7cA8T8cRU,pCI3IZx0L5ZFQ1KCMVLj,spouse,divorced
+35Gu4KbGn5xvfEspSnH4,wbI9HUppr2uGJhMlPFe2,sibling,
+tVWYhR8CpVjBdwE35dtL,GTFF58jWGk72IaUhJpaQ,parent,
+8xptIAI4kBu6Te65Owlh,517dQFRUNU8TfNTScB6W,spouse,current
+GTFF58jWGk72IaUhJpaQ,afMzfJabhVN6BotbxnjT,spouse,current
+C75sCqpzIDSzEJRsiiLp,bWa4o8F5YMeesnD1hlAN,spouse,current
+bphC5SEOngcuAgWgn1dD,bWa4o8F5YMeesnD1hlAN,parent,
+wbI9HUppr2uGJhMlPFe2,4Xbeyzzi8yP5U8uOezNL,parent,
+INtBZkTBX2hKeiFDu2XO,4v5C2Xnfsz5tC51FXXgf,spouse,current
+4v5C2Xnfsz5tC51FXXgf,bphC5SEOngcuAgWgn1dD,parent,
+INtBZkTBX2hKeiFDu2XO,6xvLGVsPfd1o3oJP5QTP,sibling,
+1oXzwtLSPb2krvfyKbWx,MXe5NJXDSC3cNorf2BfM,sibling,
+rXpY10zFyaj7cA8T8cRU,4Xbeyzzi8yP5U8uOezNL,sibling,
+4Xbeyzzi8yP5U8uOezNL,rXpY10zFyaj7cA8T8cRU,sibling,
+HICicVngLIzPCSOiZb3V,rXpY10zFyaj7cA8T8cRU,parent,
+bphC5SEOngcuAgWgn1dD,ZdSqthKU0otWGbKA95tv,spouse,current
+6xvLGVsPfd1o3oJP5QTP,INtBZkTBX2hKeiFDu2XO,sibling,
+4Xbeyzzi8yP5U8uOezNL,4v5C2Xnfsz5tC51FXXgf,sibling,
+4Xbeyzzi8yP5U8uOezNL,rXpY10zFyaj7cA8T8cRU,sibling,
+4v5C2Xnfsz5tC51FXXgf,rXpY10zFyaj7cA8T8cRU,sibling,
+afMzfJabhVN6BotbxnjT,GTFF58jWGk72IaUhJpaQ,spouse,current
+INtBZkTBX2hKeiFDu2XO,4v5C2Xnfsz5tC51FXXgf,spouse,current
+4Xbeyzzi8yP5U8uOezNL,bphC5SEOngcuAgWgn1dD,parent,
+35Gu4KbGn5xvfEspSnH4,bYlI40xFU5sjC7OwSDhb,parent,
+517dQFRUNU8TfNTScB6W,4v5C2Xnfsz5tC51FXXgf,parent,
+35Gu4KbGn5xvfEspSnH4,bYlI40xFU5sjC7OwSDhb,parent,
+JCCQRbKR4oumT70Tx4qw,QYDkuHc1NDil8HKLVIwI,spouse,current
+rXpY10zFyaj7cA8T8cRU,4v5C2Xnfsz5tC51FXXgf,sibling,
+8xptIAI4kBu6Te65Owlh,517dQFRUNU8TfNTScB6W,spouse,current
