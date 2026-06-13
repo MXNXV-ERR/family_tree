@@ -7,9 +7,11 @@ import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platfo
 import { useTheme, font, radius } from '../theme/theme';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
-import { createFamily, joinFamilyByInvite } from '../firebase/families';
+import { useFamilyTree } from '../firebase/useFamilyTree';
+import { createFamily, joinFamilyByInvite, monoOf } from '../firebase/families';
 import { Icon } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
+import type { FamilyTree } from '../shared/types';
 
 type Mode = 'list' | 'new' | 'join';
 
@@ -17,6 +19,23 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
   const { c } = useTheme();
   const { user } = useAuth();
   const { families, activeTreeId, setActiveTreeId } = useFamily();
+  const { treeMetadata } = useFamilyTree(activeTreeId);
+
+  // The membership index can be empty (e.g. multi-family rules not deployed yet)
+  // even though the user clearly has an active tree. Always surface at least the
+  // current family so the switcher is never an empty, confusing list.
+  const shownFamilies: FamilyTree[] = families.length
+    ? families
+    : activeTreeId
+      ? [{
+          id: activeTreeId,
+          name: treeMetadata?.name ?? 'My Family',
+          mono: (treeMetadata as any)?.mono ?? monoOf(treeMetadata?.name ?? 'F'),
+          color: (treeMetadata as any)?.color ?? c.accent,
+          role: 'owner',
+          ownerUid: user?.uid ?? '',
+        } as FamilyTree]
+      : [];
   const [mode, setMode] = useState<Mode>('list');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -60,7 +79,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 10 }}>
         {mode === 'list' && (
           <>
-            {families.map((f) => {
+            {shownFamilies.map((f) => {
               const on = f.id === activeTreeId;
               const color = f.color ?? c.accent;
               return (

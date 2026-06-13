@@ -2,6 +2,7 @@
 // Display toggles (birth years, glass surfaces, motion) wired to SettingsContext,
 // and sign out. Shared by the mobile settings sheet and the desktop drawer.
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme, font, radius } from '../theme/theme';
 import { useSettings, type Settings, type TextSize } from '../theme/SettingsContext';
 import { useAuth } from '../firebase/AuthContext';
@@ -13,6 +14,15 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const { c, mode, setMode } = useTheme();
   const s = useSettings();
   const { signOut } = useAuth();
+  const router = useRouter();
+
+  // Close the panel first, sign out, then send the user to login. (Closing
+  // first avoids the sheet lingering over the redirect.)
+  const handleSignOut = async () => {
+    onClose();
+    try { await signOut(); } catch {}
+    router.replace('/login');
+  };
 
   const themeCards: [typeof mode, IconName, string][] = [['dark', 'moon', 'Dark'], ['light', 'sun', 'Light']];
   type BoolKey = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings];
@@ -83,7 +93,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </GlassSurface>
         </View>
 
-        <Pressable onPress={signOut} style={({ pressed }) => ({
+        <Pressable onPress={handleSignOut} style={({ pressed }) => ({
           flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 15,
           borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }],
         })}>

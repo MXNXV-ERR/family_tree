@@ -119,3 +119,61 @@ export function Rise({ children, i = 0, style }: { children: ReactNode; i?: numb
     </Animated.View>
   );
 }
+
+// Opacity-only entrance (design's .anim-fade). Re-fades when `trigger` changes —
+// handy keyed on a tab id so switching tabs cross-fades the content.
+export function Fade({ children, trigger, dur = 400, style }: { children: ReactNode; trigger?: unknown; dur?: number; style?: StyleProp<ViewStyle> }) {
+  const { motion } = useSettings();
+  const v = useRef(new Animated.Value(motion ? 0 : 1)).current;
+  useEffect(() => {
+    if (!motion) { v.setValue(1); return; }
+    v.setValue(0);
+    Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+  }, [trigger, motion]);
+  return <Animated.View style={[{ opacity: v }, style]}>{children}</Animated.View>;
+}
+
+// Node entrance for the tree/radial — scale-pop in (design's .node-enter /
+// ft-nodepop). Scale-only + fade so cards stay visible. Staggered by index.
+export function NodePop({ children, i = 0, style }: { children: ReactNode; i?: number; style?: StyleProp<ViewStyle> }) {
+  const { motion } = useSettings();
+  const v = useRef(new Animated.Value(motion ? 0 : 1)).current;
+  useEffect(() => {
+    if (!motion) { v.setValue(1); return; }
+    v.setValue(0);
+    Animated.timing(v, { toValue: 1, duration: 420, delay: Math.min(i * 22, 500), easing: Easing.bezier(0.34, 1.56, 0.64, 1), useNativeDriver: true }).start();
+  }, [motion]);
+  return (
+    <Animated.View style={[{ opacity: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }, style]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// Three bouncing dots — the design's AI "typing" indicator (ft-float on dots).
+export function TypingDots({ color }: { color?: string }) {
+  const { c } = useTheme();
+  const { motion } = useSettings();
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  useEffect(() => {
+    if (!motion) return;
+    const loops = dots.map((v, idx) =>
+      Animated.loop(Animated.sequence([
+        Animated.delay(idx * 150),
+        Animated.timing(v, { toValue: 1, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(v, { toValue: 0, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])));
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [motion]);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingVertical: 4 }}>
+      {dots.map((v, i) => (
+        <Animated.View key={i} style={{
+          width: 6, height: 6, borderRadius: 3, backgroundColor: color ?? c.mute,
+          transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) }],
+        }} />
+      ))}
+    </View>
+  );
+}

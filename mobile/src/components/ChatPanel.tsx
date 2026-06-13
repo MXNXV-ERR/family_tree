@@ -3,9 +3,10 @@
 // that open the profile. Used by both the full-screen /chat route (native) and
 // the floating glass sheet (web).
 import { useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
+import { TypingDots } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { chat, type ChatTurn } from '../shared/gemini';
 import type { Member, Relationship } from '../shared/types';
@@ -65,9 +66,10 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
           <Bubble key={i} turn={t} c={c} members={members} onOpenMember={onOpenMember} />
         ))}
         {busy ? (
-          <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 }}>
-            <ActivityIndicator color={c.accent} size="small" />
-            <Text style={{ color: c.mute }}>Thinking…</Text>
+          <View style={{ alignSelf: 'flex-start' }}>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 13, borderRadius: 16, borderBottomLeftRadius: 4, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line }}>
+              <TypingDots />
+            </View>
           </View>
         ) : null}
       </ScrollView>

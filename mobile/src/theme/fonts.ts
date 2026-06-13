@@ -22,7 +22,7 @@ import {
 } from '@expo-google-fonts/spline-sans-mono';
 
 export function useAppFonts(): boolean {
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     Newsreader_500Medium,
     Newsreader_600SemiBold,
     Newsreader_500Medium_Italic,
@@ -36,5 +36,8 @@ export function useAppFonts(): boolean {
     SplineSansMono_500Medium,
     SplineSansMono_600SemiBold,
   });
-  return loaded;
+  // Proceed even if a font fails to load — falling back to system fonts beats a
+  // permanent loading gate (a single 404/decode error would otherwise blank the
+  // whole app, as happened when the .ttf assets weren't deployed).
+  return loaded || !!error;
 }

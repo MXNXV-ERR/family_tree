@@ -12,6 +12,7 @@ import { useTheme, radius, space, font, type Palette } from '../src/theme/theme'
 import { useSettings } from '../src/theme/SettingsContext';
 import { GlassSurface } from '../src/theme/GlassSurface';
 import { Icon } from '../src/ui/Icon';
+import { Rise, Fade } from '../src/ui/primitives';
 import { buildAdjacency, initials, lifespan } from '../src/shared/adjacency';
 import type { Member } from '../src/shared/types';
 
@@ -49,6 +50,7 @@ export default function Profile() {
         </Pressable>
 
         {/* Header */}
+        <Rise i={0}>
         <GlassSurface rounded={radius.xl} style={{ marginBottom: 16 }}>
           <View style={{ padding: space(5), alignItems: 'center' }}>
             <View style={[styles.avatar, { backgroundColor: av, borderColor: c.line }]}>
@@ -69,6 +71,7 @@ export default function Profile() {
             </Pressable>
           </View>
         </GlassSurface>
+        </Rise>
 
         {/* Tabs */}
         <View style={[styles.tabbar, { backgroundColor: c.paper, borderColor: c.line }]}>
@@ -82,9 +85,11 @@ export default function Profile() {
           })}
         </View>
 
-        {tab === 'info' && <InfoTab m={m} c={c} />}
-        {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
-        {tab === 'story' && <StoryTab m={m} c={c} />}
+        <Fade trigger={tab}>
+          {tab === 'info' && <InfoTab m={m} c={c} />}
+          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
+          {tab === 'story' && <StoryTab m={m} c={c} />}
+        </Fade>
       </ScrollView>
     </View>
   );
