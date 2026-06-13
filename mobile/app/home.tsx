@@ -72,7 +72,7 @@ function MobileHome() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}>
         {/* header */}
-        <View style={{ paddingTop: Platform.OS === 'web' ? 18 : 54, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ paddingTop: Platform.OS === 'web' ? 18 : 12, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Pressable onPress={() => setFamilyOpen(true)} style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, opacity: pressed ? 0.7 : 1 })}>
             <View style={{ width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: famColor }}>
               <Text style={{ color: famColor, fontFamily: font.serifItalic, fontSize: 21 }}>{mono}</Text>
@@ -89,7 +89,7 @@ function MobileHome() {
             </View>
           </Pressable>
           <ThemeToggle />
-          <IconBtn name="tune" tone="glass" onPress={() => setSettingsOpen(true)} />
+          <IconBtn name="settings" tone="glass" onPress={() => setSettingsOpen(true)} />
         </View>
 
         <View style={{ paddingHorizontal: 16, gap: 16 }}>
@@ -223,7 +223,7 @@ function MobileHome() {
         <Pressable style={styles.backdrop} onPress={() => setChatOpen(false)} />
         <View style={styles.sheetWrap} pointerEvents="box-none">
           <GlassSurface rounded={radius.xl} intensity={70} style={{ flex: 1, overflow: 'hidden', borderColor: c.line }}>
-            <View style={{ flex: 1, backgroundColor: c.glassBg }}>
+            <View style={{ flex: 1, backgroundColor: c.mode === 'dark' ? '#13131d' : '#fbf8f1' }}>
               <ChatPanel
                 members={members}
                 relationships={relationships}

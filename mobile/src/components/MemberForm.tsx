@@ -67,7 +67,7 @@ export function MemberForm({
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {/* Fixed header — back (cancels the edit), title, and Save */}
-      <View style={[styles.header, { borderColor: c.lineSoft, paddingTop: Platform.OS === 'web' ? 16 : 52 }]}>
+      <View style={[styles.header, { borderColor: c.lineSoft, paddingTop: Platform.OS === 'web' ? 16 : 14 }]}>
         <IconBtn name="back" tone="glass" size={40} onPress={onCancel} />
         <Text style={[styles.headerTitle, { color: c.ink }]}>{initial ? 'Edit member' : 'New member'}</Text>
         <Pressable onPress={submit} disabled={saving} style={[styles.saveBtn, { backgroundColor: c.accent, opacity: saving ? 0.6 : 1 }]}>

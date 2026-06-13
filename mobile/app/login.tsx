@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Animated, Easing,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import { useAuth } from '../src/firebase/AuthContext';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
 import { Icon } from '../src/ui/Icon';
+import { Rise } from '../src/ui/primitives';
 import { useResponsive } from '../src/ui/useResponsive';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -122,8 +123,27 @@ export default function Login() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.root, { backgroundColor: c.bg }]}
     >
-      {card}
+      <AmbientGlow c={c} />
+      <Rise i={0} style={{ width: '100%', alignItems: 'center' }}>{card}</Rise>
     </KeyboardAvoidingView>
+  );
+}
+
+// Soft floating radial glow behind the login card (design's ambient tree glyph).
+function AmbientGlow({ c }: { c: Palette }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: 3500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 3500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ])).start();
+  }, []);
+  return (
+    <Animated.View pointerEvents="none" style={{
+      position: 'absolute', top: '12%', width: 320, height: 320, borderRadius: 320,
+      backgroundColor: c.accentSoft, opacity: 0.6,
+      transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) }],
+    }} />
   );
 }
 

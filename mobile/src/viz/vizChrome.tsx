@@ -2,7 +2,8 @@
 // tab spacing — req 11/12), floating zoom buttons, and a bottom focus bar that
 // opens the selected member's profile. Restyled to the design bundle: line
 // icons, Jakarta/mono type, accent-pill active segment.
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { useTheme, radius, font } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { GlassSurface } from '../theme/GlassSurface';
@@ -68,9 +69,15 @@ export function FocusBar({ member, onOpen, onClose, extra }: {
   member: Member; onOpen: () => void; onClose: () => void; extra?: string;
 }) {
   const { c } = useTheme();
-  const { years } = useSettings();
+  const { years, motion } = useSettings();
+  // Slide up + fade in on mount (design: transform translateY(120%)→0).
+  const v = useRef(new Animated.Value(motion ? 0 : 1)).current;
+  useEffect(() => {
+    if (!motion) { v.setValue(1); return; }
+    Animated.timing(v, { toValue: 1, duration: 350, easing: Easing.bezier(0.16, 1, 0.3, 1), useNativeDriver: true }).start();
+  }, [member.id, motion]);
   return (
-    <View style={styles.focusWrap} pointerEvents="box-none">
+    <Animated.View style={[styles.focusWrap, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [120, 0] }) }] }]} pointerEvents="box-none">
       <GlassSurface rounded={radius.lg} style={{ overflow: 'hidden' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 }}>
           <Avatar m={member} size={38} />
@@ -88,7 +95,7 @@ export function FocusBar({ member, onOpen, onClose, extra }: {
           </Pressable>
         </View>
       </GlassSurface>
-    </View>
+    </Animated.View>
   );
 }
 

@@ -116,7 +116,7 @@ export function DesktopWorkspace() {
           </View>
           <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
           <IconBtn name="users" tone="ghost" onPress={() => setDrawer({ type: 'family' })} />
-          <IconBtn name="tune" tone="ghost" onPress={() => setDrawer({ type: 'settings' })} />
+          <IconBtn name="settings" tone="ghost" onPress={() => setDrawer({ type: 'settings' })} />
           <ThemeToggle />
           <Pressable onPress={() => setDrawer({ type: 'chat' })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, height: 42, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
             <Icon name="sparkles" size={17} color={c.inkSoft} />
