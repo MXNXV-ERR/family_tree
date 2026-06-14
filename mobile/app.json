@@ -44,14 +44,7 @@
           "photosPermission": "Allow Family Tree to access your photos for member pictures and face match."
         }
       ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "enableSeparateBuildPerCPUArchitecture": true
-          }
-        }
-      ],
+      "./plugins/withAndroidAbiSplits",
       [
         "expo-splash-screen",
         {

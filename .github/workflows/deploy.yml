@@ -129,7 +129,9 @@ jobs:
           EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_APP_ID }}
           EXPO_PUBLIC_GEMINI_API_KEY: ${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY }}
           EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
-        run: ./gradlew assembleRelease --no-daemon --stacktrace --info
+        # appVersionCode (CI run number) is the base versionCode; the abi-splits config
+        # plugin turns it into a distinct per-ABI versionCode (base*10 + abi offset).
+        run: ./gradlew assembleRelease --no-daemon --stacktrace --info -PappVersionCode=${{ github.run_number }}
 
       - name: Rename APKs with ABI labels
         id: apks
