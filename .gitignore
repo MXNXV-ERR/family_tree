@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 .firebase
+
+# Firebase service-account private keys — NEVER commit
+*firebase-adminsdk*.json
+serviceAccount*.json
+
+# local admin scripts scratch dir
+_admin/

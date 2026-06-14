@@ -3,7 +3,10 @@
 // default template emits a single universal APK with a fixed versionCode, so we patch
 // the Groovy directly (expo-build-properties exposes no option for either).
 //
-//   1. Split into one APK per ABI (no universal).
+//   1. Split into one APK per ABI, AND keep a universal APK. The universal one is
+//      the safe install artifact for internal/CI distribution: a single-ABI APK
+//      installed on a mismatched device crashes on launch (native libs fail to
+//      load), so we never want the only output to be arch-specific.
 //   2. Make defaultConfig.versionCode overridable via `-PappVersionCode=<n>` (CI passes
 //      the run number) while keeping the app.json value as the local fallback.
 //   3. Give each split APK a distinct versionCode so 64-bit builds outrank their 32-bit
@@ -19,7 +22,7 @@ const SPLITS_BLOCK = `
         abi {
             reset()
             enable true
-            universalApk false
+            universalApk true
             include ${ABIS.map((a) => `"${a}"`).join(', ')}
         }
     }

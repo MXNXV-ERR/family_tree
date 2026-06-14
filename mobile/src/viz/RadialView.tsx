@@ -3,7 +3,7 @@
 // overlaps the name); cards are translucent glass; a "Focus" affordance recentres
 // on a node. Tap a card to highlight its neighbours and reveal relationship pills.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, useWindowDimensions } from 'react-native';
 import Svg, { Line as SvgLine, Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { useTheme, radius, font, type Palette } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
@@ -198,8 +198,10 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
       <Pressable onPress={onPress} style={{ width: '100%' }}>
         <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: isFocus ? c.accent : selected ? c.relChild : c.line, borderWidth: isFocus ? 2 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
           <View style={{ padding: 10, alignItems: 'center', flexDirection: w > 130 ? 'row' : 'column', gap: 8 }}>
-            <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>
+            <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {m.photoUrl
+                ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
+                : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
             </View>
             <View style={{ flex: w > 130 ? 1 : undefined, alignItems: w > 130 ? 'flex-start' : 'center' }}>
               <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{m.name}</Text>
