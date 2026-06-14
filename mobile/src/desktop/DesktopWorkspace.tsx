@@ -4,7 +4,7 @@
 // hosts the profile / member form / settings / family info / chat. Reuses the
 // same visualizers and panels as mobile.
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, TextInput, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
@@ -79,8 +79,13 @@ export function DesktopWorkspace() {
 
   const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
 
-  if (!activeTreeId || !focusId) {
-    return <View style={{ flex: 1, backgroundColor: c.bg }} />;
+  // Active family still resolving — brief spinner, never a blank canvas.
+  if (!activeTreeId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={c.accent} />
+      </View>
+    );
   }
 
   return (
@@ -149,9 +154,17 @@ export function DesktopWorkspace() {
       {/* CANVAS + DRAWER — drawer is confined here (not the whole workspace) so
           the top toolbar stays visible and clickable while a panel is open. */}
       <View style={{ flex: 1 }}>
-        {view === 'tree' && <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
-        {view === 'radial' && <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
-        {view === 'timeline' && <TimelineView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+        {members.length === 0 ? (
+          <EmptyCanvas c={c} family={activeFamily} onAddFirst={() => editMember()} onPickFamily={() => setDrawer({ type: 'familyPicker' })} />
+        ) : !focusId ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>
+        ) : (
+          <>
+            {view === 'tree' && <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+            {view === 'radial' && <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+            {view === 'timeline' && <TimelineView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+          </>
+        )}
 
         {/* RIGHT DRAWER */}
         <DesktopDrawer open={!!drawer} onClose={() => setDrawer(null)}>
@@ -177,6 +190,38 @@ export function DesktopWorkspace() {
         ) : null}
         </DesktopDrawer>
       </View>
+    </View>
+  );
+}
+
+// Shown when the active family has no members yet (e.g. a brand-new account).
+// Replaces the old blank canvas with a welcome + first-step call to action.
+function EmptyCanvas({ c, family, onAddFirst, onPickFamily }: {
+  c: Palette; family: ReturnType<typeof useFamily>['activeFamily'];
+  onAddFirst: () => void; onPickFamily: () => void;
+}) {
+  const name = family?.name ?? 'your family';
+  const color = family?.color ?? c.accent;
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+      <GlassSurface rounded={radius.xl} style={{ width: '100%', maxWidth: 520 }}>
+        <View style={{ padding: 40, alignItems: 'center' }}>
+          <View style={{ width: 72, height: 72, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: color, marginBottom: 22 }}>
+            <Icon name="tree" size={38} stroke={1.5} color={color} />
+          </View>
+          <Text style={{ color: c.ink, fontFamily: font.serifItalic, fontSize: 30, lineHeight: 34, textAlign: 'center' }}>Start your family tree</Text>
+          <Text style={{ color: c.mute, fontFamily: font.sansMed, fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 10, maxWidth: 380 }}>
+            {name} has no one yet. Add your first person, then connect parents, partners, and children.
+          </Text>
+          <Pressable onPress={onAddFirst} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 22, height: 48, borderRadius: radius.md, backgroundColor: c.accent, marginTop: 26, shadowColor: c.accent, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+            <Icon name="plus" size={19} stroke={2.2} color={c.accentInk} />
+            <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 15 }}>Add your first member</Text>
+          </Pressable>
+          <Pressable onPress={onPickFamily} style={({ pressed }) => ({ marginTop: 16, opacity: pressed ? 0.6 : 1 })}>
+            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 13.5 }}>Create or join another family</Text>
+          </Pressable>
+        </View>
+      </GlassSurface>
     </View>
   );
 }

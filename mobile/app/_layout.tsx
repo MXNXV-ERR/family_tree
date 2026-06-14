@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { LogBox, View, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { SettingsProvider } from '../src/theme/SettingsContext';
 import { AuthProvider } from '../src/firebase/AuthContext';
@@ -14,8 +16,16 @@ import { useAppFonts } from '../src/theme/fonts';
 // React warns about. Harmless and web-only — silence it so it doesn't spam dev.
 LogBox.ignoreLogs(['Unknown event handler property']);
 
+// Hold the native splash on screen until the fonts are ready, so there's no
+// flash of unstyled / fallback text on cold start.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout() {
   const fontsLoaded = useAppFonts();
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded]);
 
   if (!fontsLoaded) {
     return (
