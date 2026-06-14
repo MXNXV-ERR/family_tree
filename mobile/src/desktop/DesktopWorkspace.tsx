@@ -26,10 +26,13 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import { FamilyInfoPanel } from '../components/FamilyInfoPanel';
 import { FamilyPickerPanel } from '../components/FamilyPickerPanel';
 import { ChatPanel } from '../components/ChatPanel';
+import { MembersPanel } from '../components/MembersPanel';
+import { ExportPanel } from '../components/ExportPanel';
+import { canEditMember, canDeleteMember, canEditRelationship, canImport } from '../shared/permissions';
 import type { Member } from '../shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'chat'; id?: string } | null;
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'chat' | 'members' | 'export'; id?: string } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -47,6 +50,7 @@ export function DesktopWorkspace() {
 
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
+  const role = activeFamily?.role;
   const gens = useMemo(() => (members.length ? Math.max(...computeGenerations(members, relationships).values()) + 1 : 0), [members, relationships]);
 
   useEffect(() => { if (!focusId && members.length) setFocusId(meId ?? members[0].id); }, [members, meId, focusId]);
@@ -60,12 +64,13 @@ export function DesktopWorkspace() {
 
   async function saveMember(data: Omit<Member, 'id'>, id?: string) {
     if (!activeTreeId) return;
+    if (id && !canEditMember(role, adjacency.get(id), user?.uid)) return; // not your node
     setSaving(true);
     try { if (id) await updateMember(activeTreeId, id, data); else await addMember(activeTreeId, data); setDrawer(null); }
     finally { setSaving(false); }
   }
   async function removeMember(id: string) {
-    if (!activeTreeId) return;
+    if (!activeTreeId || !canDeleteMember(role)) return;
     const ok = Platform.OS !== 'web' || (typeof window !== 'undefined' && window.confirm('Delete this member and their relationship links?'));
     if (!ok) return;
     setSaving(true);
@@ -120,7 +125,8 @@ export function DesktopWorkspace() {
             )}
           </View>
           <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
-          <IconBtn name="users" tone="ghost" onPress={() => setDrawer({ type: 'family' })} />
+          <IconBtn name="users" tone="ghost" onPress={() => setDrawer({ type: 'members' })} />
+          <IconBtn name="download" tone="ghost" onPress={() => setDrawer({ type: 'export' })} />
           <IconBtn name="settings" tone="ghost" onPress={() => setDrawer({ type: 'settings' })} />
           <ThemeToggle />
           <Pressable onPress={() => setDrawer({ type: 'chat' })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, height: 42, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
@@ -170,13 +176,15 @@ export function DesktopWorkspace() {
         <DesktopDrawer open={!!drawer} onClose={() => setDrawer(null)}>
         {drawer?.type === 'profile' && drawer.id ? (
           <DesktopProfile adj={adjacency} id={drawer.id} meId={meId} onClose={() => setDrawer(null)}
+            canEdit={canEditMember(role, adjacency.get(drawer.id), user?.uid)}
+            canAddRelative={canEditRelationship(role, drawer.id, drawer.id, members, user?.uid)}
             onEdit={(id) => editMember(id)} onOpen={(id) => setDrawer({ type: 'profile', id })}
             onAddRelative={() => editMember()} onFocusInTree={(id) => { setFocusId(id); setView('tree'); setDrawer(null); }} />
         ) : null}
         {drawer?.type === 'member' ? (
           <MemberForm initial={drawer.id ? adjacency.get(drawer.id) : undefined} saving={saving}
             onSubmit={(data) => saveMember(data, drawer.id)} onCancel={() => setDrawer(null)}
-            onDelete={drawer.id ? () => removeMember(drawer.id!) : undefined} />
+            onDelete={drawer.id && canDeleteMember(role) ? () => removeMember(drawer.id!) : undefined} />
         ) : null}
         {drawer?.type === 'settings' ? <SettingsPanel onClose={() => setDrawer(null)} /> : null}
         {drawer?.type === 'family' && activeTreeId ? (
@@ -187,6 +195,12 @@ export function DesktopWorkspace() {
         ) : null}
         {drawer?.type === 'chat' ? (
           <ChatPanel members={members} relationships={relationships} onOpenMember={(m) => setDrawer({ type: 'profile', id: m.id })} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'members' ? (
+          <MembersPanel members={members} meId={meId} onOpenProfile={openProfile} onOpenFamilyInfo={() => setDrawer({ type: 'family' })} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'export' && activeTreeId ? (
+          <ExportPanel treeId={activeTreeId} members={members} relationships={relationships} treeName={activeFamily?.name ?? treeMetadata?.name} focusId={focusId} canImport={canImport(role)} onClose={() => setDrawer(null)} />
         ) : null}
         </DesktopDrawer>
       </View>

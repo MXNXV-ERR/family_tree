@@ -13,7 +13,7 @@ export type IconName =
 
 const PATHS: Record<IconName, React.ReactNode> = {
   search: <><Circle cx={11} cy={11} r={7} /><Path d="M20 20l-3.2-3.2" /></>,
-  settings: <><Circle cx={12} cy={12} r={3.2} /><Path d="M12 2.5v2.4M12 19.1v2.4M21.5 12h-2.4M4.9 12H2.5M18.7 5.3l-1.7 1.7M7 17l-1.7 1.7M18.7 18.7L17 17M7 7L5.3 5.3" /></>,
+  settings: <><Path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" /><Circle cx={12} cy={12} r={3} /></>,
   tune: <><Path d="M4 7h16M4 12h16M4 17h16" /><Circle cx={15} cy={7} r={2.6} fill="currentColor" stroke="none" /><Circle cx={9} cy={12} r={2.6} fill="currentColor" stroke="none" /><Circle cx={17} cy={17} r={2.6} fill="currentColor" stroke="none" /></>,
   users: <><Circle cx={9} cy={9} r={3.4} /><Path d="M3.5 19c0-3 2.6-5 5.5-5s5.5 2 5.5 5" /><Path d="M16 6.2a3.2 3.2 0 010 6" /><Path d="M17.5 14.2c2.3.5 3.9 2.3 3.9 4.8" /></>,
   user: <><Circle cx={12} cy={8.5} r={3.8} /><Path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" /></>,

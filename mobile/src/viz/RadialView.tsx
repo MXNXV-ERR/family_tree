@@ -33,6 +33,10 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   const [depth, setDepth] = useState(1);
   const [selId, setSelId] = useState<string | null>(null);
   const canvasRef = useRef<CanvasHandle>(null);
+  // The canvas tap (onTapEmpty) fires simultaneously with a card press; without
+  // this guard the empty-tap clears a selection the card just set — making the
+  // "Bring into focus" affordance appear only intermittently.
+  const lastCardPress = useRef(0);
 
   const { positions, nodes, ringRadii } = useMemo(
     () => layoutRadial(adjacency, focusId, depth), [adjacency, focusId, depth],
@@ -84,7 +88,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
         </View>
       </View>
 
-      <ZoomPanCanvas key={fitKey} ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => setSelId(null)}>
+      <ZoomPanCanvas key={fitKey} ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => { if (Date.now() - lastCardPress.current > 350) setSelId(null); }}>
         <View style={{ width: stageSize, height: stageSize }}>
           <Svg width={stageSize} height={stageSize} style={StyleSheet.absoluteFill}>
             {/* filled radial-gradient glow + visible accent rings (design look) */}
@@ -129,7 +133,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
                 isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id}
                 relLabel={showPill ? REL_LABEL[node?.label ?? ''] ?? node?.label : undefined}
                 relColor={relColor(node?.viaRel)}
-                onPress={() => setSelId(id)}
+                onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
                 onFocus={() => { setFocusId(id); setSelId(null); }} />
             );
           })}
@@ -207,8 +211,9 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
       </Pressable>
       {/* Bring-into-focus affordance, shown when a non-focus card is selected */}
       {selected && !isFocus ? (
-        <Pressable onPress={onFocus} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: c.accent }}>
-          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>◎ Bring into focus</Text>
+        <Pressable onPress={onFocus} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: c.accent }}>
+          <Icon name="target" size={12} color={c.accentInk} />
+          <Text style={{ color: c.accentInk, fontSize: 11, fontWeight: '700' }}>Bring into focus</Text>
         </Pressable>
       ) : null}
     </View>

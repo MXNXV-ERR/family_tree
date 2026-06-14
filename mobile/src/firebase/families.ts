@@ -109,13 +109,23 @@ export async function joinFamilyByInvite(uid: string, email: string | null | und
   const t = snap.docs[0];
   const data = t.data() as any;
   const treeId = t.id;
-  const role: FamilyRole = 'editor';
+  const role: FamilyRole = 'member';
 
   await setDoc(membershipDoc(treeId, uid), { uid, email: email || '', role, joinedAt: serverTimestamp() }, { merge: true });
   await setDoc(familyIndexDoc(uid, treeId), {
     treeId, role, name: data.name || 'Family', mono: data.mono || monoOf(data.name || 'F'), color: data.color || FAMILY_COLORS[0],
   } as Membership);
   return treeId;
+}
+
+// Promote / demote a collaborator (owner only — enforced by the rules). Writes
+// the authoritative membership doc AND the target user's switcher index so their
+// role updates live. Never assigns 'owner' (ownership stays with the creator).
+export async function setMemberRole(treeId: string, targetUid: string, role: FamilyRole) {
+  const safeRole: FamilyRole = role === 'admin' ? 'admin' : 'member';
+  await setDoc(membershipDoc(treeId, targetUid), { role: safeRole }, { merge: true });
+  // Owner is allowed to write the target's family index (see firestore.rules).
+  await setDoc(familyIndexDoc(targetUid, treeId), { role: safeRole }, { merge: true }).catch((e) => console.warn('setMemberRole index', e?.message ?? e));
 }
 
 // Edit family metadata (owner). Also syncs the caller's switcher index basics.

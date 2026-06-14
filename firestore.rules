@@ -2,25 +2,42 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Per-user family index that powers the mobile family switcher.
+    // Per-user family index that powers the family switcher.
     // users/{uid}/families/{treeId} -> { treeId, role, name, mono, color }
+    // A user manages their own index; the tree OWNER may also write it, so that
+    // promoting/demoting a collaborator can sync that collaborator's role here.
     match /users/{userId}/families/{treeId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && (
+        request.auth.uid == userId ||
+        ( exists(/databases/$(database)/documents/trees/$(treeId)/memberships/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/trees/$(treeId)/memberships/$(request.auth.uid)).data.role == 'owner' ) ||
+        ( exists(/databases/$(database)/documents/trees/$(treeId)) &&
+          get(/databases/$(database)/documents/trees/$(treeId)).data.ownerUid == request.auth.uid )
+      );
     }
 
     match /trees/{treeId} {
       function signedIn() { return request.auth != null; }
-      // Legacy convention: a tree whose id equals the owner's uid.
-      function isLegacyOwner() { return signedIn() && request.auth.uid == treeId; }
-      // New convention: tree carries an explicit ownerUid field.
-      function isTreeOwner() { return signedIn() && resource.data.ownerUid == request.auth.uid; }
-      // A member is the owner, an allowedUsers entry (web app), or has a
-      // membership doc under this tree (mobile multi-family).
+      function uid() { return request.auth.uid; }
+
+      // --- role resolution (membership doc is the source of truth) ---
+      function memPath(u) { return /databases/$(database)/documents/trees/$(treeId)/memberships/$(u); }
+      function hasMem(u) { return exists(memPath(u)); }
+      // Legacy single tree (treeId === ownerUid) has no membership doc → owner.
+      function roleOf(u) { return hasMem(u) ? get(memPath(u)).data.role : (u == treeId ? 'owner' : 'none'); }
+      function myRole() { return roleOf(uid()); }
+      function isOwnerRole() { return signedIn() && (uid() == treeId || myRole() == 'owner'); }
+      function isAdminRole() { return signedIn() && myRole() == 'admin'; }
+      // Owner + admin have full data control.
+      function canManageData() { return isOwnerRole() || isAdminRole(); }
+
+      // --- membership / access (tree-doc scope: `resource` is the tree) ---
       function isMember() {
         return signedIn() && (
-          request.auth.uid == treeId ||
-          (resource != null && 'allowedUsers' in resource.data && request.auth.uid in resource.data.allowedUsers) ||
-          exists(/databases/$(database)/documents/trees/$(treeId)/memberships/$(request.auth.uid))
+          uid() == treeId ||
+          hasMem(uid()) ||
+          (resource != null && 'allowedUsers' in resource.data && uid() in resource.data.allowedUsers)
         );
       }
       // Web app join: append yourself to allowedUsers with the right invite code.
@@ -30,26 +47,68 @@ service cloud.firestore {
                request.resource.data.inviteCode == resource.data.inviteCode;
       }
 
+      // --- subcollection helpers (tree doc is NOT in scope here) ---
+      function treeExists() { return exists(/databases/$(database)/documents/trees/$(treeId)); }
+      function treeData() { return get(/databases/$(database)/documents/trees/$(treeId)).data; }
+      function isMemberHere() {
+        return signedIn() && (
+          uid() == treeId ||
+          hasMem(uid()) ||
+          (treeExists() && 'allowedUsers' in treeData() && uid() in treeData().allowedUsers)
+        );
+      }
+      // Depth-1: is member `mid` the node linked to the signed-in user's account?
+      function memberOwnedByMe(mid) {
+        return exists(/databases/$(database)/documents/trees/$(treeId)/members/$(mid)) &&
+          get(/databases/$(database)/documents/trees/$(treeId)/members/$(mid)).data.associatedUserId == uid();
+      }
+      function ownsTreeDoc() { return treeExists() && treeData().ownerUid == uid(); }
+
       allow get: if signedIn();   // read a tree (also used to look up an invite)
       allow list: if signedIn();  // query trees by inviteCode to join
-      allow create: if signedIn() && (request.auth.uid == treeId || request.resource.data.ownerUid == request.auth.uid);
-      allow update: if isMember() || isJoining() || isTreeOwner();
-      allow delete: if isLegacyOwner() || isTreeOwner();
+      allow create: if signedIn() && (uid() == treeId || request.resource.data.ownerUid == uid());
+      allow update: if isMember() || isJoining() || isOwnerRole();
+      allow delete: if isOwnerRole();
 
       // Collaborators / membership records.
       match /memberships/{memberUid} {
-        allow read: if signedIn();
-        allow create, update, delete: if signedIn() && (
-          memberUid == request.auth.uid || request.auth.uid == treeId || isTreeOwner()
+        allow read: if isMemberHere();
+        // Self-join keeps the default 'member' role; the tree owner may seed any
+        // role for their own membership when creating a new family.
+        allow create: if signedIn() && memberUid == uid() && (
+          request.resource.data.role == 'member' || ownsTreeDoc()
         );
+        // Owner promotes / demotes (admin|member only — never reassigns owner).
+        // A user may patch their own membership without changing their role.
+        allow update: if signedIn() && (
+          (isOwnerRole() && request.resource.data.role in ['admin', 'member']) ||
+          (memberUid == uid() && request.resource.data.role == resource.data.role)
+        );
+        allow delete: if signedIn() && (isOwnerRole() || memberUid == uid());
       }
 
-      // Tree data.
-      match /members/{document=**} {
-        allow read, write: if isMember();
+      // Members: owner/admin manage everyone; a normal member may add nodes
+      // (to attach a relative) and edit ONLY their own linked node.
+      match /members/{mid} {
+        allow read: if isMemberHere();
+        allow create: if isMemberHere();
+        allow update: if canManageData() || (
+          resource.data.associatedUserId == uid() &&
+          request.resource.data.associatedUserId == resource.data.associatedUserId
+        );
+        allow delete: if canManageData();
       }
-      match /relationships/{document=**} {
-        allow read, write: if isMember();
+
+      // Relationships: owner/admin link anyone; a normal member may only
+      // add/remove edges that touch their own node (depth 1).
+      match /relationships/{rid} {
+        allow read: if isMemberHere();
+        allow create: if canManageData() ||
+          memberOwnedByMe(request.resource.data.fromId) || memberOwnedByMe(request.resource.data.toId);
+        allow update: if canManageData() ||
+          memberOwnedByMe(request.resource.data.fromId) || memberOwnedByMe(request.resource.data.toId);
+        allow delete: if canManageData() ||
+          memberOwnedByMe(resource.data.fromId) || memberOwnedByMe(resource.data.toId);
       }
     }
   }
