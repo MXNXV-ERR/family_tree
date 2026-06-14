@@ -90,6 +90,22 @@ jobs:
           EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
         run: npx expo prebuild --platform android --clean
 
+      # Diagnostic — surfaces the real expo-modules-autolinking error that the
+      # Gradle wrapper otherwise swallows (it only reports "node exit value 1").
+      # Non-fatal (|| true) so the actual Gradle build still runs and fails with
+      # its own context if this passes. Remove once the build is green.
+      - name: (debug) surface autolinking error
+        working-directory: mobile
+        env:
+          EXPO_DEBUG: "1"
+        run: |
+          echo "::group::expo-modules-autolinking verify"
+          npx expo-modules-autolinking verify -p android || true
+          echo "::endgroup::"
+          echo "::group::expo-modules-autolinking resolve"
+          npx expo-modules-autolinking resolve -p android --json > /dev/null || true
+          echo "::endgroup::"
+
       # Optional release signing — skip if secrets not set, falls back to debug key
       - name: Setup release keystore
         if: ${{ env.HAS_KEYSTORE == 'true' }}
