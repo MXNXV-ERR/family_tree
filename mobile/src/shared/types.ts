@@ -53,7 +53,9 @@ export interface TreeMetadata {
 }
 
 // ---- Multi-family (membership restructure) ----
-export type FamilyRole = 'owner' | 'editor' | 'viewer';
+// owner: 1 per tree, manages roles. admin: full data control. member: normal
+// user (own info + depth-1 links). Legacy 'editor'/'viewer' normalise to member.
+export type FamilyRole = 'owner' | 'admin' | 'member';
 
 // A tree a user can belong to. `id` is the Firestore treeId — for the legacy
 // single tree it equals the owner's uid, so old data keeps loading unchanged.

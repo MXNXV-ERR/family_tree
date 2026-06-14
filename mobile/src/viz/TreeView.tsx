@@ -3,7 +3,7 @@
 // top. Tap a card to focus (re-centres inverted/hourglass) and highlight its
 // neighbours; the focus bar opens the profile.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, useWindowDimensions } from 'react-native';
 import Svg, { Path, Defs, Pattern, Circle, Rect } from 'react-native-svg';
 import Reanimated, { useSharedValue, useAnimatedProps, withTiming, Easing as REasing } from 'react-native-reanimated';
 import { useTheme, radius, type Palette } from '../theme/theme';
@@ -160,7 +160,9 @@ function NodeCard({ m, c, isFocus, isMe, dim, hl, onPress }: {
       elevation: isFocus ? 8 : 2,
     }}>
       <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: 13 }}>{initials(m.name)}</Text>
+        {m.photoUrl
+          ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
+          : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: 13 }}>{initials(m.name)}</Text>}
       </View>
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '700', fontSize: 12 }}>{m.name}</Text>

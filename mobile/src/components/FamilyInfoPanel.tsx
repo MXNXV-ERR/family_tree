@@ -3,13 +3,15 @@
 // the people who have access. Subscribes to the tree doc + membership docs.
 // Shared by the mobile family sheet and the desktop drawer.
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useTheme, font, radius } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
-import { subscribeFamilyDoc, subscribeCollaborators } from '../firebase/families';
+import { useAuth } from '../firebase/AuthContext';
+import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole } from '../firebase/families';
+import { canManageRoles, normalizeRole } from '../shared/permissions';
 import { computeGenerations } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship } from '../shared/types';
 
@@ -21,8 +23,10 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   onClose: () => void;
 }) {
   const { c } = useTheme();
+  const { user } = useAuth();
   const [doc, setDoc] = useState<FamilyTree | null>(family);
   const [collabs, setCollabs] = useState<Collaborator[]>([]);
+  const canManage = canManageRoles(family?.role);
 
   useEffect(() => {
     const u1 = subscribeFamilyDoc(treeId, (f) => f && setDoc(f));
@@ -113,8 +117,15 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
                       <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>{m.name}</Text>
                       {cl.email ? <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5 }}>{cl.email}</Text> : null}
                     </View>
-                    <View style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: cl.role === 'owner' ? c.accentSoft : c.paper, borderWidth: cl.role === 'owner' ? 0 : 1, borderColor: c.line }}>
-                      <Text style={{ color: cl.role === 'owner' ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 12, textTransform: 'capitalize' }}>{cl.role}</Text>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <View style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: cl.role === 'owner' ? c.accentSoft : c.paper, borderWidth: cl.role === 'owner' ? 0 : 1, borderColor: c.line }}>
+                        <Text style={{ color: cl.role === 'owner' ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 12, textTransform: 'capitalize' }}>{normalizeRole(cl.role)}</Text>
+                      </View>
+                      {canManage && cl.role !== 'owner' && cl.uid !== user?.uid ? (
+                        <Pressable onPress={() => setMemberRole(treeId, cl.uid, normalizeRole(cl.role) === 'admin' ? 'member' : 'admin')} hitSlop={6}>
+                          <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 11 }}>{normalizeRole(cl.role) === 'admin' ? 'Make member' : 'Make admin'}</Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
                 </GlassSurface>

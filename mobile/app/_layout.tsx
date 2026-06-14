@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { SettingsProvider } from '../src/theme/SettingsContext';
-import { AuthProvider } from '../src/firebase/AuthContext';
+import { AuthProvider, useAuth } from '../src/firebase/AuthContext';
 import { FamilyProvider } from '../src/firebase/FamilyContext';
 import { useTheme } from '../src/theme/theme';
 import { useAppFonts } from '../src/theme/fonts';
@@ -57,16 +57,27 @@ export default function RootLayout() {
 // Themed so the inset strips match the background in light + dark.
 function NavShell() {
   const { c, mode } = useTheme();
+  // Hold routing until Firebase has restored the session. Without this gate, a
+  // hard refresh renders a screen with user=null (loading) and the screen's
+  // "if (!user) go to /login" logic fires before auth resolves — logging the
+  // user out on every refresh.
+  const { loading } = useAuth();
   return (
     <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: c.bg }}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: c.bg },
-          animation: 'fade',
-        }}
-      />
+      {loading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
+          <ActivityIndicator color={c.accent} />
+        </View>
+      ) : (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: c.bg },
+            animation: 'fade',
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }

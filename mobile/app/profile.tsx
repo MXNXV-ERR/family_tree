@@ -6,8 +6,10 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Image, Linking, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
+import { canEditMember, canEditRelationship } from '../src/shared/permissions';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { useSettings } from '../src/theme/SettingsContext';
 import { GlassSurface } from '../src/theme/GlassSurface';
@@ -21,7 +23,8 @@ type Tab = 'info' | 'relations' | 'story';
 export default function Profile() {
   const { c } = useTheme();
   const { years } = useSettings();
-  const { activeTreeId } = useFamily();
+  const { user } = useAuth();
+  const { activeTreeId, activeFamily } = useFamily();
   const { members, relationships, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -29,6 +32,8 @@ export default function Profile() {
 
   const adj = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
   const m = id ? members.find((x) => x.id === id) : undefined;
+  const canEdit = canEditMember(activeFamily?.role, m, user?.uid);
+  const canLink = !!m && canEditRelationship(activeFamily?.role, m.id, m.id, members, user?.uid);
 
   if (loading) {
     return <Center c={c}><ActivityIndicator color={c.accent} /></Center>;
@@ -66,9 +71,11 @@ export default function Profile() {
                 <Text style={{ color: c.mute, fontSize: 13 }}>{m.location}</Text>
               </View>
             ) : null}
-            <Pressable onPress={() => router.push({ pathname: '/member', params: { id: m.id } })} style={[styles.editBtn, { borderColor: c.accent }]}>
-              <Text style={{ color: c.accent, fontWeight: '700' }}>Edit</Text>
-            </Pressable>
+            {canEdit ? (
+              <Pressable onPress={() => router.push({ pathname: '/member', params: { id: m.id } })} style={[styles.editBtn, { borderColor: c.accent }]}>
+                <Text style={{ color: c.accent, fontWeight: '700' }}>Edit</Text>
+              </Pressable>
+            ) : null}
           </View>
         </GlassSurface>
         </Rise>
@@ -87,7 +94,7 @@ export default function Profile() {
 
         <Fade trigger={tab}>
           {tab === 'info' && <InfoTab m={m} c={c} />}
-          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
+          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
           {tab === 'story' && <StoryTab m={m} c={c} />}
         </Fade>
       </ScrollView>
@@ -127,8 +134,8 @@ function InfoTab({ m, c }: { m: Member; c: Palette }) {
   );
 }
 
-function RelationsTab({ m, adj, c, onOpen, onAdd }: {
-  m: Member; adj: ReturnType<typeof buildAdjacency>; c: Palette;
+function RelationsTab({ m, adj, c, canAdd, onOpen, onAdd }: {
+  m: Member; adj: ReturnType<typeof buildAdjacency>; c: Palette; canAdd: boolean;
   onOpen: (id: string) => void; onAdd: (kind: string) => void;
 }) {
   const groups: { title: string; ids: string[]; addKind: string }[] = [
@@ -144,9 +151,11 @@ function RelationsTab({ m, adj, c, onOpen, onAdd }: {
           <View style={{ padding: space(4) }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <Text style={[styles.section, { color: c.mute }]}>{g.title.toUpperCase()}</Text>
-              <Pressable onPress={() => onAdd(g.addKind)} hitSlop={8}>
-                <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>+ Add</Text>
-              </Pressable>
+              {canAdd ? (
+                <Pressable onPress={() => onAdd(g.addKind)} hitSlop={8}>
+                  <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>+ Add</Text>
+                </Pressable>
+              ) : null}
             </View>
             {g.ids.length === 0 ? (
               <Text style={{ color: c.mute, fontSize: 13 }}>None recorded.</Text>

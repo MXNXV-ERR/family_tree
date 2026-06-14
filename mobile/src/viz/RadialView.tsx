@@ -3,7 +3,7 @@
 // overlaps the name); cards are translucent glass; a "Focus" affordance recentres
 // on a node. Tap a card to highlight its neighbours and reveal relationship pills.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, useWindowDimensions } from 'react-native';
 import Svg, { Line as SvgLine, Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { useTheme, radius, font, type Palette } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
@@ -33,6 +33,10 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   const [depth, setDepth] = useState(1);
   const [selId, setSelId] = useState<string | null>(null);
   const canvasRef = useRef<CanvasHandle>(null);
+  // The canvas tap (onTapEmpty) fires simultaneously with a card press; without
+  // this guard the empty-tap clears a selection the card just set — making the
+  // "Bring into focus" affordance appear only intermittently.
+  const lastCardPress = useRef(0);
 
   const { positions, nodes, ringRadii } = useMemo(
     () => layoutRadial(adjacency, focusId, depth), [adjacency, focusId, depth],
@@ -84,7 +88,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
         </View>
       </View>
 
-      <ZoomPanCanvas key={fitKey} ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => setSelId(null)}>
+      <ZoomPanCanvas key={fitKey} ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => { if (Date.now() - lastCardPress.current > 350) setSelId(null); }}>
         <View style={{ width: stageSize, height: stageSize }}>
           <Svg width={stageSize} height={stageSize} style={StyleSheet.absoluteFill}>
             {/* filled radial-gradient glow + visible accent rings (design look) */}
@@ -129,7 +133,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
                 isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id}
                 relLabel={showPill ? REL_LABEL[node?.label ?? ''] ?? node?.label : undefined}
                 relColor={relColor(node?.viaRel)}
-                onPress={() => setSelId(id)}
+                onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
                 onFocus={() => { setFocusId(id); setSelId(null); }} />
             );
           })}
@@ -194,8 +198,10 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
       <Pressable onPress={onPress} style={{ width: '100%' }}>
         <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: isFocus ? c.accent : selected ? c.relChild : c.line, borderWidth: isFocus ? 2 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
           <View style={{ padding: 10, alignItems: 'center', flexDirection: w > 130 ? 'row' : 'column', gap: 8 }}>
-            <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>
+            <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {m.photoUrl
+                ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
+                : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
             </View>
             <View style={{ flex: w > 130 ? 1 : undefined, alignItems: w > 130 ? 'flex-start' : 'center' }}>
               <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{m.name}</Text>
@@ -207,8 +213,9 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
       </Pressable>
       {/* Bring-into-focus affordance, shown when a non-focus card is selected */}
       {selected && !isFocus ? (
-        <Pressable onPress={onFocus} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: c.accent }}>
-          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>◎ Bring into focus</Text>
+        <Pressable onPress={onFocus} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: c.accent }}>
+          <Icon name="target" size={12} color={c.accentInk} />
+          <Text style={{ color: c.accentInk, fontSize: 11, fontWeight: '700' }}>Bring into focus</Text>
         </Pressable>
       ) : null}
     </View>

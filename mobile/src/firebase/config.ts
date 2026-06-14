@@ -5,6 +5,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   initializeAuth,
   getAuth,
+  browserLocalPersistence,
   // @ts-expect-error getReactNativePersistence has loose typing in some setups
   getReactNativePersistence,
   type Auth,
@@ -26,7 +27,12 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 let auth: Auth;
 if (Platform.OS === 'web') {
-  auth = getAuth(app);
+  // Explicit local persistence so the session survives a page refresh.
+  try {
+    auth = initializeAuth(app, { persistence: browserLocalPersistence });
+  } catch {
+    auth = getAuth(app); // already initialized (Fast Refresh)
+  }
 } else {
   try {
     auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });

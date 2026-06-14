@@ -11,8 +11,8 @@ import { Icon, type IconName } from '../ui/Icon';
 import { lifespan } from '../shared/adjacency';
 import type { Adjacency } from '../shared/adjacency';
 
-export function DesktopProfile({ adj, id, meId, onClose, onEdit, onOpen, onAddRelative, onFocusInTree }: {
-  adj: Adjacency; id: string; meId?: string; onClose: () => void;
+export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, onClose, onEdit, onOpen, onAddRelative, onFocusInTree }: {
+  adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; onClose: () => void;
   onEdit: (id: string) => void; onOpen: (id: string) => void;
   onAddRelative: () => void; onFocusInTree: (id: string) => void;
 }) {
@@ -46,7 +46,7 @@ export function DesktopProfile({ adj, id, meId, onClose, onEdit, onOpen, onAddRe
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderColor: c.lineSoft }}>
         <IconBtn name="back" tone="glass" size={38} onPress={onClose} />
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <IconBtn name="edit" tone="glass" size={38} onPress={() => onEdit(m.id)} />
+          {canEdit ? <IconBtn name="edit" tone="glass" size={38} onPress={() => onEdit(m.id)} /> : null}
         </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }}>
@@ -62,7 +62,10 @@ export function DesktopProfile({ adj, id, meId, onClose, onEdit, onOpen, onAddRe
 
         {/* quick actions */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {([['tree', 'In tree', () => onFocusInTree(m.id)], ['link', 'Add relative', onAddRelative], ['edit', 'Edit', () => onEdit(m.id)]] as [IconName, string, () => void][]).map(([ic, lb, fn]) => (
+          {(([['tree', 'In tree', () => onFocusInTree(m.id)],
+            ...(canAddRelative ? [['link', 'Add relative', onAddRelative]] as [IconName, string, () => void][] : []),
+            ...(canEdit ? [['edit', 'Edit', () => onEdit(m.id)]] as [IconName, string, () => void][] : []),
+          ]) as [IconName, string, () => void][]).map(([ic, lb, fn]) => (
             <Pressable key={lb} onPress={fn} style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
               <Icon name={ic} size={19} color={c.inkSoft} />
               <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 11.5 }}>{lb}</Text>
@@ -94,7 +97,7 @@ export function DesktopProfile({ adj, id, meId, onClose, onEdit, onOpen, onAddRe
             <View style={{ padding: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: ids.length ? 12 : 0 }}>
                 <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.5, textTransform: 'uppercase' }}>{title} · {ids.length}</Text>
-                <Pressable onPress={onAddRelative}><Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>+ Add</Text></Pressable>
+                {canAddRelative ? <Pressable onPress={onAddRelative}><Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>+ Add</Text></Pressable> : null}
               </View>
               {ids.length ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

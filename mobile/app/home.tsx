@@ -33,7 +33,7 @@ export default function Home() {
 
 function MobileHome() {
   const { c } = useTheme();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { years } = useSettings();
   const { activeTreeId, activeFamily, families } = useFamily();
   const { members, relationships, treeMetadata, loading } = useFamilyTree(activeTreeId);
@@ -65,8 +65,8 @@ function MobileHome() {
     : (user?.email ?? '');
 
   useEffect(() => {
-    if (!user) router.replace('/login');
-  }, [user]);
+    if (!authLoading && !user) router.replace('/login');
+  }, [user, authLoading]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>

@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import type { Member, Relationship } from './types';
 import { buildAdjacency, lifespan, initials, computeGenerations, yearOf } from './adjacency';
 import { layoutPyramid, NODE_W, NODE_H } from './treeLayout';
+import { layoutRadial } from './radialLayout';
 
 export interface TreeExport {
   version: 1;
@@ -67,6 +68,91 @@ export function buildTreeSVG(members: Member[], relationships: Relationship[]): 
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`
     + `<rect width="${width}" height="${height}" fill="${DARK.bg}"/>${linePaths}${nodes}</svg>`;
+}
+
+const emptySVG = () =>
+  `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="420" height="200" viewBox="0 0 420 200">`
+  + `<rect width="420" height="200" fill="${DARK.bg}"/><text x="210" y="104" text-anchor="middle" fill="${DARK.mute}" font-family="sans-serif" font-size="14">Nothing to export yet</text></svg>`;
+
+// Standalone SVG of the radial view (focus person centred, relatives on rings).
+export function buildRadialSVG(members: Member[], relationships: Relationship[], focusId?: string, depth = 1): string {
+  const adj = buildAdjacency(members, relationships);
+  const focus = focusId && adj.get(focusId) ? focusId : (members[0]?.id ?? '');
+  if (!focus) return emptySVG();
+  const { positions, ringRadii, nodes } = layoutRadial(adj, focus, Math.max(1, Math.min(3, Math.round(depth))));
+  const PAD = 110;
+  let minX = 0, minY = 0, maxX = 0, maxY = 0;
+  positions.forEach((p) => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+  const W = Math.round(maxX - minX + PAD * 2);
+  const H = Math.round(maxY - minY + PAD * 2);
+  const ox = -minX + PAD, oy = -minY + PAD;
+  const rings = ringRadii.map((r) => `<circle cx="${ox}" cy="${oy}" r="${r}" fill="none" stroke="${DARK.accent}" stroke-width="1.5" opacity="0.28"/>`).join('');
+  const edges = [...nodes.entries()].map(([id, n]) => {
+    if (n.depth === 0) return '';
+    const from = (n.viaId ? positions.get(n.viaId) : positions.get(focus)) ?? positions.get(focus)!;
+    const to = positions.get(id); if (!to) return '';
+    return `<line x1="${(from.x + ox).toFixed(1)}" y1="${(from.y + oy).toFixed(1)}" x2="${(to.x + ox).toFixed(1)}" y2="${(to.y + oy).toFixed(1)}" stroke="${DARK.accent}" stroke-width="1.4" opacity="0.4"/>`;
+  }).join('');
+  const cards = [...positions.entries()].map(([id, p]) => {
+    const m = adj.get(id); if (!m) return '';
+    const isFocus = id === focus;
+    const r = isFocus ? 30 : 22;
+    const fill = m.gender === 'female' ? DARK.f : m.gender === 'male' ? DARK.m : DARK.paper;
+    return `<g transform="translate(${(p.x + ox).toFixed(1)},${(p.y + oy).toFixed(1)})">`
+      + `<circle r="${r}" fill="${fill}" stroke="${isFocus ? DARK.accent : DARK.line}" stroke-width="${isFocus ? 2.5 : 1.5}"/>`
+      + `<text y="4" text-anchor="middle" fill="${DARK.ink}" font-family="sans-serif" font-size="${isFocus ? 13 : 11}" font-weight="700">${xmlEsc(initials(m.name))}</text>`
+      + `<text y="${r + 16}" text-anchor="middle" fill="${DARK.ink}" font-family="sans-serif" font-size="11" font-weight="600">${xmlEsc(m.name.slice(0, 18))}</text>`
+      + `</g>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+    + `<rect width="${W}" height="${H}" fill="${DARK.bg}"/>${rings}${edges}${cards}</svg>`;
+}
+
+// Standalone SVG of the timeline view (one lifespan bar per member, year axis).
+export function buildTimelineSVG(members: Member[], _relationships: Relationship[]): string {
+  const rows = members
+    .map((m) => ({ m, b: yearOf(m.birthDate), d: yearOf(m.deathDate) }))
+    .filter((x): x is { m: Member; b: number; d: number | undefined } => !!x.b)
+    .sort((a, b) => a.b - b.b);
+  if (!rows.length) return emptySVG();
+  const nowY = new Date().getFullYear();
+  const minYear = Math.min(...rows.map((x) => x.b));
+  const maxYear = Math.max(nowY, ...rows.map((x) => x.d ?? nowY));
+  const leftPad = 175, rightPad = 40, topPad = 56, rowH = 30, axisH = 34, plotW = 760;
+  const W = leftPad + plotW + rightPad;
+  const H = topPad + rows.length * rowH + axisH;
+  const span = Math.max(1, maxYear - minYear);
+  const xFor = (y: number) => leftPad + ((y - minYear) / span) * plotW;
+  const grid: string[] = [];
+  for (let y = Math.ceil(minYear / 10) * 10; y <= maxYear; y += 10) {
+    const x = xFor(y).toFixed(1);
+    grid.push(`<line x1="${x}" y1="${topPad - 10}" x2="${x}" y2="${H - axisH}" stroke="${DARK.line}" stroke-width="1" opacity="0.5"/>`);
+    grid.push(`<text x="${x}" y="${H - axisH + 20}" text-anchor="middle" fill="${DARK.mute}" font-family="sans-serif" font-size="11">${y}</text>`);
+  }
+  const bars = rows.map((x, i) => {
+    const y = topPad + i * rowH;
+    const x1 = xFor(x.b), x2 = xFor(x.d ?? nowY);
+    const fill = x.m.gender === 'female' ? DARK.f : x.m.gender === 'male' ? DARK.m : DARK.paper;
+    return `<g transform="translate(0,${y})">`
+      + `<text x="${leftPad - 12}" y="4" text-anchor="end" fill="${DARK.ink}" font-family="sans-serif" font-size="12" font-weight="600">${xmlEsc(x.m.name.slice(0, 24))}</text>`
+      + `<rect x="${x1.toFixed(1)}" y="-7" width="${Math.max(3, x2 - x1).toFixed(1)}" height="14" rx="7" fill="${fill}" stroke="${DARK.accent}" stroke-width="1.2"/>`
+      + `<circle cx="${x1.toFixed(1)}" cy="0" r="4" fill="${DARK.accent}"/>`
+      + (x.d ? `<circle cx="${x2.toFixed(1)}" cy="0" r="3" fill="${DARK.mute}"/>` : '')
+      + `</g>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+    + `<rect width="${W}" height="${H}" fill="${DARK.bg}"/>`
+    + `<text x="${leftPad}" y="32" fill="${DARK.ink}" font-family="sans-serif" font-size="15" font-weight="700">Timeline · ${minYear}–present</text>`
+    + `${grid.join('')}${bars}</svg>`;
+}
+
+export type ExportView = 'tree' | 'radial' | 'timeline';
+
+// Dispatch: build the standalone SVG for whichever view the user chose.
+export function buildViewSVG(view: ExportView, members: Member[], relationships: Relationship[], focusId?: string, depth = 1): string {
+  if (view === 'radial') return buildRadialSVG(members, relationships, focusId, depth);
+  if (view === 'timeline') return buildTimelineSVG(members, relationships);
+  return buildTreeSVG(members, relationships);
 }
 
 // Full PDF summary document: cover with stats, tree snapshot, then a
