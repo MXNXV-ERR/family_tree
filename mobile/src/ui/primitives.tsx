@@ -135,14 +135,15 @@ export function Fade({ children, trigger, dur = 400, style }: { children: ReactN
 
 // Node entrance for the tree/radial — scale-pop in (design's .node-enter /
 // ft-nodepop). Scale-only + fade so cards stay visible. Staggered by index.
-export function NodePop({ children, i = 0, style }: { children: ReactNode; i?: number; style?: StyleProp<ViewStyle> }) {
+export function NodePop({ children, i = 0, disabled, style }: { children: ReactNode; i?: number; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
   const { motion } = useSettings();
-  const v = useRef(new Animated.Value(motion ? 0 : 1)).current;
+  const on = motion && !disabled; // big trees pass disabled to render instantly (no stutter)
+  const v = useRef(new Animated.Value(on ? 0 : 1)).current;
   useEffect(() => {
-    if (!motion) { v.setValue(1); return; }
+    if (!on) { v.setValue(1); return; }
     v.setValue(0);
     Animated.timing(v, { toValue: 1, duration: 420, delay: Math.min(i * 22, 500), easing: Easing.bezier(0.34, 1.56, 0.64, 1), useNativeDriver: true }).start();
-  }, [motion]);
+  }, [on]);
   return (
     <Animated.View style={[{ opacity: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }, style]}>
       {children}
@@ -174,6 +175,99 @@ export function TypingDots({ color }: { color?: string }) {
           transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) }],
         }} />
       ))}
+    </View>
+  );
+}
+
+// Segmented control with a single pill that SLIDES to the active segment (vs the
+// old on/off background toggle). Pill left/width are measured per-segment via
+// onLayout so it works for equal-flex (`fill`) and content-sized (`fill={false}`)
+// layouts alike. Motion-gated: snaps instantly when motion is off.
+export function SegTabs<T extends string>({
+  value, onChange, options, icons, fill = true,
+  activeBg, activeColor, inactiveColor, trackBg, trackBorder,
+  rad = radius.pill, pad = 4, gap = 4, padV = 9, padH = 17, fontSize = 13, iconSize = 17, style,
+}: {
+  value: T; onChange: (v: T) => void; options: [T, string][];
+  icons?: Partial<Record<T, IconName>>; fill?: boolean;
+  activeBg?: string; activeColor?: string; inactiveColor?: string; trackBg?: string; trackBorder?: string;
+  rad?: number; pad?: number; gap?: number; padV?: number; padH?: number; fontSize?: number; iconSize?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { c } = useTheme();
+  const { motion } = useSettings();
+  const [widths, setWidths] = useState<number[]>(() => options.map(() => 0));
+  const left = useRef(new Animated.Value(0)).current;
+  const wv = useRef(new Animated.Value(0)).current;
+  const idx = Math.max(0, options.findIndex(([k]) => k === value));
+  const ready = widths.length === options.length && widths.every((w) => w > 0);
+  const segLeft = (i: number) => widths.slice(0, i).reduce((a, b) => a + b, 0) + i * gap;
+
+  useEffect(() => {
+    if (!ready) return;
+    const tx = segLeft(idx); const tw = widths[idx];
+    if (!motion) { left.setValue(tx); wv.setValue(tw); return; }
+    Animated.parallel([
+      Animated.timing(left, { toValue: tx, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(wv, { toValue: tw, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+  }, [idx, ready, motion, widths]);
+
+  const aBg = activeBg ?? c.accent;
+  const aCol = activeColor ?? c.accentInk;
+  const iCol = inactiveColor ?? c.inkSoft;
+
+  return (
+    <View style={[{ backgroundColor: trackBg ?? c.paper, borderWidth: 1, borderColor: trackBorder ?? c.line, borderRadius: rad, padding: pad }, style]}>
+      <View style={{ flexDirection: 'row', gap }}>
+        {ready ? (
+          <Animated.View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left, width: wv, borderRadius: rad, backgroundColor: aBg }} />
+        ) : null}
+        {options.map(([k, label], i) => {
+          const on = k === value; const ic = icons?.[k];
+          return (
+            <Pressable key={k} onPress={() => onChange(k)}
+              onLayout={(e) => {
+                const wd = e.nativeEvent.layout.width;
+                setWidths((prev) => { if (Math.abs((prev[i] ?? 0) - wd) < 0.5) return prev; const next = prev.slice(); next[i] = wd; return next; });
+              }}
+              style={({ pressed }) => ({ ...(fill ? { flex: 1 } : { paddingHorizontal: padH }), paddingVertical: padV, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+              {ic ? <Icon name={ic} size={iconSize} stroke={1.8} color={on ? aCol : iCol} /> : null}
+              <Text style={{ color: on ? aCol : iCol, fontFamily: font.sansSemi, fontSize }}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// Swaps a single child with a horizontal slide + fade keyed on `activeKey`.
+// Direction comes from `index` vs the previous index (forward → in from right).
+// Only the active child is mounted (cheap for heavy canvases). Motion-gated.
+export function SlideSwap({ activeKey, index, children, style }: {
+  activeKey: string; index: number; children: ReactNode; style?: StyleProp<ViewStyle>;
+}) {
+  const { motion } = useSettings();
+  const [w, setW] = useState(0);
+  const prevIdx = useRef(index);
+  const t = useRef(new Animated.Value(0)).current;
+  const op = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const dir = index >= prevIdx.current ? 1 : -1;
+    prevIdx.current = index;
+    if (!motion || !w) { t.setValue(0); op.setValue(1); return; }
+    t.setValue(dir * w); op.setValue(0);
+    Animated.parallel([
+      Animated.timing(t, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(op, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [activeKey]);
+  return (
+    <View style={[{ flex: 1, overflow: 'hidden' }, style]} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      <Animated.View key={activeKey} style={{ flex: 1, opacity: op, transform: [{ translateX: t }] }}>
+        {children}
+      </Animated.View>
     </View>
   );
 }

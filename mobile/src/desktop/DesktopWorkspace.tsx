@@ -14,8 +14,8 @@ import { planUnlink, type LinkKind } from '../shared/relationshipActions';
 import { buildAdjacency, computeGenerations, lifespan } from '../shared/adjacency';
 import { useTheme, font, radius, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
-import { Avatar, IconBtn, ThemeToggle } from '../ui/primitives';
-import { Icon, type IconName } from '../ui/Icon';
+import { Avatar, IconBtn, ThemeToggle, SegTabs, SlideSwap } from '../ui/primitives';
+import { Icon } from '../ui/Icon';
 import { TreeView } from '../viz/TreeView';
 import { RadialView } from '../viz/RadialView';
 import { TimelineView } from '../viz/TimelineView';
@@ -55,7 +55,7 @@ export function DesktopWorkspace() {
   const role = activeFamily?.role;
   const gens = useMemo(() => (members.length ? Math.max(...computeGenerations(members, relationships).values()) + 1 : 0), [members, relationships]);
 
-  useEffect(() => { if (!focusId && members.length) setFocusId(meId ?? members[0].id); }, [members, meId, focusId]);
+  useEffect(() => { if (!focusId && members.length) setFocusId(meId ?? members[Math.floor(Math.random() * members.length)].id); }, [members, meId, focusId]);
   useEffect(() => { setFocusId(''); setDrawer(null); }, [activeTreeId]);
   useEffect(() => { setZoomApi(null); }, [view]); // active view re-registers its zoom
 
@@ -127,10 +127,10 @@ export function DesktopWorkspace() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {/* TOP TOOLBAR */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderColor: c.lineSoft, zIndex: 30 }}>
-        <FamilySwitcher c={c} onPick={() => setDrawer({ type: 'familyPicker' })} family={activeFamily} fallbackName={treeMetadata?.name} />
+        <FamilySwitcher c={c} onPick={() => setDrawer({ type: 'family' })} family={activeFamily} fallbackName={treeMetadata?.name} />
 
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <ViewSwitcher c={c} value={view} onChange={setView} />
+          <ViewSwitcher value={view} onChange={setView} />
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -195,11 +195,11 @@ export function DesktopWorkspace() {
         ) : !focusId ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>
         ) : (
-          <>
-            {view === 'tree' && <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
-            {view === 'radial' && <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
-            {view === 'timeline' && <TimelineView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
-          </>
+          <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree'].indexOf(view)} style={{ flex: 1 }}>
+            {view === 'tree' ? <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />
+              : view === 'radial' ? <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />
+              : <TimelineView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+          </SlideSwap>
         )}
 
         {/* RIGHT DRAWER */}
@@ -226,7 +226,8 @@ export function DesktopWorkspace() {
         ) : null}
         {drawer?.type === 'settings' ? <SettingsPanel onClose={() => setDrawer(null)} /> : null}
         {drawer?.type === 'family' && activeTreeId ? (
-          <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships} onClose={() => setDrawer(null)} />
+          <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
+            onClose={() => setDrawer(null)} onSwitchFamily={() => setDrawer({ type: 'familyPicker' })} />
         ) : null}
         {drawer?.type === 'familyPicker' ? (
           <FamilyPickerPanel onClose={() => setDrawer(null)} onOpenInfo={() => setDrawer({ type: 'family' })} />
@@ -278,20 +279,13 @@ function EmptyCanvas({ c, family, onAddFirst, onPickFamily }: {
   );
 }
 
-function ViewSwitcher({ c, value, onChange }: { c: Palette; value: ViewKind; onChange: (v: ViewKind) => void }) {
-  const opts: [ViewKind, string, IconName][] = [['radial', 'Radial', 'radial'], ['timeline', 'Timeline', 'timeline'], ['tree', 'Tree', 'tree']];
+function ViewSwitcher({ value, onChange }: { value: ViewKind; onChange: (v: ViewKind) => void }) {
   return (
-    <View style={{ flexDirection: 'row', padding: 4, gap: 2, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: radius.pill }}>
-      {opts.map(([k, lb, ic]) => {
-        const on = value === k;
-        return (
-          <Pressable key={k} onPress={() => onChange(k)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 17, paddingVertical: 9, borderRadius: radius.pill, backgroundColor: on ? c.accent : 'transparent', transform: [{ scale: pressed ? 0.97 : 1 }] })}>
-            <Icon name={ic} size={17} stroke={1.8} color={on ? c.accentInk : c.inkSoft} />
-            <Text style={{ color: on ? c.accentInk : c.inkSoft, fontFamily: font.sansSemi, fontSize: 14 }}>{lb}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegTabs<ViewKind>
+      value={value} onChange={onChange}
+      options={[['radial', 'Radial'], ['timeline', 'Timeline'], ['tree', 'Tree']]}
+      icons={{ radial: 'radial', timeline: 'timeline', tree: 'tree' }}
+      fill={false} fontSize={14} />
   );
 }
 

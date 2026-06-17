@@ -21,25 +21,29 @@ import { relToMe } from '../shared/relationTo';
 import type { Member, Relationship } from '../shared/types';
 
 const RnPath = Reanimated.createAnimatedComponent(Path);
-const DASH = 2000;
 
 // Connector lines that draw themselves in (design's .link-draw / ft-draw): a
-// long dash slides its offset to 0. Reanimated drives the SVG prop so it works
-// on web + native. Restarts whenever `drawKey` changes.
-function DrawLines({ lines, color, drawKey }: { lines: { d: string }[]; color: string; drawKey: string }) {
-  const { motion } = useSettings();
-  const p = useSharedValue(motion ? 0 : 1);
+// long dash slides its offset to 0. `dash` MUST exceed the longest path or the
+// single-value dasharray leaves a gap that clips wide connectors (the broken
+// links on large trees) — so it's driven off the diagram bounding box
+// (width + height ≥ any M…L… path). Reanimated drives the SVG prop so it works
+// on web + native. Restarts when `drawKey` changes; skipped (solid lines) when
+// `animate` is off (motion off / large tree).
+function DrawLines({ lines, color, dash, animate, drawKey }: {
+  lines: { d: string }[]; color: string; dash: number; animate: boolean; drawKey: string;
+}) {
+  const p = useSharedValue(animate ? 0 : 1);
   useEffect(() => {
-    if (!motion) { p.value = 1; return; }
+    if (!animate) { p.value = 1; return; }
     p.value = 0;
     p.value = withTiming(1, { duration: 900, easing: REasing.bezier(0.16, 1, 0.3, 1) });
-  }, [drawKey, motion]);
-  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: DASH * (1 - p.value) }));
+  }, [drawKey, animate]);
+  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: dash * (1 - p.value) }));
   return (
     <>
       {lines.map((l, i) => (
         <RnPath key={i} d={l.d} fill="none" stroke={color} strokeWidth={1.5} opacity={0.5}
-          strokeLinecap="round" strokeDasharray={DASH} animatedProps={animatedProps} />
+          strokeLinecap="round" strokeDasharray={dash} animatedProps={animatedProps} />
       ))}
     </>
   );
@@ -53,6 +57,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
 }) {
   const { c } = useTheme();
+  const { motion } = useSettings();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [layout, setLayout] = useState<TreeLayout>('pyramid');
   const [selId, setSelId] = useState<string | null>(null);
@@ -67,7 +72,26 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   const { positions, couplePills, lines, width, height } = res;
 
   const fit = Math.max(0.2, Math.min(1, (screenW - 40) / width, (screenH - 220) / height));
-  const fitKey = `${layout}-${focusId}-${Math.round(width)}`;
+  // Entrance animations only on small trees — hundreds of NodePop/line-draw
+  // animations stutter and "skip" on big trees, so render those instantly.
+  const animate = motion && positions.size <= 60;
+  // Dash long enough to cover any single connector at this tree size.
+  const dash = Math.ceil(width + height);
+  // Lines redraw on layout/size change, not on every focus tap (geometry is the
+  // same), so the canvas stays mounted across focus changes (no remount jank).
+  const drawKey = `${layout}-${Math.round(width)}`;
+
+  // Smoothly pan the canvas so the focus member sits at centre — on first load
+  // (the default "you"/random focus) and whenever the focus changes. Content is
+  // centred in the canvas, transform is [tx, ty, scale], so a content point
+  // (nx,ny) reaches centre at tx = scale*(W/2 - nx), ty = scale*(H/2 - ny).
+  useEffect(() => {
+    const pos = positions.get(focusId);
+    if (!pos) return;
+    const nx = pos.x + NODE_W / 2;
+    const ny = pos.y + NODE_H / 2;
+    canvasRef.current?.reset(fit, fit * (width / 2 - nx), fit * (height / 2 - ny));
+  }, [focusId, layout, width, height, fit]);
 
   const highlight = useMemo(() => {
     if (!selId) return null;
@@ -95,7 +119,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
         onChange={(v) => { setLayout(v as TreeLayout); setSelId(null); }}
         options={[['pyramid', 'Pyramid'], ['inverted', 'Ancestors'], ['hourglass', 'Hourglass']]}
       />
-      <ZoomPanCanvas key={fitKey} ref={canvasRef} initialScale={fit} minScale={0.15} maxScale={2.5} onTapEmpty={() => setSelId(null)}>
+      <ZoomPanCanvas key={layout} ref={canvasRef} initialScale={fit} minScale={0.15} maxScale={2.5} onTapEmpty={() => setSelId(null)}>
         <View style={{ width, height }}>
           <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
             {/* dotted canvas (design .dotgrid) */}
@@ -105,7 +129,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
               </Pattern>
             </Defs>
             <Rect x={0} y={0} width={width} height={height} fill="url(#ft-dots)" />
-            <DrawLines lines={lines} color={c.relParent} drawKey={fitKey} />
+            <DrawLines lines={lines} color={c.relParent} dash={dash} animate={animate} drawKey={drawKey} />
           </Svg>
 
           {couplePills.map((p, i) => (
@@ -125,7 +149,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
             const dim = !!highlight && !highlight.has(id);
             const hl = !!highlight && highlight.has(id) && !isFocus;
             return (
-              <NodePop key={id} i={idx} style={{ position: 'absolute', left: pos.x, top: pos.y }}>
+              <NodePop key={id} i={idx} disabled={!animate} style={{ position: 'absolute', left: pos.x, top: pos.y }}>
                 <NodeCard m={m} c={c}
                   isFocus={isFocus} isMe={isMe} dim={dim} hl={hl}
                   onPress={() => { setSelId(id); setFocusId(id); }} />

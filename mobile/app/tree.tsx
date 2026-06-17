@@ -2,13 +2,14 @@
 // Timeline) with a top switcher. Focus person drives the radial + ancestor/
 // hourglass layouts; tapping a node's profile button navigates to /profile.
 import { useMemo, useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { useTheme, radius } from '../src/theme/theme';
 import { Icon } from '../src/ui/Icon';
+import { SegTabs, SlideSwap } from '../src/ui/primitives';
 import { buildAdjacency } from '../src/shared/adjacency';
 import { TreeView } from '../src/viz/TreeView';
 import { RadialView } from '../src/viz/RadialView';
@@ -30,7 +31,7 @@ export default function VizScreen() {
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
 
   useEffect(() => {
-    if (!focusId && members.length) setFocusId(meId ?? members[0].id);
+    if (!focusId && members.length) setFocusId(meId ?? members[Math.floor(Math.random() * members.length)].id);
   }, [members, meId, focusId]);
 
   const openProfile = (m: Member) => router.push({ pathname: '/profile', params: { id: m.id } });
@@ -45,28 +46,18 @@ export default function VizScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 8 }}>
         <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
-        <View style={[styles.switch, { backgroundColor: c.paper, borderColor: c.line }]}>
-          {(['tree', 'radial', 'timeline'] as ViewKind[]).map((v) => {
-            const on = view === v;
-            return (
-              <Pressable key={v} onPress={() => setView(v)} style={[styles.switchBtn, on && { backgroundColor: c.accentSoft }]}>
-                <Text style={{ color: on ? c.accent : c.inkSoft, fontWeight: '700', fontSize: 13, textTransform: 'capitalize' }}>{v}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <SegTabs<ViewKind>
+          value={view} onChange={setView}
+          options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline']]}
+          activeBg={c.accentSoft} activeColor={c.accent} rad={radius.md} pad={3} gap={3} padV={8} fontSize={13}
+          style={{ flex: 1 }} />
       </View>
 
-      <View style={{ flex: 1 }}>
-        {view === 'tree' && <TreeView {...shared} />}
-        {view === 'radial' && <RadialView {...shared} />}
-        {view === 'timeline' && <TimelineView {...shared} />}
-      </View>
+      <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline'].indexOf(view)} style={{ flex: 1 }}>
+        {view === 'tree' ? <TreeView {...shared} />
+          : view === 'radial' ? <RadialView {...shared} />
+          : <TimelineView {...shared} />}
+      </SlideSwap>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  switch: { flex: 1, flexDirection: 'row', borderWidth: 1, borderRadius: radius.md, padding: 3, gap: 3 },
-  switchBtn: { flex: 1, paddingVertical: 8, borderRadius: radius.sm, alignItems: 'center' },
-});
