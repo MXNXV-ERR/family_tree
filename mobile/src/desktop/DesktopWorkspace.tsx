@@ -9,7 +9,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
-import { addMember, updateMember, deleteMember, deleteRelationship } from '../firebase/firestore';
+import { addMember, updateMember, deleteMember, deleteRelationship, deleteRelationships, addRelationships, claimMember } from '../firebase/firestore';
+import { planUnlink, type LinkKind } from '../shared/relationshipActions';
 import { buildAdjacency, computeGenerations, lifespan } from '../shared/adjacency';
 import { useTheme, font, radius, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
@@ -28,11 +29,12 @@ import { FamilyPickerPanel } from '../components/FamilyPickerPanel';
 import { ChatPanel } from '../components/ChatPanel';
 import { MembersPanel } from '../components/MembersPanel';
 import { ExportPanel } from '../components/ExportPanel';
+import { LinkForm } from '../components/LinkForm';
 import { canEditMember, canDeleteMember, canEditRelationship, canImport } from '../shared/permissions';
-import type { Member } from '../shared/types';
+import type { Member, Relationship } from '../shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'chat' | 'members' | 'export'; id?: string } | null;
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -80,6 +82,34 @@ export function DesktopWorkspace() {
       await deleteMember(activeTreeId, id);
       setDrawer(null);
     } finally { setSaving(false); }
+  }
+
+  // Add relationship edges (with the same depth-1 guard as the mobile /link route).
+  async function addLink(edges: Omit<Relationship, 'id'>[]) {
+    if (!activeTreeId) return;
+    if (!edges.every((e) => canEditRelationship(role, e.fromId, e.toId, members, user?.uid))) return;
+    setSaving(true);
+    try { await addRelationships(activeTreeId, edges); setDrawer(null); }
+    finally { setSaving(false); }
+  }
+  // Remove a relationship (direct edges + now-unsupported inferred siblings).
+  function removeLink(focusMemberId: string, kind: LinkKind, relatedId: string) {
+    if (!activeTreeId) return;
+    if (!canEditRelationship(role, focusMemberId, relatedId, members, user?.uid)) return;
+    const plan = planUnlink(members, relationships, focusMemberId, relatedId, kind);
+    if (!plan.ids.length) return;
+    const other = adjacency.get(relatedId)?.name ?? 'this person';
+    const ok = Platform.OS !== 'web' || (typeof window !== 'undefined' && window.confirm(`Remove the link between ${adjacency.get(focusMemberId)?.name ?? 'this person'} and ${other}?`));
+    if (!ok) return;
+    deleteRelationships(activeTreeId, plan.ids);
+  }
+  // Claim a node as "this is me" (only offered when the user has no node yet).
+  function claimThis(memberId: string) {
+    if (!activeTreeId || !user) return;
+    const name = adjacency.get(memberId)?.name ?? 'this person';
+    const ok = Platform.OS !== 'web' || (typeof window !== 'undefined' && window.confirm(`Set ${name} as you? You'll get the “You” badge and can edit this profile.`));
+    if (!ok) return;
+    claimMember(activeTreeId, memberId, user.uid);
   }
 
   const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
@@ -178,8 +208,16 @@ export function DesktopWorkspace() {
           <DesktopProfile adj={adjacency} id={drawer.id} meId={meId} onClose={() => setDrawer(null)}
             canEdit={canEditMember(role, adjacency.get(drawer.id), user?.uid)}
             canAddRelative={canEditRelationship(role, drawer.id, drawer.id, members, user?.uid)}
+            canClaim={!meId && !adjacency.get(drawer.id)?.associatedUserId}
             onEdit={(id) => editMember(id)} onOpen={(id) => setDrawer({ type: 'profile', id })}
-            onAddRelative={() => editMember()} onFocusInTree={(id) => { setFocusId(id); setView('tree'); setDrawer(null); }} />
+            onAddRelative={(kind) => setDrawer({ type: 'link', id: drawer.id, kind })}
+            onDeleteRelative={(kind, relatedId) => removeLink(drawer.id!, kind, relatedId)}
+            onClaim={() => claimThis(drawer.id!)}
+            onFocusInTree={(id) => { setFocusId(id); setView('tree'); setDrawer(null); }} />
+        ) : null}
+        {drawer?.type === 'link' ? (
+          <LinkForm members={members} relationships={relationships} presetAId={drawer.id} presetKind={drawer.kind}
+            saving={saving} onSubmit={addLink} onCancel={() => setDrawer(drawer.id ? { type: 'profile', id: drawer.id } : null)} />
         ) : null}
         {drawer?.type === 'member' ? (
           <MemberForm initial={drawer.id ? adjacency.get(drawer.id) : undefined} saving={saving}

@@ -11,7 +11,7 @@
 // need the membership-aware rules in mobile/firestore.rules.
 import {
   collection, doc, setDoc, addDoc, updateDoc, getDoc, getDocs,
-  onSnapshot, query, where, serverTimestamp,
+  onSnapshot, query, where, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
 import type { FamilyTree, Membership, Collaborator, FamilyRole } from '../shared/types';
@@ -76,27 +76,37 @@ export async function createFamily(
   const treeRef = doc(collection(db, 'trees'));
   const treeId = treeRef.id;
 
-  await setDoc(treeRef, {
-    name, mono, color, ownerUid: uid,
-    surname: input.surname || name.split(/\s+/)[0],
-    region: input.region || '',
-    summary: input.summary || '',
-    kind: 'Your family',
-    established: String(new Date().getFullYear()),
-    inviteCode: genInvite(input.surname || name),
-    createdAt: serverTimestamp(),
-  });
+  try {
+    const batch = writeBatch(db);
 
-  await setDoc(membershipDoc(treeId, uid), { uid, email: email || '', role: 'owner', joinedAt: serverTimestamp() });
-  await setDoc(familyIndexDoc(uid, treeId), { treeId, role: 'owner', name, mono, color } as Membership);
+    batch.set(treeRef, {
+      name, mono, color, ownerUid: uid,
+      surname: input.surname || name.split(/\s+/)[0],
+      region: input.region || '',
+      summary: input.summary || '',
+      kind: 'Your family',
+      established: String(new Date().getFullYear()),
+      inviteCode: genInvite(input.surname || name),
+      createdAt: serverTimestamp(),
+    });
 
-  // Seed the creator so the new tree isn't empty and "You" resolves.
-  await addDoc(collection(treeRef, 'members'), {
-    name: input.meName || (email ? email.split('@')[0] : 'Me'),
-    gender: 'other', associatedUserId: uid, createdAt: serverTimestamp(),
-  });
+    batch.set(membershipDoc(treeId, uid), { uid, email: email || '', role: 'owner', joinedAt: serverTimestamp() });
+    batch.set(familyIndexDoc(uid, treeId), { treeId, role: 'owner', name, mono, color } as Membership);
 
-  return treeId;
+    await batch.commit();
+
+    // Seed the creator so the new tree isn't empty and "You" resolves.
+    // addDoc isn't batchable, so we do it as a follow-up.
+    await addDoc(collection(treeRef, 'members'), {
+      name: input.meName || (email ? email.split('@')[0] : 'Me'),
+      gender: 'other', associatedUserId: uid, createdAt: serverTimestamp(),
+    });
+
+    return treeId;
+  } catch (e) {
+    console.error('createFamily failure', e);
+    throw e;
+  }
 }
 
 // Join an existing family by its invite code. Returns the treeId, or null.
@@ -135,6 +145,34 @@ export async function updateFamily(treeId: string, uid: string, data: Partial<Fa
   if (data.name) { idxPatch.name = data.name; idxPatch.mono = monoOf(data.name); }
   if (data.color) idxPatch.color = data.color;
   if (Object.keys(idxPatch).length) await setDoc(familyIndexDoc(uid, treeId), idxPatch, { merge: true });
+}
+
+// Permanently delete a family the user owns: every member + relationship +
+// membership doc, each collaborator's switcher index entry, then the tree doc.
+// Caller (UI) blocks deleting the legacy primary tree (treeId === ownerUid) so a
+// user is never left with zero trees. Owner-only — enforced by the rules.
+export async function deleteFamily(treeId: string, uid: string) {
+  const [membersSnap, relsSnap, memSnap] = await Promise.all([
+    getDocs(collection(treeDoc(treeId), 'members')),
+    getDocs(collection(treeDoc(treeId), 'relationships')),
+    getDocs(collection(treeDoc(treeId), 'memberships')),
+  ]);
+
+  const refs: any[] = [];
+  membersSnap.forEach((d) => refs.push(d.ref));
+  relsSnap.forEach((d) => refs.push(d.ref));
+  // Each collaborator's membership doc + their per-user switcher index entry
+  // (the owner is allowed to write collaborators' index docs — see the rules).
+  memSnap.forEach((d) => { refs.push(d.ref); refs.push(familyIndexDoc(d.id, treeId)); });
+  refs.push(familyIndexDoc(uid, treeId)); // own index (covers a legacy tree with no membership doc)
+  refs.push(treeDoc(treeId));             // appended last so it survives rule checks on the rows above
+
+  // Firestore caps a batch at 500 writes — commit in chunks, tree doc last.
+  for (let i = 0; i < refs.length; i += 450) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 450).forEach((r) => batch.delete(r));
+    await batch.commit();
+  }
 }
 
 // Live full metadata for one family (region/summary/invite/etc.).

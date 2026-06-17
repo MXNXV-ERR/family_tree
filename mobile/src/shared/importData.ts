@@ -2,6 +2,7 @@
 // one with the same name + birthDate already exists (req: merge, skip dupes).
 import * as XLSX from 'xlsx';
 import type { Member, Relationship } from './types';
+import { inferImpliedEdges } from './relationshipActions';
 
 export interface ParsedTree { members: Member[]; relationships: Relationship[]; }
 
@@ -105,6 +106,22 @@ export function planMerge(existing: Member[], incoming: ParsedTree, existingRels
     if (seenEdge.has(sig)) continue;
     seenEdge.add(sig);
     newRelationships.push({ fromId: from, toId: to, type: r.type, status: r.status, marriageDate: r.marriageDate });
+  }
+
+  // Close the graph: a CSV often records a child under only one parent, or a
+  // marriage without re-stating the kids. Run the same cascade the manual Link
+  // form applies so the imported tree comes out consistent — a child linked to
+  // the wife is also linked to the husband, shared-parent kids become siblings.
+  // Inferred edges reference real ids or `new:<importId>` placeholders, which
+  // commitMerge resolves exactly like the explicit edges above.
+  const placeholderMembers: Member[] = newMembers.map((nm) => ({ id: `new:${nm.importId}`, ...(nm.data as Omit<Member, 'id'>) }));
+  const combinedMembers: Member[] = [...existing, ...placeholderMembers];
+  const combinedRels = [...existingRels, ...newRelationships];
+  for (const e of inferImpliedEdges(combinedMembers, combinedRels)) {
+    const sig = `${e.fromId}|${e.toId}|${e.type}`;
+    if (seenEdge.has(sig)) continue;
+    seenEdge.add(sig);
+    newRelationships.push({ fromId: e.fromId, toId: e.toId, type: e.type, status: e.status, marriageDate: e.marriageDate });
   }
 
   return { newMembers, newRelationships, skipped, idMap };

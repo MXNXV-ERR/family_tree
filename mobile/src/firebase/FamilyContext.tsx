@@ -31,6 +31,10 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   const [families, setFamilies] = useState<FamilyTree[]>([]);
   const [activeTreeId, setActiveState] = useState<string | null>(null);
   const [loadingFamilies, setLoading] = useState(true);
+  // True once the persisted selection has been read back from storage. The
+  // fallback effect must wait for this, else it snaps the user to their primary
+  // tree on every refresh before the saved choice has loaded.
+  const [hydrated, setHydrated] = useState(false);
 
   // Backfill + subscribe to the user's families.
   useEffect(() => {
@@ -54,20 +58,27 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; unsub(); };
   }, [uid]);
 
-  // Restore the persisted active tree once we know the user.
+  // Restore the persisted active tree once we know the user. `hydrated` gates
+  // the fallback below so a not-yet-loaded selection is never overwritten.
   useEffect(() => {
-    if (!uid) return;
-    AsyncStorage.getItem(activeKey(uid)).then((v) => setActiveState(v || uid));
+    if (!uid) { setHydrated(false); return; }
+    setHydrated(false);
+    let cancelled = false;
+    AsyncStorage.getItem(activeKey(uid))
+      .then((v) => { if (!cancelled) { setActiveState(v || uid); setHydrated(true); } })
+      .catch(() => { if (!cancelled) setHydrated(true); });
+    return () => { cancelled = true; };
   }, [uid]);
 
-  // Keep the active tree valid against the live family list.
+  // Keep the active tree valid against the live family list — but only after the
+  // saved selection has been restored, so a refresh holds the chosen family.
   useEffect(() => {
-    if (!uid || loadingFamilies) return;
+    if (!uid || !hydrated || loadingFamilies) return;
     if (!families.length) return;
     if (!activeTreeId || !families.some((f) => f.id === activeTreeId)) {
       setActiveState(families.some((f) => f.id === uid) ? uid : families[0].id);
     }
-  }, [families, activeTreeId, uid, loadingFamilies]);
+  }, [families, activeTreeId, uid, loadingFamilies, hydrated]);
 
   const setActiveTreeId = (id: string) => {
     setActiveState(id);

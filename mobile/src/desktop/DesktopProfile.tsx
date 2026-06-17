@@ -10,11 +10,13 @@ import { Avatar, IconBtn } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
 import { lifespan } from '../shared/adjacency';
 import type { Adjacency } from '../shared/adjacency';
+import type { LinkKind } from '../shared/relationshipActions';
 
-export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, onClose, onEdit, onOpen, onAddRelative, onFocusInTree }: {
-  adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; onClose: () => void;
+export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, canClaim = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onFocusInTree }: {
+  adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; canClaim?: boolean; onClose: () => void;
   onEdit: (id: string) => void; onOpen: (id: string) => void;
-  onAddRelative: () => void; onFocusInTree: (id: string) => void;
+  onAddRelative: (kind?: LinkKind) => void; onDeleteRelative?: (kind: LinkKind, relatedId: string) => void;
+  onClaim?: () => void; onFocusInTree: (id: string) => void;
 }) {
   const { c } = useTheme();
   const { years } = useSettings();
@@ -32,11 +34,11 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
     ['briefcase', 'Occupation', m.occupation],
   ];
   const rows = info.filter((r) => r[2]);
-  const relGroups: [string, string[]][] = [
-    ['Parents', adj.parents(m.id)],
-    ['Partners', [...adj.currentSpouses(m.id), ...adj.exSpouses(m.id)]],
-    ['Children', adj.children(m.id)],
-    ['Siblings', adj.siblings(m.id)],
+  const relGroups: [string, string[], LinkKind][] = [
+    ['Parents', adj.parents(m.id), 'child'],
+    ['Partners', [...adj.currentSpouses(m.id), ...adj.exSpouses(m.id)], 'spouse'],
+    ['Children', adj.children(m.id), 'parent'],
+    ['Siblings', adj.siblings(m.id), 'sibling'],
   ];
   const story: [string, string | undefined][] = [['Favourite quote', m.favoriteQuote], ['About', m.about], ['Childhood', m.childhoodStories]];
 
@@ -63,7 +65,8 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
         {/* quick actions */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {(([['tree', 'In tree', () => onFocusInTree(m.id)],
-            ...(canAddRelative ? [['link', 'Add relative', onAddRelative]] as [IconName, string, () => void][] : []),
+            ...(canAddRelative ? [['link', 'Add relative', () => onAddRelative()]] as [IconName, string, () => void][] : []),
+            ...(canClaim && onClaim ? [['user', 'This is me', onClaim]] as [IconName, string, () => void][] : []),
             ...(canEdit ? [['edit', 'Edit', () => onEdit(m.id)]] as [IconName, string, () => void][] : []),
           ]) as [IconName, string, () => void][]).map(([ic, lb, fn]) => (
             <Pressable key={lb} onPress={fn} style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
@@ -92,21 +95,26 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
         ) : null}
 
         {/* relations */}
-        {relGroups.map(([title, ids]) => (
+        {relGroups.map(([title, ids, kind]) => (
           <GlassSurface key={title} rounded={radius.lg}>
             <View style={{ padding: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: ids.length ? 12 : 0 }}>
                 <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.5, textTransform: 'uppercase' }}>{title} · {ids.length}</Text>
-                {canAddRelative ? <Pressable onPress={onAddRelative}><Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>+ Add</Text></Pressable> : null}
+                {canAddRelative ? <Pressable onPress={() => onAddRelative(kind)}><Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>+ Add</Text></Pressable> : null}
               </View>
               {ids.length ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {ids.map((rid) => { const p = adj.get(rid); if (!p) return null; const ex = title === 'Partners' && adj.exSpouses(m.id).includes(rid);
                     return (
-                      <Pressable key={rid} onPress={() => onOpen(rid)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 5, paddingRight: 13, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line }}>
+                      <Pressable key={rid} onPress={() => onOpen(rid)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 5, paddingRight: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line }}>
                         <Avatar m={p} size={28} />
                         <Text style={{ color: c.ink, fontFamily: font.sansSemi, fontSize: 13.5 }}>{p.name}</Text>
                         {ex ? <Text style={{ color: c.relEx, fontSize: 11 }}>ex</Text> : null}
+                        {canAddRelative && onDeleteRelative ? (
+                          <Pressable onPress={() => onDeleteRelative(kind, rid)} hitSlop={8} style={{ marginLeft: 2 }}>
+                            <Icon name="close" size={14} color={c.mute} />
+                          </Pressable>
+                        ) : null}
                       </Pressable>
                     ); })}
                 </View>

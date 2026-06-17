@@ -27,7 +27,13 @@ service cloud.firestore {
       // Legacy single tree (treeId === ownerUid) has no membership doc → owner.
       function roleOf(u) { return hasMem(u) ? get(memPath(u)).data.role : (u == treeId ? 'owner' : 'none'); }
       function myRole() { return roleOf(uid()); }
-      function isOwnerRole() { return signedIn() && (uid() == treeId || myRole() == 'owner'); }
+      function isOwnerRole() {
+        return signedIn() && (
+          uid() == treeId ||
+          myRole() == 'owner' ||
+          (treeExists() && treeData().ownerUid == uid())
+        );
+      }
       function isAdminRole() { return signedIn() && myRole() == 'admin'; }
       // Owner + admin have full data control.
       function canManageData() { return isOwnerRole() || isAdminRole(); }
@@ -37,7 +43,8 @@ service cloud.firestore {
         return signedIn() && (
           uid() == treeId ||
           hasMem(uid()) ||
-          (resource != null && 'allowedUsers' in resource.data && uid() in resource.data.allowedUsers)
+          (resource != null && 'allowedUsers' in resource.data && uid() in resource.data.allowedUsers) ||
+          (resource != null && 'ownerUid' in resource.data && resource.data.ownerUid == uid())
         );
       }
       // Web app join: append yourself to allowedUsers with the right invite code.
@@ -54,6 +61,7 @@ service cloud.firestore {
         return signedIn() && (
           uid() == treeId ||
           hasMem(uid()) ||
+          (treeExists() && treeData().ownerUid == uid()) ||
           (treeExists() && 'allowedUsers' in treeData() && uid() in treeData().allowedUsers)
         );
       }
@@ -92,10 +100,19 @@ service cloud.firestore {
       match /members/{mid} {
         allow read: if isMemberHere();
         allow create: if isMemberHere();
-        allow update: if canManageData() || (
-          resource.data.associatedUserId == uid() &&
-          request.resource.data.associatedUserId == resource.data.associatedUserId
-        );
+        allow update: if canManageData()
+          || (
+            resource.data.associatedUserId == uid() &&
+            request.resource.data.associatedUserId == resource.data.associatedUserId
+          )
+          // "This is me": a member may claim a node that has no owner yet by
+          // setting associatedUserId to themselves — and changing nothing else.
+          || (
+            isMemberHere() &&
+            (!('associatedUserId' in resource.data) || resource.data.associatedUserId == '') &&
+            request.resource.data.associatedUserId == uid() &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['associatedUserId'])
+          );
         allow delete: if canManageData();
       }
 

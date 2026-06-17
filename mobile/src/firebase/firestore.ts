@@ -24,6 +24,11 @@ export const addMember = (uid: string, m: Omit<Member, 'id'>) =>
 export const updateMember = (uid: string, id: string, data: Partial<Member>) =>
   updateDoc(doc(treeRef(uid), 'members', id), data);
 
+// Claim a member node as "this is me" — sets associatedUserId to the signed-in
+// user. The rules let a plain member do this only on a node with no owner yet.
+export const claimMember = (treeId: string, memberId: string, uid: string) =>
+  updateMember(treeId, memberId, { associatedUserId: uid });
+
 export const deleteMember = (uid: string, id: string) =>
   deleteDoc(doc(treeRef(uid), 'members', id));
 
@@ -41,6 +46,16 @@ export async function addRelationships(uid: string, edges: Omit<Relationship, 'i
 
 export const deleteRelationship = (uid: string, id: string) =>
   deleteDoc(doc(treeRef(uid), 'relationships', id));
+
+// Delete several relationship edges atomically (an unlink usually removes a few
+// direct + inferred docs together).
+export async function deleteRelationships(uid: string, ids: string[]) {
+  if (!ids.length) return;
+  const batch = writeBatch(db);
+  const col = collection(treeRef(uid), 'relationships');
+  ids.forEach((id) => batch.delete(doc(col, id)));
+  await batch.commit();
+}
 
 // Bulk import (Phase 7) — batched writes.
 export async function bulkImport(uid: string, members: Member[], relationships: Relationship[]) {
