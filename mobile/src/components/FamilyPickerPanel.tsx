@@ -9,17 +9,19 @@ import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
 import { createFamily, joinFamilyByInvite, monoOf } from '../firebase/families';
+import { claimMember } from '../firebase/firestore';
 import { Icon } from '../ui/Icon';
+import { Avatar } from '../ui/primitives';
 import { SheetHead } from './panelChrome';
 import type { FamilyTree } from '../shared/types';
 
-type Mode = 'list' | 'new' | 'join';
+type Mode = 'list' | 'new' | 'join' | 'claim';
 
 export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void; onOpenInfo: () => void }) {
   const { c } = useTheme();
   const { user } = useAuth();
   const { families, activeTreeId, setActiveTreeId } = useFamily();
-  const { treeMetadata } = useFamilyTree(activeTreeId);
+  const { members, treeMetadata } = useFamilyTree(activeTreeId);
 
   // The membership index can be empty (e.g. multi-family rules not deployed yet)
   // even though the user clearly has an active tree. Always surface at least the
@@ -51,7 +53,10 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
     try {
       const id = await createFamily(user.uid, user.email, { name: name.trim(), region: region.trim(), colorIndex: families.length });
       setActiveTreeId(id); onClose();
-    } catch (e) { setErr('Could not create family. Check your connection / rules.'); }
+    } catch (e: any) {
+      console.error('doCreate', e);
+      setErr(e?.message || 'Could not create family. Check your connection / rules.');
+    }
     finally { setBusy(false); }
   }
 
@@ -61,8 +66,18 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
     try {
       const id = await joinFamilyByInvite(user.uid, user.email, code.trim());
       if (!id) { setErr('No family found for that invite code.'); return; }
-      setActiveTreeId(id); onClose();
+      // Switch to the joined tree and offer to claim a node, rather than closing.
+      setActiveTreeId(id); setCode(''); setMode('claim');
     } catch (e) { setErr('Could not join. Check the code and your rules.'); }
+    finally { setBusy(false); }
+  }
+
+  // Link the signed-in user to a member node ("this is me") right after joining.
+  async function doClaim(memberId: string) {
+    if (!user || !activeTreeId) return;
+    setBusy(true); setErr(null);
+    try { await claimMember(activeTreeId, memberId, user.uid); onClose(); }
+    catch (e) { setErr('Could not set that as you. Ask the family owner.'); }
     finally { setBusy(false); }
   }
 
@@ -71,7 +86,9 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
       style={{ height: 48, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, color: c.ink, fontFamily: font.sansMed, fontSize: 15, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : null) }} />
   );
 
-  const headSub = mode === 'new' ? 'Start a new tree you own' : mode === 'join' ? 'Enter an invite code' : 'Switch between the trees you belong to';
+  const headSub = mode === 'new' ? 'Start a new tree you own' : mode === 'join' ? 'Enter an invite code'
+    : mode === 'claim' ? 'Pick the person that is you' : 'Switch between the trees you belong to';
+  const unclaimed = members.filter((m) => !m.associatedUserId);
 
   return (
     <View style={{ flex: 1 }}>
@@ -140,6 +157,31 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 15 }}>Join family</Text>}
               </Pressable>
             </View>
+          </View>
+        )}
+
+        {mode === 'claim' && (
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: c.inkSoft, fontFamily: font.sans, fontSize: 13.5, lineHeight: 20 }}>
+              You're in. Which person are you? Pick your node to get the “You” badge — or just browse the tree.
+            </Text>
+            {unclaimed.map((m) => (
+              <Pressable key={m.id} onPress={() => doClaim(m.id)} disabled={busy} style={({ pressed }) => ({
+                flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: radius.lg,
+                backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.98 : 1 }],
+              })}>
+                <Avatar m={m} size={40} />
+                <Text numberOfLines={1} style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 15 }}>{m.name}</Text>
+                <Icon name="chevR" size={18} color={c.faint} />
+              </Pressable>
+            ))}
+            {unclaimed.length === 0 ? (
+              <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 13, textAlign: 'center', paddingVertical: 8 }}>No unclaimed people to pick yet.</Text>
+            ) : null}
+            {err ? <Text style={{ color: c.danger, fontFamily: font.sans, fontSize: 13 }}>{err}</Text> : null}
+            <Pressable onPress={onClose} style={({ pressed }) => actionStyle(c, pressed)}>
+              <Icon name="check" size={18} color={c.inkSoft} /><Text style={actionText(c)}>Just view</Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>

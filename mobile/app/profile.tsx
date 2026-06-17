@@ -4,12 +4,14 @@
 // custom). Edit button → member form. Quick actions add a relative via the
 // Link dialog preset to this person.
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Image, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Image, Linking, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
-import { canEditMember, canEditRelationship } from '../src/shared/permissions';
+import { canEditMember, canEditRelationship, myMemberId } from '../src/shared/permissions';
+import { planUnlink, type LinkKind } from '../src/shared/relationshipActions';
+import { deleteRelationships, claimMember } from '../src/firebase/firestore';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { useSettings } from '../src/theme/SettingsContext';
 import { GlassSurface } from '../src/theme/GlassSurface';
@@ -34,6 +36,28 @@ export default function Profile() {
   const m = id ? members.find((x) => x.id === id) : undefined;
   const canEdit = canEditMember(activeFamily?.role, m, user?.uid);
   const canLink = !!m && canEditRelationship(activeFamily?.role, m.id, m.id, members, user?.uid);
+  const myId = myMemberId(members, user?.uid);
+
+  // Remove a relationship (direct edges + now-unsupported inferred siblings).
+  const removeLink = (kind: string, relatedId: string) => {
+    if (!m || !activeTreeId) return;
+    const plan = planUnlink(members, relationships, m.id, relatedId, kind as LinkKind);
+    if (!plan.ids.length) return;
+    const other = members.find((x) => x.id === relatedId)?.name ?? 'this person';
+    const msg = `Remove the link between ${m.name} and ${other}?`;
+    const go = () => { deleteRelationships(activeTreeId, plan.ids); };
+    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
+    else Alert.alert('Remove link', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: go }]);
+  };
+
+  // Claim this node as "this is me" (only when the user has no node yet).
+  const claimThis = () => {
+    if (!m || !activeTreeId || !user) return;
+    const msg = `Set ${m.name} as you? You'll get the “You” badge and can edit this profile.`;
+    const go = () => { claimMember(activeTreeId, m.id, user.uid); };
+    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
+    else Alert.alert('This is me', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Yes', onPress: go }]);
+  };
 
   if (loading) {
     return <Center c={c}><ActivityIndicator color={c.accent} /></Center>;
@@ -71,11 +95,18 @@ export default function Profile() {
                 <Text style={{ color: c.mute, fontSize: 13 }}>{m.location}</Text>
               </View>
             ) : null}
-            {canEdit ? (
-              <Pressable onPress={() => router.push({ pathname: '/member', params: { id: m.id } })} style={[styles.editBtn, { borderColor: c.accent }]}>
-                <Text style={{ color: c.accent, fontWeight: '700' }}>Edit</Text>
-              </Pressable>
-            ) : null}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              {canEdit ? (
+                <Pressable onPress={() => router.push({ pathname: '/member', params: { id: m.id } })} style={[styles.editBtn, { borderColor: c.accent, marginTop: 0 }]}>
+                  <Text style={{ color: c.accent, fontWeight: '700' }}>Edit</Text>
+                </Pressable>
+              ) : null}
+              {!myId && !m.associatedUserId ? (
+                <Pressable onPress={claimThis} style={[styles.editBtn, { borderColor: c.accent, backgroundColor: c.accentSoft, marginTop: 0 }]}>
+                  <Text style={{ color: c.accent, fontWeight: '700' }}>This is me</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         </GlassSurface>
         </Rise>
@@ -94,7 +125,7 @@ export default function Profile() {
 
         <Fade trigger={tab}>
           {tab === 'info' && <InfoTab m={m} c={c} />}
-          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
+          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
           {tab === 'story' && <StoryTab m={m} c={c} />}
         </Fade>
       </ScrollView>
@@ -134,9 +165,9 @@ function InfoTab({ m, c }: { m: Member; c: Palette }) {
   );
 }
 
-function RelationsTab({ m, adj, c, canAdd, onOpen, onAdd }: {
-  m: Member; adj: ReturnType<typeof buildAdjacency>; c: Palette; canAdd: boolean;
-  onOpen: (id: string) => void; onAdd: (kind: string) => void;
+function RelationsTab({ m, adj, c, canAdd, canDelete, onOpen, onAdd, onDelete }: {
+  m: Member; adj: ReturnType<typeof buildAdjacency>; c: Palette; canAdd: boolean; canDelete: boolean;
+  onOpen: (id: string) => void; onAdd: (kind: string) => void; onDelete: (kind: string, relatedId: string) => void;
 }) {
   const groups: { title: string; ids: string[]; addKind: string }[] = [
     { title: 'Parents', ids: adj.parents(m.id), addKind: 'child' },
@@ -172,6 +203,11 @@ function RelationsTab({ m, adj, c, canAdd, onOpen, onAdd }: {
                       </View>
                       <Text style={{ color: c.ink, fontWeight: '600' }}>{p.name}</Text>
                       {ex ? <Text style={{ color: c.relEx, fontSize: 11 }}>(ex)</Text> : null}
+                      {canDelete ? (
+                        <Pressable onPress={() => onDelete(g.addKind, rid)} hitSlop={8} style={{ marginLeft: 1 }}>
+                          <Icon name="close" size={14} color={c.mute} />
+                        </Pressable>
+                      ) : null}
                     </Pressable>
                   );
                 })}

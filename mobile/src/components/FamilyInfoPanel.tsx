@@ -3,15 +3,15 @@
 // the people who have access. Subscribes to the tree doc + membership docs.
 // Shared by the mobile family sheet and the desktop drawer.
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useTheme, font, radius } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
-import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole } from '../firebase/families';
-import { canManageRoles, normalizeRole } from '../shared/permissions';
+import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf } from '../firebase/families';
+import { canManageRoles, normalizeRole, isOwner } from '../shared/permissions';
 import { computeGenerations } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship } from '../shared/types';
 
@@ -38,6 +38,47 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const color = fam?.color ?? c.accent;
   const mono = fam?.mono ?? (fam?.name?.[0]?.toUpperCase() ?? 'F');
 
+  // Owner-only edit + delete. The legacy primary tree (treeId === uid) can't be
+  // deleted, so the user is never left with no family at all.
+  const owner = isOwner(fam?.role) || isOwner(family?.role);
+  const isPrimary = treeId === user?.uid;
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [fName, setFName] = useState('');
+  const [fRegion, setFRegion] = useState('');
+  const [fEst, setFEst] = useState('');
+  const [fSummary, setFSummary] = useState('');
+  const [fColor, setFColor] = useState<string | undefined>(undefined);
+
+  const startEdit = () => {
+    setFName(fam?.name ?? ''); setFRegion(fam?.region ?? ''); setFEst(fam?.established ?? '');
+    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setEditing(true);
+  };
+  const saveEdit = async () => {
+    if (!user || !fName.trim()) return;
+    setBusy(true);
+    try {
+      await updateFamily(treeId, user.uid, {
+        name: fName.trim(), mono: monoOf(fName.trim()), region: fRegion.trim(),
+        established: fEst.trim(), summary: fSummary.trim(), ...(fColor ? { color: fColor } : {}),
+      });
+      setEditing(false);
+    } finally { setBusy(false); }
+  };
+  const removeFamily = () => {
+    if (!user || isPrimary) return;
+    const msg = `Delete "${fam?.name ?? 'this family'}"? Every member, link, and collaborator is permanently removed. This can't be undone.`;
+    const go = async () => { setBusy(true); try { await deleteFamily(treeId, user.uid); onClose(); } finally { setBusy(false); } };
+    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
+    else Alert.alert('Delete family', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: go }]);
+  };
+
+  const inputStyle = {
+    height: 46, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.line,
+    backgroundColor: c.paper, color: c.ink, fontFamily: font.sansMed, fontSize: 15,
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : null),
+  };
+
   const gens = useMemo(() => {
     if (!members.length) return 0;
     return Math.max(...computeGenerations(members, relationships).values()) + 1;
@@ -57,6 +98,35 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
     <View style={{ flex: 1 }}>
       <SheetHead icon="info" title="Family info" sub={fam?.name} onClose={onClose} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 16 }}>
+        {editing ? (
+          <View style={{ gap: 12 }}>
+            <Field label="Family name" c={c}><TextInput value={fName} onChangeText={setFName} placeholder="Family name" placeholderTextColor={c.mute} style={inputStyle} /></Field>
+            <Field label="Region" c={c}><TextInput value={fRegion} onChangeText={setFRegion} placeholder="Region (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
+            <Field label="Established" c={c}><TextInput value={fEst} onChangeText={setFEst} placeholder="Year (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
+            <Field label="Summary" c={c}><TextInput value={fSummary} onChangeText={setFSummary} placeholder="A short description (optional)" placeholderTextColor={c.mute} multiline style={[inputStyle, { height: 92, paddingTop: 12, textAlignVertical: 'top' }]} /></Field>
+            <Field label="Colour" c={c}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {FAMILY_COLORS.map((col) => {
+                  const on = (fColor ?? color) === col;
+                  return (
+                    <Pressable key={col} onPress={() => setFColor(col)} style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: c.paper, borderWidth: 2, borderColor: on ? col : c.line }}>
+                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: col }} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Field>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <Pressable onPress={() => setEditing(false)} style={{ flex: 1, height: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.line }}>
+                <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 15 }}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={saveEdit} disabled={busy || !fName.trim()} style={{ flex: 1, height: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accent, opacity: busy || !fName.trim() ? 0.6 : 1 }}>
+                {busy ? <ActivityIndicator color={c.accentInk} /> : <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 15 }}>Save changes</Text>}
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+        <>
         {/* identity */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <View style={{ width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: c.paper, borderWidth: 1.5, borderColor: color }}>
@@ -136,7 +206,34 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
             ) : null}
           </View>
         </View>
+
+        {/* owner actions */}
+        {owner ? (
+          <View style={{ gap: 10, marginTop: 4 }}>
+            <Pressable onPress={startEdit} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+              <Icon name="edit" size={17} color={c.inkSoft} /><Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Edit family details</Text>
+            </Pressable>
+            {!isPrimary ? (
+              <Pressable onPress={removeFamily} disabled={busy} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: c.danger, opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+                <Icon name="trash" size={17} color={c.danger} /><Text style={{ color: c.danger, fontFamily: font.sansSemi, fontSize: 14.5 }}>Delete family</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 12, textAlign: 'center' }}>Your primary family can't be deleted.</Text>
+            )}
+          </View>
+        ) : null}
+        </>
+        )}
       </ScrollView>
+    </View>
+  );
+}
+
+function Field({ label, c, children }: { label: string; c: ReturnType<typeof useTheme>['c']; children: React.ReactNode }) {
+  return (
+    <View style={{ gap: 7 }}>
+      <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', marginLeft: 2 }}>{label}</Text>
+      {children}
     </View>
   );
 }
