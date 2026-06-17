@@ -46,7 +46,15 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   const C = maxR; // centre offset (stage is 2*maxR square)
   const stageSize = maxR * 2;
   const fit = Math.max(0.25, Math.min(1, (screenW - 40) / stageSize, (screenH - 220) / stageSize));
-  const fitKey = `${focusId}-${depth}-${Math.round(maxR)}`;
+
+  // Glide to centre on the focus member instead of hard-remounting the canvas.
+  // The radial layout always places the focus at the stage centre, so recentring
+  // is reset(fit, 0, 0). Skip the first run — initialScale already fits on mount.
+  const firstFit = useRef(true);
+  useEffect(() => {
+    if (firstFit.current) { firstFit.current = false; return; }
+    canvasRef.current?.reset(fit, 0, 0);
+  }, [focusId, depth, fit]);
 
   const highlight = useMemo(() => {
     if (!selId) return null;
@@ -88,7 +96,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
         </View>
       </View>
 
-      <ZoomPanCanvas key={fitKey} ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => { if (Date.now() - lastCardPress.current > 350) setSelId(null); }}>
+      <ZoomPanCanvas ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => { if (Date.now() - lastCardPress.current > 350) setSelId(null); }}>
         <View style={{ width: stageSize, height: stageSize }}>
           <Svg width={stageSize} height={stageSize} style={StyleSheet.absoluteFill}>
             {/* filled radial-gradient glow + visible accent rings (design look) */}

@@ -27,6 +27,16 @@ export type NeighborNode = {
   viaRel?: string;
 };
 
+// Distinct couples = unique unordered spouse pairs. Counting edges/2 over-counts
+// when an edge isn't perfectly bidirectional or is duplicated; deduping the
+// {fromId,toId} pair is robust to both.
+export function countCouples(relationships: Relationship[]): number {
+  const pairs = new Set<string>();
+  for (const r of relationships)
+    if (r.type === 'spouse') pairs.add([r.fromId, r.toId].sort().join('|'));
+  return pairs.size;
+}
+
 export function buildAdjacency(members: Member[], relationships: Relationship[]): Adjacency {
   const byId = new Map(members.map((m) => [m.id, m]));
   const parents = new Map<string, string[]>();

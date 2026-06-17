@@ -8,26 +8,16 @@ import { useTheme, radius, font } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon, type IconName } from '../ui/Icon';
-import { Avatar } from '../ui/primitives';
+import { Avatar, SegTabs } from '../ui/primitives';
 import { lifespan } from '../shared/adjacency';
 import type { Member } from '../shared/types';
 
 export function VizSegment({ value, onChange, options }: {
   value: string; onChange: (v: string) => void; options: [string, string][];
 }) {
-  const { c } = useTheme();
   return (
     <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
-      <View style={[styles.seg, { backgroundColor: c.paper, borderColor: c.line }]}>
-        {options.map(([k, label]) => {
-          const on = value === k;
-          return (
-            <Pressable key={k} onPress={() => onChange(k)} style={[styles.segBtn, on && { backgroundColor: c.accent }]}>
-              <Text style={{ color: on ? c.accentInk : c.inkSoft, fontFamily: font.sansSemi, fontSize: 12.5 }}>{label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <SegTabs value={value} onChange={onChange} options={options} fontSize={12.5} />
     </View>
   );
 }
@@ -100,8 +90,6 @@ export function FocusBar({ member, onOpen, onClose, extra }: {
 }
 
 const styles = StyleSheet.create({
-  seg: { flexDirection: 'row', borderWidth: 1, borderRadius: radius.pill, padding: 4, gap: 4 },
-  segBtn: { flex: 1, paddingVertical: 9, borderRadius: radius.pill, alignItems: 'center' },
   zoom: { position: 'absolute', right: 12, top: 70, gap: 8 },
   zoomBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   focusWrap: { position: 'absolute', left: 12, right: 12, bottom: 16 },

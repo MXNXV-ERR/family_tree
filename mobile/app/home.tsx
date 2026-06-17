@@ -21,7 +21,7 @@ import { Icon, type IconName } from '../src/ui/Icon';
 import { Avatar, IconBtn, SectionLabel, Counter, ThemeToggle, Rise } from '../src/ui/primitives';
 import { useResponsive } from '../src/ui/useResponsive';
 import { DesktopWorkspace } from '../src/desktop/DesktopWorkspace';
-import { lifespan, computeGenerations } from '../src/shared/adjacency';
+import { lifespan, computeGenerations, countCouples } from '../src/shared/adjacency';
 import type { Member } from '../src/shared/types';
 
 // On wide web viewports the home route becomes the desktop workspace; phones and
@@ -46,7 +46,7 @@ function MobileHome() {
   const openChat = () => { if (Platform.OS === 'web') setChatOpen(true); else router.push('/chat'); };
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
-  const couples = useMemo(() => Math.round(relationships.filter((r) => r.type === 'spouse').length / 2), [relationships]);
+  const couples = useMemo(() => countCouples(relationships), [relationships]);
   const gens = useMemo(() => {
     if (!members.length) return 0;
     const g = computeGenerations(members, relationships);
@@ -73,7 +73,7 @@ function MobileHome() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}>
         {/* header */}
         <View style={{ paddingTop: Platform.OS === 'web' ? 18 : 12, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Pressable onPress={() => setFamilyOpen(true)} style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, opacity: pressed ? 0.7 : 1 })}>
+          <Pressable onPress={() => setFamilyInfoOpen(true)} style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, opacity: pressed ? 0.7 : 1 })}>
             <View style={{ width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: famColor }}>
               <Text style={{ color: famColor, fontFamily: font.serifItalic, fontSize: 21 }}>{mono}</Text>
             </View>
@@ -214,7 +214,9 @@ function MobileHome() {
       {/* family info */}
       <BottomSheet visible={familyInfoOpen} onClose={() => setFamilyInfoOpen(false)} heightRatio={0.88}>
         {activeTreeId ? (
-          <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships} onClose={() => setFamilyInfoOpen(false)} />
+          <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
+            onClose={() => setFamilyInfoOpen(false)}
+            onSwitchFamily={() => { setFamilyInfoOpen(false); setFamilyOpen(true); }} />
         ) : null}
       </BottomSheet>
 

@@ -4,7 +4,10 @@
 import { type ReactNode, useImperativeHandle, forwardRef, useRef, useEffect } from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
+
+// Eased pan/zoom — replaces the default linear 300ms so recenter & zoom glide.
+const EASE = { duration: 420, easing: Easing.out(Easing.cubic) };
 
 export interface CanvasHandle {
   reset: (scale?: number, tx?: number, ty?: number) => void;
@@ -28,12 +31,12 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
 
   useImperativeHandle(ref, () => ({
     reset(s = initialScale, x = 0, y = 0) {
-      scale.value = withTiming(s);
-      tx.value = withTiming(x);
-      ty.value = withTiming(y);
+      scale.value = withTiming(s, EASE);
+      tx.value = withTiming(x, EASE);
+      ty.value = withTiming(y, EASE);
     },
     zoomBy(factor: number) {
-      scale.value = withTiming(Math.max(minScale, Math.min(maxScale, scale.value * factor)));
+      scale.value = withTiming(Math.max(minScale, Math.min(maxScale, scale.value * factor)), EASE);
     },
   }));
 

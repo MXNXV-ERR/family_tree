@@ -12,15 +12,16 @@ import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
 import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf } from '../firebase/families';
 import { canManageRoles, normalizeRole, isOwner } from '../shared/permissions';
-import { computeGenerations } from '../shared/adjacency';
+import { computeGenerations, countCouples } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship } from '../shared/types';
 
-export function FamilyInfoPanel({ treeId, family, members, relationships, onClose }: {
+export function FamilyInfoPanel({ treeId, family, members, relationships, onClose, onSwitchFamily }: {
   treeId: string;
   family: FamilyTree | null;
   members: Member[];
   relationships: Relationship[];
   onClose: () => void;
+  onSwitchFamily?: () => void;
 }) {
   const { c } = useTheme();
   const { user } = useAuth();
@@ -83,7 +84,7 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
     if (!members.length) return 0;
     return Math.max(...computeGenerations(members, relationships).values()) + 1;
   }, [members, relationships]);
-  const couples = Math.round(relationships.filter((r) => r.type === 'spouse').length / 2);
+  const couples = countCouples(relationships);
   const stats: [string, number][] = [['Members', members.length], ['Generations', gens], ['Couples', couples]];
 
   const ownerEmail = collabs.find((x) => x.role === 'owner')?.email || fam?.ownerUid || '—';
@@ -143,6 +144,14 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
         </View>
 
         {fam?.summary ? <Text style={{ color: c.inkSoft, fontFamily: font.sans, fontSize: 14.5, lineHeight: 22 }}>{fam.summary}</Text> : null}
+
+        {/* switch family — the picker now lives inside the details panel */}
+        {onSwitchFamily ? (
+          <Pressable onPress={onSwitchFamily} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, backgroundColor: c.accentSoft, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+            <Icon name="users" size={17} color={c.accent} />
+            <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 14.5 }}>Switch family</Text>
+          </Pressable>
+        ) : null}
 
         {/* stats */}
         <View style={{ flexDirection: 'row', gap: 10 }}>

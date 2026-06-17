@@ -1,0 +1,1069 @@
+{
+  "version": 1,
+  "members": [
+    {
+      "id": "rajeshwari",
+      "name": "Rajeshwari",
+      "gender": "female"
+    },
+    {
+      "id": "seetharam",
+      "name": "Seetharam Mudaliyar",
+      "gender": "male"
+    },
+    {
+      "id": "vijaykumar",
+      "name": "Vijaykumar",
+      "gender": "male"
+    },
+    {
+      "id": "kalavathi",
+      "name": "Kalavathi",
+      "gender": "female"
+    },
+    {
+      "id": "chittibabu",
+      "name": "Chittibabu",
+      "gender": "male"
+    },
+    {
+      "id": "kanchana",
+      "name": "Kanchana",
+      "gender": "female"
+    },
+    {
+      "id": "dayal",
+      "name": "Dayal",
+      "gender": "male"
+    },
+    {
+      "id": "lalitha",
+      "name": "Lalitha",
+      "gender": "female"
+    },
+    {
+      "id": "ashok",
+      "name": "Ashok",
+      "gender": "male"
+    },
+    {
+      "id": "vasugi",
+      "name": "Vasugi",
+      "gender": "female"
+    },
+    {
+      "id": "geetha",
+      "name": "Geetha",
+      "gender": "female"
+    },
+    {
+      "id": "narayan",
+      "name": "Narayan",
+      "gender": "male"
+    },
+    {
+      "id": "mohan",
+      "name": "Mohan",
+      "gender": "male"
+    },
+    {
+      "id": "shanti",
+      "name": "Shanti",
+      "gender": "female"
+    },
+    {
+      "id": "manju",
+      "name": "Manju",
+      "gender": "female"
+    },
+    {
+      "id": "padmanabhan",
+      "name": "Padmanabhan",
+      "gender": "male"
+    },
+    {
+      "id": "madan",
+      "name": "Madan",
+      "gender": "male"
+    },
+    {
+      "id": "priya",
+      "name": "Priya",
+      "gender": "female"
+    },
+    {
+      "id": "mahesh_vk",
+      "name": "Mahesh (s/o Vijaykumar)",
+      "gender": "male"
+    },
+    {
+      "id": "ashwini",
+      "name": "Ashwini",
+      "gender": "female"
+    },
+    {
+      "id": "aruna",
+      "name": "Aruna",
+      "gender": "female"
+    },
+    {
+      "id": "bhaskar",
+      "name": "Bhaskar",
+      "gender": "male"
+    },
+    {
+      "id": "arvind",
+      "name": "Arvind",
+      "gender": "male"
+    },
+    {
+      "id": "keethana",
+      "name": "Keethana",
+      "gender": "female"
+    },
+    {
+      "id": "praveena",
+      "name": "Praveena",
+      "gender": "female"
+    },
+    {
+      "id": "mahesh_p",
+      "name": "Mahesh (h/o Praveena)",
+      "gender": "male"
+    },
+    {
+      "id": "pradeep",
+      "name": "Pradeep",
+      "gender": "male"
+    },
+    {
+      "id": "sudha",
+      "name": "Sudha",
+      "gender": "female"
+    },
+    {
+      "id": "babli",
+      "name": "Babli",
+      "gender": "female"
+    },
+    {
+      "id": "rajan",
+      "name": "Rajan",
+      "gender": "male"
+    },
+    {
+      "id": "srikanth",
+      "name": "Srikanth",
+      "gender": "male"
+    },
+    {
+      "id": "champa",
+      "name": "Champa",
+      "gender": "female"
+    },
+    {
+      "id": "srinath",
+      "name": "Srinath",
+      "gender": "male"
+    },
+    {
+      "id": "sandya",
+      "name": "Sandya",
+      "gender": "female"
+    },
+    {
+      "id": "prasanth",
+      "name": "Prasanth",
+      "gender": "male"
+    },
+    {
+      "id": "divya",
+      "name": "Divya",
+      "gender": "female"
+    },
+    {
+      "id": "anitha",
+      "name": "Anitha",
+      "gender": "female"
+    },
+    {
+      "id": "aravind",
+      "name": "Aravind",
+      "gender": "male"
+    },
+    {
+      "id": "gopi",
+      "name": "Gopi",
+      "gender": "male"
+    },
+    {
+      "id": "yamini",
+      "name": "Yamini",
+      "gender": "female"
+    },
+    {
+      "id": "rajesh",
+      "name": "Rajesh",
+      "gender": "male"
+    },
+    {
+      "id": "meenakshi",
+      "name": "Meenakshi",
+      "gender": "female"
+    },
+    {
+      "id": "rakesh",
+      "name": "Rakesh",
+      "gender": "male"
+    },
+    {
+      "id": "karthik",
+      "name": "Karthik",
+      "gender": "male"
+    },
+    {
+      "id": "bomi",
+      "name": "Bomi",
+      "gender": "female"
+    },
+    {
+      "id": "sai_shareesh",
+      "name": "Sai Shareesh",
+      "gender": "male"
+    },
+    {
+      "id": "vismaya",
+      "name": "Vismaya",
+      "gender": "female"
+    },
+    {
+      "id": "sanjeet",
+      "name": "Sanjeet",
+      "gender": "male"
+    },
+    {
+      "id": "shylesh",
+      "name": "Shylesh",
+      "gender": "male"
+    },
+    {
+      "id": "thanuj",
+      "name": "Thanuj",
+      "gender": "male"
+    },
+    {
+      "id": "janvi",
+      "name": "Janvi",
+      "gender": "female"
+    },
+    {
+      "id": "jatin",
+      "name": "Jatin",
+      "gender": "male"
+    },
+    {
+      "id": "pranavi",
+      "name": "Pranavi",
+      "gender": "female"
+    },
+    {
+      "id": "prajeen",
+      "name": "Prajeen",
+      "gender": "male"
+    },
+    {
+      "id": "parathana",
+      "name": "Parathana",
+      "gender": "female"
+    },
+    {
+      "id": "pritham",
+      "name": "Pritham",
+      "gender": "male"
+    },
+    {
+      "id": "chaarit",
+      "name": "Chaarit",
+      "gender": "male"
+    },
+    {
+      "id": "michilash",
+      "name": "Michilash",
+      "gender": "male"
+    },
+    {
+      "id": "senvesh",
+      "name": "Senvesh",
+      "gender": "male"
+    },
+    {
+      "id": "sanvika",
+      "name": "Sanvika",
+      "gender": "female"
+    },
+    {
+      "id": "vihaan",
+      "name": "Vihaan",
+      "gender": "male"
+    },
+    {
+      "id": "seyon",
+      "name": "Seyon",
+      "gender": "male"
+    },
+    {
+      "id": "atul",
+      "name": "Atul",
+      "gender": "male"
+    },
+    {
+      "id": "avyu",
+      "name": "Avyu",
+      "gender": "male"
+    },
+    {
+      "id": "advaith",
+      "name": "Advaith",
+      "gender": "male"
+    },
+    {
+      "id": "adya",
+      "name": "Adya",
+      "gender": "female"
+    },
+    {
+      "id": "aradya",
+      "name": "Aradya",
+      "gender": "female"
+    },
+    {
+      "id": "hygreev",
+      "name": "Hygreev",
+      "gender": "male"
+    },
+    {
+      "id": "tharak",
+      "name": "Tharak",
+      "gender": "male"
+    }
+  ],
+  "relationships": [
+    {
+      "fromId": "rajeshwari",
+      "toId": "seetharam",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "seetharam",
+      "toId": "rajeshwari",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "vijaykumar",
+      "toId": "kalavathi",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "kalavathi",
+      "toId": "vijaykumar",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "chittibabu",
+      "toId": "kanchana",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "kanchana",
+      "toId": "chittibabu",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "dayal",
+      "toId": "lalitha",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "lalitha",
+      "toId": "dayal",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "ashok",
+      "toId": "vasugi",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "vasugi",
+      "toId": "ashok",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "geetha",
+      "toId": "narayan",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "narayan",
+      "toId": "geetha",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "mohan",
+      "toId": "shanti",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "shanti",
+      "toId": "mohan",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "manju",
+      "toId": "padmanabhan",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "padmanabhan",
+      "toId": "manju",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "madan",
+      "toId": "priya",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "priya",
+      "toId": "madan",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "mahesh_vk",
+      "toId": "ashwini",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "ashwini",
+      "toId": "mahesh_vk",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "aruna",
+      "toId": "bhaskar",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "bhaskar",
+      "toId": "aruna",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "arvind",
+      "toId": "keethana",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "keethana",
+      "toId": "arvind",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "praveena",
+      "toId": "mahesh_p",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "mahesh_p",
+      "toId": "praveena",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "pradeep",
+      "toId": "sudha",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "sudha",
+      "toId": "pradeep",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "babli",
+      "toId": "rajan",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "rajan",
+      "toId": "babli",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "srikanth",
+      "toId": "champa",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "champa",
+      "toId": "srikanth",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "srinath",
+      "toId": "sandya",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "sandya",
+      "toId": "srinath",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "prasanth",
+      "toId": "divya",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "divya",
+      "toId": "prasanth",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "anitha",
+      "toId": "aravind",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "aravind",
+      "toId": "anitha",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "gopi",
+      "toId": "yamini",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "yamini",
+      "toId": "gopi",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "rajesh",
+      "toId": "meenakshi",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "meenakshi",
+      "toId": "rajesh",
+      "type": "spouse",
+      "status": "current"
+    },
+    {
+      "fromId": "vijaykumar",
+      "toId": "rajeshwari",
+      "type": "parent"
+    },
+    {
+      "fromId": "vijaykumar",
+      "toId": "seetharam",
+      "type": "parent"
+    },
+    {
+      "fromId": "chittibabu",
+      "toId": "rajeshwari",
+      "type": "parent"
+    },
+    {
+      "fromId": "chittibabu",
+      "toId": "seetharam",
+      "type": "parent"
+    },
+    {
+      "fromId": "dayal",
+      "toId": "rajeshwari",
+      "type": "parent"
+    },
+    {
+      "fromId": "dayal",
+      "toId": "seetharam",
+      "type": "parent"
+    },
+    {
+      "fromId": "ashok",
+      "toId": "rajeshwari",
+      "type": "parent"
+    },
+    {
+      "fromId": "ashok",
+      "toId": "seetharam",
+      "type": "parent"
+    },
+    {
+      "fromId": "geetha",
+      "toId": "rajeshwari",
+      "type": "parent"
+    },
+    {
+      "fromId": "geetha",
+      "toId": "seetharam",
+      "type": "parent"
+    },
+    {
+      "fromId": "mohan",
+      "toId": "rajeshwari",
+      "type": "parent"
+    },
+    {
+      "fromId": "mohan",
+      "toId": "seetharam",
+      "type": "parent"
+    },
+    {
+      "fromId": "manju",
+      "toId": "vijaykumar",
+      "type": "parent"
+    },
+    {
+      "fromId": "manju",
+      "toId": "kalavathi",
+      "type": "parent"
+    },
+    {
+      "fromId": "madan",
+      "toId": "vijaykumar",
+      "type": "parent"
+    },
+    {
+      "fromId": "madan",
+      "toId": "kalavathi",
+      "type": "parent"
+    },
+    {
+      "fromId": "mahesh_vk",
+      "toId": "vijaykumar",
+      "type": "parent"
+    },
+    {
+      "fromId": "mahesh_vk",
+      "toId": "kalavathi",
+      "type": "parent"
+    },
+    {
+      "fromId": "aruna",
+      "toId": "chittibabu",
+      "type": "parent"
+    },
+    {
+      "fromId": "aruna",
+      "toId": "kanchana",
+      "type": "parent"
+    },
+    {
+      "fromId": "arvind",
+      "toId": "chittibabu",
+      "type": "parent"
+    },
+    {
+      "fromId": "arvind",
+      "toId": "kanchana",
+      "type": "parent"
+    },
+    {
+      "fromId": "praveena",
+      "toId": "dayal",
+      "type": "parent"
+    },
+    {
+      "fromId": "praveena",
+      "toId": "lalitha",
+      "type": "parent"
+    },
+    {
+      "fromId": "pradeep",
+      "toId": "dayal",
+      "type": "parent"
+    },
+    {
+      "fromId": "pradeep",
+      "toId": "lalitha",
+      "type": "parent"
+    },
+    {
+      "fromId": "babli",
+      "toId": "dayal",
+      "type": "parent"
+    },
+    {
+      "fromId": "babli",
+      "toId": "lalitha",
+      "type": "parent"
+    },
+    {
+      "fromId": "srikanth",
+      "toId": "ashok",
+      "type": "parent"
+    },
+    {
+      "fromId": "srikanth",
+      "toId": "vasugi",
+      "type": "parent"
+    },
+    {
+      "fromId": "srinath",
+      "toId": "ashok",
+      "type": "parent"
+    },
+    {
+      "fromId": "srinath",
+      "toId": "vasugi",
+      "type": "parent"
+    },
+    {
+      "fromId": "prasanth",
+      "toId": "ashok",
+      "type": "parent"
+    },
+    {
+      "fromId": "prasanth",
+      "toId": "vasugi",
+      "type": "parent"
+    },
+    {
+      "fromId": "anitha",
+      "toId": "geetha",
+      "type": "parent"
+    },
+    {
+      "fromId": "anitha",
+      "toId": "narayan",
+      "type": "parent"
+    },
+    {
+      "fromId": "gopi",
+      "toId": "geetha",
+      "type": "parent"
+    },
+    {
+      "fromId": "gopi",
+      "toId": "narayan",
+      "type": "parent"
+    },
+    {
+      "fromId": "rajesh",
+      "toId": "geetha",
+      "type": "parent"
+    },
+    {
+      "fromId": "rajesh",
+      "toId": "narayan",
+      "type": "parent"
+    },
+    {
+      "fromId": "rakesh",
+      "toId": "geetha",
+      "type": "parent"
+    },
+    {
+      "fromId": "rakesh",
+      "toId": "narayan",
+      "type": "parent"
+    },
+    {
+      "fromId": "karthik",
+      "toId": "mohan",
+      "type": "parent"
+    },
+    {
+      "fromId": "karthik",
+      "toId": "shanti",
+      "type": "parent"
+    },
+    {
+      "fromId": "bomi",
+      "toId": "mohan",
+      "type": "parent"
+    },
+    {
+      "fromId": "bomi",
+      "toId": "shanti",
+      "type": "parent"
+    },
+    {
+      "fromId": "sai_shareesh",
+      "toId": "manju",
+      "type": "parent"
+    },
+    {
+      "fromId": "sai_shareesh",
+      "toId": "padmanabhan",
+      "type": "parent"
+    },
+    {
+      "fromId": "vismaya",
+      "toId": "manju",
+      "type": "parent"
+    },
+    {
+      "fromId": "vismaya",
+      "toId": "padmanabhan",
+      "type": "parent"
+    },
+    {
+      "fromId": "sanjeet",
+      "toId": "madan",
+      "type": "parent"
+    },
+    {
+      "fromId": "sanjeet",
+      "toId": "priya",
+      "type": "parent"
+    },
+    {
+      "fromId": "shylesh",
+      "toId": "madan",
+      "type": "parent"
+    },
+    {
+      "fromId": "shylesh",
+      "toId": "priya",
+      "type": "parent"
+    },
+    {
+      "fromId": "thanuj",
+      "toId": "mahesh_vk",
+      "type": "parent"
+    },
+    {
+      "fromId": "thanuj",
+      "toId": "ashwini",
+      "type": "parent"
+    },
+    {
+      "fromId": "janvi",
+      "toId": "mahesh_vk",
+      "type": "parent"
+    },
+    {
+      "fromId": "janvi",
+      "toId": "ashwini",
+      "type": "parent"
+    },
+    {
+      "fromId": "jatin",
+      "toId": "aruna",
+      "type": "parent"
+    },
+    {
+      "fromId": "jatin",
+      "toId": "bhaskar",
+      "type": "parent"
+    },
+    {
+      "fromId": "pranavi",
+      "toId": "arvind",
+      "type": "parent"
+    },
+    {
+      "fromId": "pranavi",
+      "toId": "keethana",
+      "type": "parent"
+    },
+    {
+      "fromId": "prajeen",
+      "toId": "praveena",
+      "type": "parent"
+    },
+    {
+      "fromId": "prajeen",
+      "toId": "mahesh_p",
+      "type": "parent"
+    },
+    {
+      "fromId": "parathana",
+      "toId": "praveena",
+      "type": "parent"
+    },
+    {
+      "fromId": "parathana",
+      "toId": "mahesh_p",
+      "type": "parent"
+    },
+    {
+      "fromId": "pritham",
+      "toId": "pradeep",
+      "type": "parent"
+    },
+    {
+      "fromId": "pritham",
+      "toId": "sudha",
+      "type": "parent"
+    },
+    {
+      "fromId": "chaarit",
+      "toId": "pradeep",
+      "type": "parent"
+    },
+    {
+      "fromId": "chaarit",
+      "toId": "sudha",
+      "type": "parent"
+    },
+    {
+      "fromId": "michilash",
+      "toId": "babli",
+      "type": "parent"
+    },
+    {
+      "fromId": "michilash",
+      "toId": "rajan",
+      "type": "parent"
+    },
+    {
+      "fromId": "senvesh",
+      "toId": "babli",
+      "type": "parent"
+    },
+    {
+      "fromId": "senvesh",
+      "toId": "rajan",
+      "type": "parent"
+    },
+    {
+      "fromId": "sanvika",
+      "toId": "srikanth",
+      "type": "parent"
+    },
+    {
+      "fromId": "sanvika",
+      "toId": "champa",
+      "type": "parent"
+    },
+    {
+      "fromId": "vihaan",
+      "toId": "srinath",
+      "type": "parent"
+    },
+    {
+      "fromId": "vihaan",
+      "toId": "sandya",
+      "type": "parent"
+    },
+    {
+      "fromId": "seyon",
+      "toId": "prasanth",
+      "type": "parent"
+    },
+    {
+      "fromId": "seyon",
+      "toId": "divya",
+      "type": "parent"
+    },
+    {
+      "fromId": "atul",
+      "toId": "anitha",
+      "type": "parent"
+    },
+    {
+      "fromId": "atul",
+      "toId": "aravind",
+      "type": "parent"
+    },
+    {
+      "fromId": "avyu",
+      "toId": "anitha",
+      "type": "parent"
+    },
+    {
+      "fromId": "avyu",
+      "toId": "aravind",
+      "type": "parent"
+    },
+    {
+      "fromId": "advaith",
+      "toId": "gopi",
+      "type": "parent"
+    },
+    {
+      "fromId": "advaith",
+      "toId": "yamini",
+      "type": "parent"
+    },
+    {
+      "fromId": "adya",
+      "toId": "gopi",
+      "type": "parent"
+    },
+    {
+      "fromId": "adya",
+      "toId": "yamini",
+      "type": "parent"
+    },
+    {
+      "fromId": "aradya",
+      "toId": "rajesh",
+      "type": "parent"
+    },
+    {
+      "fromId": "aradya",
+      "toId": "meenakshi",
+      "type": "parent"
+    },
+    {
+      "fromId": "hygreev",
+      "toId": "rajesh",
+      "type": "parent"
+    },
+    {
+      "fromId": "hygreev",
+      "toId": "meenakshi",
+      "type": "parent"
+    },
+    {
+      "fromId": "tharak",
+      "toId": "bomi",
+      "type": "parent"
+    }
+  ]
+}
