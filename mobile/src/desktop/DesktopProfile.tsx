@@ -12,11 +12,11 @@ import { lifespan } from '../shared/adjacency';
 import type { Adjacency } from '../shared/adjacency';
 import type { LinkKind } from '../shared/relationshipActions';
 
-export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, canClaim = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onFocusInTree }: {
-  adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; canClaim?: boolean; onClose: () => void;
+export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, canClaim = false, canSync = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onSync, onFocusInTree }: {
+  adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; canClaim?: boolean; canSync?: boolean; onClose: () => void;
   onEdit: (id: string) => void; onOpen: (id: string) => void;
   onAddRelative: (kind?: LinkKind) => void; onDeleteRelative?: (kind: LinkKind, relatedId: string) => void;
-  onClaim?: () => void; onFocusInTree: (id: string) => void;
+  onClaim?: () => void; onSync?: () => void; onFocusInTree: (id: string) => void;
 }) {
   const { c } = useTheme();
   const { years } = useSettings();
@@ -67,6 +67,7 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
           {(([['tree', 'In tree', () => onFocusInTree(m.id)],
             ...(canAddRelative ? [['link', 'Add relative', () => onAddRelative()]] as [IconName, string, () => void][] : []),
             ...(canClaim && onClaim ? [['user', 'This is me', onClaim]] as [IconName, string, () => void][] : []),
+            ...(canSync && onSync ? [['copy', 'Sync me', onSync]] as [IconName, string, () => void][] : []),
             ...(canEdit ? [['edit', 'Edit', () => onEdit(m.id)]] as [IconName, string, () => void][] : []),
           ]) as [IconName, string, () => void][]).map(([ic, lb, fn]) => (
             <Pressable key={lb} onPress={fn} style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>

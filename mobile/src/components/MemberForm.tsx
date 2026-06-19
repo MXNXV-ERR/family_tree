@@ -10,6 +10,7 @@ import {
 import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { IconBtn } from '../ui/primitives';
+import { DateField } from '../ui/DateField';
 import { validateMember, hasErrors, type FieldErrors } from '../shared/validation';
 import { pickFromGallery, takePhoto } from '../shared/photo';
 import { initials } from '../shared/adjacency';
@@ -98,8 +99,8 @@ export function MemberForm({
         <Field label="Name" required value={d.name} onChange={(v) => set('name', v)} error={errors.name} c={c} placeholder="Full name" />
         <GenderRow value={d.gender} onChange={(v) => set('gender', v)} c={c} />
         <Row>
-          <Field label="Born" value={d.birthDate} onChange={(v) => set('birthDate', v)} error={errors.birthDate} c={c} placeholder="YYYY-MM-DD" flex />
-          <Field label="Died" value={d.deathDate} onChange={(v) => set('deathDate', v)} error={errors.deathDate} c={c} placeholder="YYYY-MM-DD" flex />
+          <Field label="Born" value={d.birthDate} onChange={(v) => set('birthDate', v)} error={errors.birthDate} c={c} placeholder="Select date" flex date />
+          <Field label="Died" value={d.deathDate} onChange={(v) => set('deathDate', v)} error={errors.deathDate} c={c} placeholder="Select date" flex date />
         </Row>
       </Section>
 
@@ -174,11 +175,11 @@ function Section({ title, c, children }: { title: string; c: Palette; children: 
 }
 
 function Field({
-  label, value, onChange, error, c, placeholder, required, multiline, flex, keyboardType, autoCap,
+  label, value, onChange, error, c, placeholder, required, multiline, flex, keyboardType, autoCap, date,
 }: {
   label: string; value?: string; onChange: (v: string) => void; error?: string; c: Palette;
   placeholder?: string; required?: boolean; multiline?: boolean; flex?: boolean;
-  keyboardType?: KeyboardTypeOptions; autoCap?: 'none' | 'sentences' | 'words';
+  keyboardType?: KeyboardTypeOptions; autoCap?: 'none' | 'sentences' | 'words'; date?: boolean;
 }) {
   return (
     <View style={{ marginBottom: 12, flex: flex ? 1 : undefined }}>
@@ -187,20 +188,24 @@ function Field({
           {label}{required ? <Text style={{ color: c.danger }}> *</Text> : null}
         </Text>
       ) : null}
-      <TextInput
-        value={value ?? ''}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={c.mute}
-        multiline={multiline}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCap ?? 'sentences'}
-        style={[
-          styles.input,
-          { color: c.ink, borderColor: error ? c.danger : c.line, backgroundColor: c.paper },
-          multiline && { minHeight: 72, textAlignVertical: 'top' },
-        ]}
-      />
+      {date ? (
+        <DateField value={value} onChange={onChange} placeholder={placeholder} error={!!error} />
+      ) : (
+        <TextInput
+          value={value ?? ''}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={c.mute}
+          multiline={multiline}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCap ?? 'sentences'}
+          style={[
+            styles.input,
+            { color: c.ink, borderColor: error ? c.danger : c.line, backgroundColor: c.paper },
+            multiline && { minHeight: 72, textAlignVertical: 'top' },
+          ]}
+        />
+      )}
       {error ? <Text style={[styles.err, { color: c.danger }]}>{error}</Text> : null}
     </View>
   );

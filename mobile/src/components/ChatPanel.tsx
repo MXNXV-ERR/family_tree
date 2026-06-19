@@ -2,12 +2,14 @@
 // conversation in glass bubbles. Member names in replies become tappable chips
 // that open the profile. Used by both the full-screen /chat route (native) and
 // the floating glass sheet (web).
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { TypingDots } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
+import { useAuth } from '../firebase/AuthContext';
+import { useRelTerms } from '../theme/RelTermsContext';
 import { chat, type ChatTurn } from '../shared/gemini';
 import type { Member, Relationship } from '../shared/types';
 
@@ -18,6 +20,9 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
   onOpenMember: (m: Member) => void; onClose?: () => void;
 }) {
   const { c } = useTheme();
+  const { user } = useAuth();
+  const { lang } = useRelTerms();
+  const meName = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.name, [members, user]);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,7 +35,7 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
     setTurns(next); setInput(''); setBusy(true);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     try {
-      const reply = await chat(next, members, relationships);
+      const reply = await chat(next, members, relationships, { meName, language: lang });
       setTurns([...next, { role: 'assistant', content: reply }]);
     } catch (e) {
       setTurns([...next, { role: 'assistant', content: '⚠ ' + (e instanceof Error ? e.message : 'Something went wrong.') }]);

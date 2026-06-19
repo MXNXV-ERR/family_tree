@@ -30,6 +30,9 @@ export default function VizScreen() {
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
 
+  // A fresh session / family switch starts focused on YOU (your node), else a
+  // sensible default node.
+  useEffect(() => { setFocusId(''); }, [activeTreeId]);
   useEffect(() => {
     if (!focusId && members.length) setFocusId(meId ?? members[Math.floor(Math.random() * members.length)].id);
   }, [members, meId, focusId]);

@@ -18,6 +18,7 @@ import {
 import { initials, lifespan } from '../shared/adjacency';
 import type { Adjacency } from '../shared/adjacency';
 import { relToMe } from '../shared/relationTo';
+import { useRelTerms } from '../theme/RelTermsContext';
 import type { Member, Relationship } from '../shared/types';
 
 const RnPath = Reanimated.createAnimatedComponent(Path);
@@ -57,6 +58,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
 }) {
   const { c } = useTheme();
+  const { terms } = useRelTerms();
   const { motion } = useSettings();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [layout, setLayout] = useState<TreeLayout>('pyramid');
@@ -160,7 +162,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
       </ZoomPanCanvas>
 
       {!hideZoomUI && <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(fit, 0, 0)} />}
-      {sel ? <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId) ?? undefined} /> : null}
+      {sel ? <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId, terms) ?? undefined} /> : null}
     </View>
   );
 }

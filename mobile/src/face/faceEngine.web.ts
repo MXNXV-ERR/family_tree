@@ -69,4 +69,17 @@ export async function describeFromUri(uri: string): Promise<Descriptor | null> {
   }
 }
 
+// Cheap liveness check for the live loop — BlazeFace detection only, no embedding.
+export async function detectFace(uri: string): Promise<boolean> {
+  if (!detector) await loadModels();
+  const img = await loadImage(uri);
+  const pixels = tf.browser.fromPixels(img);
+  try {
+    const faces = await detector!.estimateFaces(pixels, false);
+    return faces.length > 0;
+  } finally {
+    pixels.dispose();
+  }
+}
+
 export const hasFaceModels = () => !!(detector && embedder);

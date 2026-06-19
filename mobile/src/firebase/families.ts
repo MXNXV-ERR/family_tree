@@ -144,7 +144,30 @@ export async function updateFamily(treeId: string, uid: string, data: Partial<Fa
   const idxPatch: any = {};
   if (data.name) { idxPatch.name = data.name; idxPatch.mono = monoOf(data.name); }
   if (data.color) idxPatch.color = data.color;
-  if (Object.keys(idxPatch).length) await setDoc(familyIndexDoc(uid, treeId), idxPatch, { merge: true });
+  if (!Object.keys(idxPatch).length) return;
+  // Fan the denormalised switcher index out to EVERY collaborator so the family
+  // name/colour updates live for them too — not just the editor. The owner is
+  // allowed to write collaborators' index docs (see firestore.rules).
+  const memSnap = await getDocs(collection(treeDoc(treeId), 'memberships'));
+  const uids = new Set<string>([uid, ...memSnap.docs.map((d) => d.id)]);
+  await Promise.all(
+    [...uids].map((u) =>
+      setDoc(familyIndexDoc(u, treeId), idxPatch, { merge: true }).catch((e) =>
+        console.warn('updateFamily index', u, e?.message ?? e),
+      ),
+    ),
+  );
+}
+
+// Lazily fix a stale denormalised switcher index entry (name/mono/color) against
+// the live tree doc — e.g. a family renamed before the collaborator fan-out
+// existed still shows its old/placeholder name in another member's switcher.
+export async function reconcileFamilyIndex(uid: string, treeId: string, data: { name?: string; mono?: string; color?: string }) {
+  const patch: any = {};
+  if (data.name) { patch.name = data.name; patch.mono = data.mono ?? monoOf(data.name); }
+  if (data.color) patch.color = data.color;
+  if (!Object.keys(patch).length) return;
+  await setDoc(familyIndexDoc(uid, treeId), patch, { merge: true }).catch((e) => console.warn('reconcileFamilyIndex', e?.message ?? e));
 }
 
 // Permanently delete a family the user owns: every member + relationship +

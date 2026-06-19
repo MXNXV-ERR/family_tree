@@ -17,6 +17,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
 import { yearOf, computeGenerations } from '../shared/adjacency';
 import { relationLabel } from '../shared/relationTo';
+import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
 import type { Member, Relationship } from '../shared/types';
 
@@ -32,6 +33,7 @@ export function TimelineView({ members, relationships, adjacency, focusId, meId,
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
 }) {
   const { c } = useTheme();
+  const { terms } = useRelTerms();
   const { years } = useSettings();
   const { width: screenW } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('bar');
@@ -124,7 +126,7 @@ export function TimelineView({ members, relationships, adjacency, focusId, meId,
     const m = adjacency.get(id);
     if (!m) return;
     const yrs = m.birthDate ? (m.deathDate ? `${yearOf(m.birthDate)}–${yearOf(m.deathDate)}` : `b. ${yearOf(m.birthDate)}`) : 'no dates';
-    const rel = meId ? relationLabel(members, relationships, id, meId) : undefined;
+    const rel = meId ? relationLabel(members, relationships, id, meId, terms) : undefined;
     const relTxt = id === meId ? 'You' : rel ? (rel.startsWith('Relation path') ? rel : `Your ${rel.toLowerCase()}`) : undefined;
     setTip({ text: `${m.name} · ${yrs}${relTxt ? ` · ${relTxt}` : ''}` });
   }

@@ -10,6 +10,9 @@ import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
 import { addMember, updateMember, deleteMember, deleteRelationship, deleteRelationships, addRelationships, claimMember } from '../firebase/firestore';
+import { useUserProfile } from '../firebase/UserProfileContext';
+import { PROFILE_TO_MEMBER_FIELDS } from '../firebase/userProfile';
+import { reconcileFamilyIndex } from '../firebase/families';
 import { planUnlink, type LinkKind } from '../shared/relationshipActions';
 import { buildAdjacency, computeGenerations, lifespan } from '../shared/adjacency';
 import { useTheme, font, radius, type Palette } from '../theme/theme';
@@ -40,6 +43,7 @@ export function DesktopWorkspace() {
   const { c } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const profile = useUserProfile();
   const { activeTreeId, activeFamily } = useFamily();
   const { members, relationships, treeMetadata } = useFamilyTree(activeTreeId);
 
@@ -57,6 +61,13 @@ export function DesktopWorkspace() {
 
   useEffect(() => { if (!focusId && members.length) setFocusId(meId ?? members[Math.floor(Math.random() * members.length)].id); }, [members, meId, focusId]);
   useEffect(() => { setFocusId(''); setDrawer(null); }, [activeTreeId]);
+  // Heal a stale switcher-index name against the live tree-doc name.
+  useEffect(() => {
+    if (!user || !activeTreeId || !treeMetadata?.name || !activeFamily) return;
+    if (treeMetadata.name !== activeFamily.name) {
+      reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
+    }
+  }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
   useEffect(() => { setZoomApi(null); }, [view]); // active view re-registers its zoom
 
   const matches = query.trim() ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6) : [];
@@ -110,6 +121,17 @@ export function DesktopWorkspace() {
     const ok = Platform.OS !== 'web' || (typeof window !== 'undefined' && window.confirm(`Set ${name} as you? You'll get the “You” badge and can edit this profile.`));
     if (!ok) return;
     claimMember(activeTreeId, memberId, user.uid);
+  }
+  // One-way push of the signed-in user's profile details onto their own node.
+  function syncProfile(memberId: string) {
+    if (!activeTreeId || !profile) return;
+    const name = adjacency.get(memberId)?.name ?? 'this person';
+    const patch: Partial<Member> = {};
+    for (const f of PROFILE_TO_MEMBER_FIELDS) { const v = (profile as any)[f]; if (v !== undefined && v !== null && v !== '') (patch as any)[f] = v; }
+    if (!Object.keys(patch).length) return;
+    const ok = Platform.OS !== 'web' || (typeof window !== 'undefined' && window.confirm(`Copy your profile details onto ${name}? This overwrites their name, photo, dates, contact, and bio with your profile.`));
+    if (!ok) return;
+    updateMember(activeTreeId, memberId, patch);
   }
 
   const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
@@ -209,10 +231,12 @@ export function DesktopWorkspace() {
             canEdit={canEditMember(role, adjacency.get(drawer.id), user?.uid)}
             canAddRelative={canEditRelationship(role, drawer.id, drawer.id, members, user?.uid)}
             canClaim={!meId && !adjacency.get(drawer.id)?.associatedUserId}
+            canSync={!!meId && drawer.id === meId && !!profile}
             onEdit={(id) => editMember(id)} onOpen={(id) => setDrawer({ type: 'profile', id })}
             onAddRelative={(kind) => setDrawer({ type: 'link', id: drawer.id, kind })}
             onDeleteRelative={(kind, relatedId) => removeLink(drawer.id!, kind, relatedId)}
             onClaim={() => claimThis(drawer.id!)}
+            onSync={() => syncProfile(drawer.id!)}
             onFocusInTree={(id) => { setFocusId(id); setView('tree'); setDrawer(null); }} />
         ) : null}
         {drawer?.type === 'link' ? (
@@ -290,7 +314,9 @@ function ViewSwitcher({ value, onChange }: { value: ViewKind; onChange: (v: View
 }
 
 function FamilySwitcher({ c, family, fallbackName, onPick }: { c: Palette; family: ReturnType<typeof useFamily>['activeFamily']; fallbackName?: string; onPick: () => void }) {
-  const name = family?.name ?? fallbackName ?? 'My Family';
+  // Live tree-doc name (fallbackName) wins over the denormalised index so a
+  // rename shows immediately for every collaborator, not just the editor.
+  const name = fallbackName ?? family?.name ?? 'My Family';
   const color = family?.color ?? c.accent;
   const mono = family?.mono ?? (name[0]?.toUpperCase() ?? 'F');
   return (

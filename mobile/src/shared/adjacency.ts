@@ -27,13 +27,17 @@ export type NeighborNode = {
   viaRel?: string;
 };
 
-// Distinct couples = unique unordered spouse pairs. Counting edges/2 over-counts
-// when an edge isn't perfectly bidirectional or is duplicated; deduping the
-// {fromId,toId} pair is robust to both.
-export function countCouples(relationships: Relationship[]): number {
+// Distinct couples = unique unordered spouse pairs of CURRENT marriages between
+// members that still exist. Skipping dangling edges (an endpoint was deleted —
+// deleteMember now cleans these, but old data still has them) and divorced pairs
+// stops the count from over-reporting; the {fromId,toId} dedupe handles the
+// bidirectional/duplicated spouse docs.
+export function countCouples(members: Member[], relationships: Relationship[]): number {
+  const ids = new Set(members.map((m) => m.id));
   const pairs = new Set<string>();
   for (const r of relationships)
-    if (r.type === 'spouse') pairs.add([r.fromId, r.toId].sort().join('|'));
+    if (r.type === 'spouse' && r.status !== 'divorced' && ids.has(r.fromId) && ids.has(r.toId))
+      pairs.add([r.fromId, r.toId].sort().join('|'));
   return pairs.size;
 }
 

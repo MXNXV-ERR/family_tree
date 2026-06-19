@@ -11,7 +11,9 @@ import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { canEditMember, canEditRelationship, myMemberId } from '../src/shared/permissions';
 import { planUnlink, type LinkKind } from '../src/shared/relationshipActions';
-import { deleteRelationships, claimMember } from '../src/firebase/firestore';
+import { deleteRelationships, claimMember, updateMember } from '../src/firebase/firestore';
+import { useUserProfile } from '../src/firebase/UserProfileContext';
+import { PROFILE_TO_MEMBER_FIELDS } from '../src/firebase/userProfile';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { useSettings } from '../src/theme/SettingsContext';
 import { GlassSurface } from '../src/theme/GlassSurface';
@@ -37,6 +39,7 @@ export default function Profile() {
   const canEdit = canEditMember(activeFamily?.role, m, user?.uid);
   const canLink = !!m && canEditRelationship(activeFamily?.role, m.id, m.id, members, user?.uid);
   const myId = myMemberId(members, user?.uid);
+  const profile = useUserProfile();
 
   // Remove a relationship (direct edges + now-unsupported inferred siblings).
   const removeLink = (kind: string, relatedId: string) => {
@@ -57,6 +60,21 @@ export default function Profile() {
     const go = () => { claimMember(activeTreeId, m.id, user.uid); };
     if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
     else Alert.alert('This is me', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Yes', onPress: go }]);
+  };
+
+  // One-way push: copy the signed-in user's profile details onto their own node.
+  const syncProfile = () => {
+    if (!m || !activeTreeId || !profile) return;
+    const patch: Partial<Member> = {};
+    for (const f of PROFILE_TO_MEMBER_FIELDS) {
+      const v = (profile as any)[f];
+      if (v !== undefined && v !== null && v !== '') (patch as any)[f] = v;
+    }
+    if (!Object.keys(patch).length) return;
+    const go = () => { updateMember(activeTreeId, m.id, patch); };
+    const msg = `Copy your profile details onto ${m.name}? This overwrites their name, photo, dates, contact, and bio with your profile.`;
+    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
+    else Alert.alert('Sync my profile', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Sync', onPress: go }]);
   };
 
   if (loading) {
@@ -104,6 +122,11 @@ export default function Profile() {
               {!myId && !m.associatedUserId ? (
                 <Pressable onPress={claimThis} style={[styles.editBtn, { borderColor: c.accent, backgroundColor: c.accentSoft, marginTop: 0 }]}>
                   <Text style={{ color: c.accent, fontWeight: '700' }}>This is me</Text>
+                </Pressable>
+              ) : null}
+              {myId && m.id === myId && profile ? (
+                <Pressable onPress={syncProfile} style={[styles.editBtn, { borderColor: c.accent, marginTop: 0 }]}>
+                  <Text style={{ color: c.accent, fontWeight: '700' }}>Sync my profile</Text>
                 </Pressable>
               ) : null}
             </View>

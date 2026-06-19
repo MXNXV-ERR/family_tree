@@ -4,7 +4,7 @@
 // app can switch between families while old single-tree data still loads
 // (legacy treeId === uid).
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { kvGet, kvSet } from './kvStore';
 import { useAuth } from './AuthContext';
 import { subscribeMyFamilies, ensurePrimaryFamily } from './families';
 import type { FamilyTree, Membership } from '../shared/types';
@@ -64,7 +64,7 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
     if (!uid) { setHydrated(false); return; }
     setHydrated(false);
     let cancelled = false;
-    AsyncStorage.getItem(activeKey(uid))
+    kvGet(activeKey(uid))
       .then((v) => { if (!cancelled) { setActiveState(v || uid); setHydrated(true); } })
       .catch(() => { if (!cancelled) setHydrated(true); });
     return () => { cancelled = true; };
@@ -73,16 +73,23 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   // Keep the active tree valid against the live family list — but only after the
   // saved selection has been restored, so a refresh holds the chosen family.
   useEffect(() => {
-    if (!uid || !hydrated || loadingFamilies) return;
-    if (!families.length) return;
-    if (!activeTreeId || !families.some((f) => f.id === activeTreeId)) {
-      setActiveState(families.some((f) => f.id === uid) ? uid : families[0].id);
-    }
+    if (!uid || !hydrated || loadingFamilies || !families.length) return;
+    if (activeTreeId && families.some((f) => f.id === activeTreeId)) return; // already valid
+    // The membership list can arrive across several snapshots on reload, so wait
+    // briefly before snapping to a default — otherwise a freshly-restored choice
+    // gets clobbered by a transient list that doesn't yet include it.
+    const t = setTimeout(() => {
+      setActiveState((cur) =>
+        cur && families.some((f) => f.id === cur)
+          ? cur
+          : (families.some((f) => f.id === uid) ? uid : families[0].id));
+    }, 1500);
+    return () => clearTimeout(t);
   }, [families, activeTreeId, uid, loadingFamilies, hydrated]);
 
   const setActiveTreeId = (id: string) => {
     setActiveState(id);
-    if (uid) AsyncStorage.setItem(activeKey(uid), id).catch(() => {});
+    if (uid) kvSet(activeKey(uid), id).catch(() => {});
   };
 
   const activeFamily = useMemo(

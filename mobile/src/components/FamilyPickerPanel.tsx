@@ -10,6 +10,7 @@ import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
 import { createFamily, joinFamilyByInvite, monoOf } from '../firebase/families';
 import { claimMember } from '../firebase/firestore';
+import { useUserProfile } from '../firebase/UserProfileContext';
 import { Icon } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
 import { SheetHead } from './panelChrome';
@@ -20,6 +21,7 @@ type Mode = 'list' | 'new' | 'join' | 'claim';
 export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void; onOpenInfo: () => void }) {
   const { c } = useTheme();
   const { user } = useAuth();
+  const profile = useUserProfile();
   const { families, activeTreeId, setActiveTreeId } = useFamily();
   const { members, treeMetadata } = useFamilyTree(activeTreeId);
 
@@ -88,7 +90,22 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
 
   const headSub = mode === 'new' ? 'Start a new tree you own' : mode === 'join' ? 'Enter an invite code'
     : mode === 'claim' ? 'Pick the person that is you' : 'Switch between the trees you belong to';
-  const unclaimed = members.filter((m) => !m.associatedUserId);
+  // Rank unclaimed members by how well their name matches the joining user, so
+  // the likely "this is me" node floats to the top and gets a hint.
+  const myName = (profile?.name ?? user?.displayName ?? user?.email?.split('@')[0] ?? '').trim().toLowerCase();
+  const nameScore = (n: string) => {
+    const a = n.trim().toLowerCase();
+    if (!myName || !a) return 0;
+    if (a === myName) return 3;
+    if (a.includes(myName) || myName.includes(a)) return 2;
+    const af = a.split(/\s+/)[0], mf = myName.split(/\s+/)[0];
+    return af && af === mf ? 1 : 0;
+  };
+  const unclaimed = members
+    .filter((m) => !m.associatedUserId)
+    .map((m) => ({ m, s: nameScore(m.name) }))
+    .sort((a, b) => b.s - a.s || a.m.name.localeCompare(b.m.name));
+  const suggestedId = (unclaimed[0]?.s ?? 0) >= 2 ? unclaimed[0].m.id : null;
 
   return (
     <View style={{ flex: 1 }}>
@@ -165,16 +182,23 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
             <Text style={{ color: c.inkSoft, fontFamily: font.sans, fontSize: 13.5, lineHeight: 20 }}>
               You're in. Which person are you? Pick your node to get the “You” badge — or just browse the tree.
             </Text>
-            {unclaimed.map((m) => (
-              <Pressable key={m.id} onPress={() => doClaim(m.id)} disabled={busy} style={({ pressed }) => ({
-                flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: radius.lg,
-                backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.98 : 1 }],
-              })}>
-                <Avatar m={m} size={40} />
-                <Text numberOfLines={1} style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 15 }}>{m.name}</Text>
-                <Icon name="chevR" size={18} color={c.faint} />
-              </Pressable>
-            ))}
+            {unclaimed.map(({ m }) => {
+              const suggested = m.id === suggestedId;
+              return (
+                <Pressable key={m.id} onPress={() => doClaim(m.id)} disabled={busy} style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: radius.lg,
+                  backgroundColor: suggested ? c.accentSoft : c.paper, borderWidth: 1.5, borderColor: suggested ? c.accent : c.line,
+                  opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}>
+                  <Avatar m={m} size={40} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansSemi, fontSize: 15 }}>{m.name}</Text>
+                    {suggested ? <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 11.5, marginTop: 1 }}>Likely you</Text> : null}
+                  </View>
+                  <Icon name="chevR" size={18} color={suggested ? c.accent : c.faint} />
+                </Pressable>
+              );
+            })}
             {unclaimed.length === 0 ? (
               <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 13, textAlign: 'center', paddingVertical: 8 }}>No unclaimed people to pick yet.</Text>
             ) : null}

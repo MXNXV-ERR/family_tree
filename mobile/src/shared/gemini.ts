@@ -4,6 +4,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Member, Relationship } from './types';
 import { yearOf } from './adjacency';
+import { RELATION_KEYS, RELATION_HINTS, type RelTerms } from './relTerms';
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
@@ -42,6 +43,43 @@ Keep answers short and friendly.`;
     }
 }
 
+// Generate a regional-language kinship dictionary once for a language: maps each
+// RELATION_KEY → its everyday term transliterated in English letters. Cached on
+// the family / user profile so it isn't regenerated per render. Returns {} for
+// English or on parse failure (callers fall back to plain English).
+export async function generateRelationshipTerms(language: string): Promise<RelTerms> {
+    if (!API_KEY) throw new Error('Missing API Key. Set EXPO_PUBLIC_GEMINI_API_KEY in your env.');
+    if (!language || language.trim().toLowerCase() === 'english') return {};
+
+    const lines = RELATION_KEYS.map((k) => `${k} = ${RELATION_HINTS[k]}`).join('; ');
+    const prompt = `Language: "${language}". For each relationship below, give the everyday ${language} kinship term, transliterated in ENGLISH (Latin) LETTERS ONLY — no native script. "paternal" = father's side, "maternal" = mother's side. Return ONLY a strict JSON object mapping each key to its term (a string); no commentary, no code fences. Relationships (key = meaning): ${lines}`;
+    const systemInstruction = 'You translate family/kinship terms accurately, respecting paternal vs maternal distinctions. Output strict minified JSON only; every value in English letters.';
+
+    const run = async (model: string) => {
+        const m = genAI.getGenerativeModel({ model, systemInstruction });
+        const res = await m.generateContent(prompt);
+        return res.response.text();
+    };
+
+    // Errors propagate so the caller can show "AI unavailable" rather than
+    // silently saving an empty dictionary.
+    let text: string;
+    try { text = await run('gemini-2.5-flash'); }
+    catch { text = await run('gemini-2.5-pro'); }
+
+    const jsonStr = text.replace(/```json|```/gi, '').trim();
+    let parsed: Record<string, unknown>;
+    try { parsed = JSON.parse(jsonStr); } catch { throw new Error('AI returned an unexpected format. Please try again.'); }
+
+    const out: RelTerms = {};
+    for (const k of RELATION_KEYS) {
+        const v = parsed[k];
+        if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+    }
+    if (!Object.keys(out).length) throw new Error('AI returned no terms — check your Gemini API key.');
+    return out;
+}
+
 export interface ChatTurn { role: 'user' | 'assistant'; content: string; }
 
 // Serialize the tree so Gemini can reason over real members + relationships.
@@ -73,10 +111,24 @@ export function buildTreePrompt(members: Member[], relationships: Relationship[]
 
 // Context-aware family Q&A. Sends the serialized tree as system context plus the
 // running conversation. Falls back Flash → Pro on error.
-export async function chat(history: ChatTurn[], members: Member[], relationships: Relationship[]): Promise<string> {
+export async function chat(
+    history: ChatTurn[],
+    members: Member[],
+    relationships: Relationship[],
+    opts: { meName?: string; language?: string } = {},
+): Promise<string> {
     if (!API_KEY) throw new Error('Missing API Key. Set EXPO_PUBLIC_GEMINI_API_KEY in your env.');
 
-    const systemInstruction = `You are a warm, concise family-tree assistant. Use ONLY the family data below to answer questions about who's who, how people are related, dates, counts, and ancestry. If asked "how is A related to B", reason over the parent/spouse links and give the everyday term (e.g. uncle, grandmother, cousin). Refer to people by their exact names as written. If the data doesn't contain the answer, say so briefly. Keep replies short and friendly. Do not invent members or relationships.\n\n${buildTreePrompt(members, relationships)}`;
+    // Tell the model who "me" is so it can answer first-person questions, and
+    // which regional language to transliterate relationship terms into.
+    const meLine = opts.meName
+        ? `\n\nThe current user ("me", "I", "my") is ${opts.meName}. Answer first-person questions ("who am I", "how is X related to me", "who are my cousins") about that person.`
+        : '';
+    const langLine = opts.language && opts.language.trim().toLowerCase() !== 'english'
+        ? `\n\nWhen you name a family relationship, also give the ${opts.language} term written in English letters (transliteration) in parentheses, e.g. "uncle (Chacha)". Keep the English term too.`
+        : '';
+
+    const systemInstruction = `You are a warm, concise family-tree assistant. Use ONLY the family data below to answer questions about who's who, how people are related, dates, counts, and ancestry. If asked "how is A related to B", reason over the parent/spouse links and give the everyday term (e.g. uncle, grandmother, cousin). Refer to people by their exact names as written. If the data doesn't contain the answer, say so briefly. Keep replies short and friendly. Do not invent members or relationships.${meLine}${langLine}\n\n${buildTreePrompt(members, relationships)}`;
 
     const last = history[history.length - 1];
     const priorTurns = history.slice(0, -1);
