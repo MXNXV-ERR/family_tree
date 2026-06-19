@@ -3,6 +3,7 @@
 import type { Member, Relationship } from './types';
 import { buildGraph, findRelationshipPath, type AdjacencyList } from './relationshipLogic';
 import { localizeLabel, type RelTerms } from './relTerms';
+import { kinshipLabel } from './kinship';
 
 let cacheKey = '';
 let cachedGraph: AdjacencyList | null = null;
@@ -25,6 +26,10 @@ export function relationLabel(
 ): string | undefined {
   if (!ofId || !toId) return undefined;
   if (ofId === toId) return 'You';
+  // Side+gender-aware kinship first (Nana vs Dada, Chacha vs Mama); fall back to
+  // the BFS path label for anything it doesn't cover.
+  const kin = kinshipLabel(members, relationships, toId, ofId, terms);
+  if (kin) return kin;
   const g = graphFor(members, relationships);
   const label = findRelationshipPath(g, toId, ofId);
   if (!label || label === 'No direct relationship found') return undefined;

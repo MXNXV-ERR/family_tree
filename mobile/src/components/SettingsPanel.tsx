@@ -1,13 +1,16 @@
 // Settings panel — the design's Settings sheet. Theme Dark/Light cards, the
 // Display toggles (birth years, glass surfaces, motion) wired to SettingsContext,
 // and sign out. Shared by the mobile settings sheet and the desktop drawer.
-import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme, font, radius } from '../theme/theme';
 import { useSettings, type Settings, type TextSize } from '../theme/SettingsContext';
 import { useAuth } from '../firebase/AuthContext';
 import { useUserProfile } from '../firebase/UserProfileContext';
+import { updateUserProfile } from '../firebase/userProfile';
+import { generateRelationshipTerms } from '../shared/gemini';
+import { STATIC_REL_TERMS, STATIC_LANGS } from '../shared/relTermsStatic';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead, Toggle } from './panelChrome';
@@ -20,6 +23,41 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const profile = useUserProfile();
   const router = useRouter();
   const [editingProfile, setEditingProfile] = useState(false);
+
+  // Regional-language relationship terms (per-user). Save → generate dictionary
+  // via Gemini → store on the profile; the views re-localise reactively.
+  const [langInput, setLangInput] = useState(profile?.relLang ?? '');
+  const [savingLang, setSavingLang] = useState(false);
+  const [langErr, setLangErr] = useState<string | null>(null);
+  const [otherMode, setOtherMode] = useState(false);
+  useEffect(() => { setLangInput(profile?.relLang ?? ''); }, [profile?.relLang]);
+  // Preset language → use the built-in static dictionary (no API call).
+  const applyPreset = async (lang: string) => {
+    if (!user) return;
+    setOtherMode(false); setSavingLang(true); setLangErr(null);
+    try {
+      if (lang === 'English') await updateUserProfile(user.uid, { relLang: '', relTerms: {} });
+      else await updateUserProfile(user.uid, { relLang: lang, relTerms: STATIC_REL_TERMS[lang] ?? {} });
+    } catch { setLangErr('Could not save. Try again.'); }
+    finally { setSavingLang(false); }
+  };
+  // "Other" language → generate once via Gemini, then cache on the profile.
+  const saveLang = async () => {
+    if (!user) return;
+    const lang = langInput.trim();
+    setSavingLang(true); setLangErr(null);
+    try {
+      if (!lang || lang.toLowerCase() === 'english') {
+        await updateUserProfile(user.uid, { relLang: '', relTerms: {} });
+      } else {
+        const terms = await generateRelationshipTerms(lang); // throws if AI fails
+        await updateUserProfile(user.uid, { relLang: lang, relTerms: terms });
+        setOtherMode(false);
+      }
+    } catch (e) {
+      setLangErr(e instanceof Error ? e.message : 'AI unavailable. Check your Gemini API key.');
+    } finally { setSavingLang(false); }
+  };
 
   // Close the panel first, sign out, then send the user to login. (Closing
   // first avoids the sheet lingering over the redirect.)
@@ -111,6 +149,42 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <Toggle on={s[k]} onPress={() => s.setOption(k, !s[k])} />
                 </View>
               ))}
+            </View>
+          </GlassSurface>
+        </View>
+
+        {/* Relationship language (regional terms, English letters) */}
+        <View>
+          <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Relationship names</Text>
+          <GlassSurface rounded={radius.lg}>
+            <View style={{ padding: 14, gap: 10 }}>
+              <Text style={{ color: c.inkSoft, fontFamily: font.sans, fontSize: 13, lineHeight: 19 }}>Show relationships in a regional language, in English letters (uncle → Chacha, mother's father → Nana).</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {(() => {
+                  const cur = profile?.relLang || 'English';
+                  const isCustom = cur !== 'English' && !STATIC_LANGS.includes(cur);
+                  const chip = (label: string, on: boolean, onPress: () => void) => (
+                    <Pressable key={label} onPress={onPress} disabled={savingLang} style={{ paddingHorizontal: 14, height: 38, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.accentSoft : c.paper, borderWidth: 1.5, borderColor: on ? c.accent : c.line }}>
+                      <Text style={{ color: on ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 13.5 }}>{label}</Text>
+                    </Pressable>
+                  );
+                  return [
+                    ...['English', ...STATIC_LANGS].map((lang) => chip(lang, !otherMode && cur === lang, () => applyPreset(lang))),
+                    chip(isCustom && !otherMode ? cur : 'Other…', otherMode || isCustom, () => setOtherMode(true)),
+                  ];
+                })()}
+              </View>
+              {otherMode || (!!profile?.relLang && profile.relLang !== 'English' && !STATIC_LANGS.includes(profile.relLang)) ? (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput value={langInput} onChangeText={setLangInput} onSubmitEditing={saveLang} placeholder="Language (e.g. Marathi, Bengali)" placeholderTextColor={c.mute} autoCapitalize="words"
+                    style={{ flex: 1, height: 46, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, color: c.ink, fontFamily: font.sansMed, fontSize: 15, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : null) }} />
+                  <Pressable onPress={saveLang} disabled={savingLang} style={{ paddingHorizontal: 18, height: 46, borderRadius: radius.md, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', opacity: savingLang ? 0.6 : 1 }}>
+                    {savingLang ? <ActivityIndicator color={c.accentInk} /> : <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 14 }}>Apply</Text>}
+                  </Pressable>
+                </View>
+              ) : null}
+              <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, lineHeight: 16 }}>Presets are instant. “Other” generates once via AI, then is saved — no repeat calls.</Text>
+              {langErr ? <Text style={{ color: c.danger, fontFamily: font.sans, fontSize: 12.5 }}>{langErr}</Text> : null}
             </View>
           </GlassSurface>
         </View>

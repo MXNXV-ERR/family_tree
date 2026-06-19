@@ -159,6 +159,17 @@ export async function updateFamily(treeId: string, uid: string, data: Partial<Fa
   );
 }
 
+// Lazily fix a stale denormalised switcher index entry (name/mono/color) against
+// the live tree doc — e.g. a family renamed before the collaborator fan-out
+// existed still shows its old/placeholder name in another member's switcher.
+export async function reconcileFamilyIndex(uid: string, treeId: string, data: { name?: string; mono?: string; color?: string }) {
+  const patch: any = {};
+  if (data.name) { patch.name = data.name; patch.mono = data.mono ?? monoOf(data.name); }
+  if (data.color) patch.color = data.color;
+  if (!Object.keys(patch).length) return;
+  await setDoc(familyIndexDoc(uid, treeId), patch, { merge: true }).catch((e) => console.warn('reconcileFamilyIndex', e?.message ?? e));
+}
+
 // Permanently delete a family the user owns: every member + relationship +
 // membership doc, each collaborator's switcher index entry, then the tree doc.
 // Caller (UI) blocks deleting the legacy primary tree (treeId === ownerUid) so a

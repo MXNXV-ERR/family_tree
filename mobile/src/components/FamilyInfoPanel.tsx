@@ -12,7 +12,6 @@ import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
 import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf } from '../firebase/families';
-import { generateRelationshipTerms } from '../shared/gemini';
 import { canManageRoles, normalizeRole, isOwner } from '../shared/permissions';
 import { computeGenerations, countCouples } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship } from '../shared/types';
@@ -63,30 +62,18 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const [fEst, setFEst] = useState('');
   const [fSummary, setFSummary] = useState('');
   const [fColor, setFColor] = useState<string | undefined>(undefined);
-  const [fRelLang, setFRelLang] = useState('');
 
   const startEdit = () => {
     setFName(fam?.name ?? ''); setFRegion(fam?.region ?? ''); setFEst(fam?.established ?? '');
-    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setFRelLang(fam?.relLang ?? ''); setEditing(true);
+    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setEditing(true);
   };
   const saveEdit = async () => {
     if (!user || !fName.trim()) return;
     setBusy(true);
     try {
-      // If the relationship language changed, (re)generate the regional kinship
-      // dictionary via Gemini and cache it on the tree (cleared for English).
-      const lang = fRelLang.trim();
-      let relPatch: Partial<FamilyTree> = {};
-      if (lang !== (fam?.relLang ?? '')) {
-        const terms = lang && lang.toLowerCase() !== 'english'
-          ? await generateRelationshipTerms(lang).catch(() => ({}))
-          : {};
-        relPatch = { relLang: lang, relTerms: terms };
-      }
       await updateFamily(treeId, user.uid, {
         name: fName.trim(), mono: monoOf(fName.trim()), region: fRegion.trim(),
         established: fEst.trim(), summary: fSummary.trim(), ...(fColor ? { color: fColor } : {}),
-        ...relPatch,
       });
       setEditing(false);
     } finally { setBusy(false); }
@@ -116,7 +103,6 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const meta: [IconName, string, string | undefined][] = [
     ['pin', 'Region', fam?.region],
     ['cake', 'Established', fam?.established],
-    ['globe', 'Language', fam?.relLang],
     ['user', 'Owner', ownerEmail],
     ['link', 'Invite code', fam?.inviteCode],
   ];
@@ -131,10 +117,6 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
             <Field label="Region" c={c}><TextInput value={fRegion} onChangeText={setFRegion} placeholder="Region (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
             <Field label="Established" c={c}><TextInput value={fEst} onChangeText={setFEst} placeholder="Year (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
             <Field label="Summary" c={c}><TextInput value={fSummary} onChangeText={setFSummary} placeholder="A short description (optional)" placeholderTextColor={c.mute} multiline style={[inputStyle, { height: 92, paddingTop: 12, textAlignVertical: 'top' }]} /></Field>
-            <Field label="Relationship language" c={c}>
-              <TextInput value={fRelLang} onChangeText={setFRelLang} placeholder="e.g. Hindi, Tamil, Telugu (optional)" placeholderTextColor={c.mute} autoCapitalize="words" style={inputStyle} />
-              <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, marginTop: 4 }}>Shows relationship names (uncle → Chacha) in this language, written in English letters.</Text>
-            </Field>
             <Field label="Colour" c={c}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {FAMILY_COLORS.map((col) => {

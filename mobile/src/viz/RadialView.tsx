@@ -16,6 +16,7 @@ import { layoutRadial, type RadialPos } from '../shared/radialLayout';
 import { initials, lifespan } from '../shared/adjacency';
 import { relToMe } from '../shared/relationTo';
 import { localizeLabel } from '../shared/relTerms';
+import { kinshipLabel } from '../shared/kinship';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
 import type { Member, Relationship } from '../shared/types';
@@ -142,7 +143,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
             return (
               <RadialCard key={id} m={m} c={c} cx={p.x + C} cy={p.y + C} pos={p}
                 isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id}
-                relLabel={showPill ? localizeLabel(REL_LABEL[node?.label ?? ''] ?? node?.label, terms) : undefined}
+                relLabel={showPill ? (kinshipLabel(members, relationships, focusId, id, terms) ?? localizeLabel(REL_LABEL[node?.label ?? ''] ?? node?.label, terms)) : undefined}
                 relColor={relColor(node?.viaRel)}
                 onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
                 onFocus={() => { setFocusId(id); setSelId(null); }} />
@@ -206,29 +207,32 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
           <Text style={{ color: relColor, fontSize: 10, fontWeight: '800' }}>{relLabel}</Text>
         </View>
       ) : null}
-      <Pressable onPress={onPress} style={{ width: '100%' }}>
-        <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: isFocus ? c.accent : selected ? c.relChild : c.line, borderWidth: isFocus ? 2 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
-          <View style={{ padding: 10, alignItems: 'center', flexDirection: w > 130 ? 'row' : 'column', gap: 8 }}>
-            <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {m.photoUrl
-                ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
-                : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
+      <View style={{ width: '100%' }}>
+        <Pressable onPress={onPress} style={{ width: '100%' }}>
+          <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: isFocus ? c.accent : selected ? c.relChild : c.line, borderWidth: isFocus ? 2 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
+            <View style={{ padding: 10, alignItems: 'center', flexDirection: w > 130 ? 'row' : 'column', gap: 8 }}>
+              <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {m.photoUrl
+                  ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
+                  : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
+              </View>
+              <View style={{ flex: w > 130 ? 1 : undefined, alignItems: w > 130 ? 'flex-start' : 'center' }}>
+                <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{m.name}</Text>
+                {years ? <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text> : null}
+                {isMe ? <Text style={{ color: c.accent, fontSize: 9, fontWeight: '800' }}>YOU</Text> : null}
+              </View>
             </View>
-            <View style={{ flex: w > 130 ? 1 : undefined, alignItems: w > 130 ? 'flex-start' : 'center' }}>
-              <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{m.name}</Text>
-              {years ? <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text> : null}
-              {isMe ? <Text style={{ color: c.accent, fontSize: 9, fontWeight: '800' }}>YOU</Text> : null}
-            </View>
-          </View>
-        </GlassSurface>
-      </Pressable>
-      {/* Bring-into-focus affordance, shown when a non-focus card is selected */}
-      {selected && !isFocus ? (
-        <Pressable onPress={onFocus} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: c.accent }}>
-          <Icon name="target" size={12} color={c.accentInk} />
-          <Text style={{ color: c.accentInk, fontSize: 11, fontWeight: '700' }}>Bring into focus</Text>
+          </GlassSurface>
         </Pressable>
-      ) : null}
+        {/* Bring-into-focus — a big round button to the LEFT of a selected card,
+            so it's easy to tap and never collides with neighbouring nodes. */}
+        {selected && !isFocus ? (
+          <Pressable onPress={onFocus} hitSlop={10}
+            style={{ position: 'absolute', left: -52, top: '50%', marginTop: -23, width: 46, height: 46, borderRadius: 23, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.bg, shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
+            <Icon name="target" size={22} color={c.accentInk} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }

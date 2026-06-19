@@ -1,43 +1,69 @@
-// Regional-language relationship terms. The kinship engine emits English labels;
-// a per-family / per-user dictionary maps canonical keys → transliterated words
-// (English letters). localizeLabel() swaps the term in at render time, and
-// everything falls back to plain English when there's no dictionary or no
-// matching key. The dictionary itself is generated once via Gemini
-// (shared/gemini.ts → generateRelationshipTerms) and cached on the tree / profile.
+// Regional-language relationship terms. The kinship engine (shared/kinship.ts)
+// classifies a relationship into a canonical KEY that distinguishes paternal vs
+// maternal side and gender (e.g. 'maternal-grandfather' = Nana, 'paternal-uncle'
+// = Chacha). A per-user dictionary maps those keys → a transliterated word
+// (English letters), generated once via Gemini (generateRelationshipTerms) and
+// cached on the user's profile. Everything falls back to plain English.
 import type { FamilyTree } from './types';
 
 export type RelTerms = Record<string, string>;
 
-// Canonical keys the engine can produce (lowercased, normalised by relKey()).
-export const RELATION_KEYS: string[] = [
-  'parent', 'mother', 'father',
-  'child', 'son', 'daughter',
-  'partner', 'spouse', 'husband', 'wife', 'ex-partner',
-  'sibling', 'brother', 'sister',
-  'grandparent', 'grandfather', 'grandmother',
-  'grandchild', 'grandson', 'granddaughter',
-  'uncle/aunt', 'uncle', 'aunt',
-  'niece/nephew', 'nephew', 'niece',
-  'cousin',
-  'great-grandparent', 'great-grandchild',
-  'in-law',
-];
+// Canonical key → plain-English gloss. The gloss is fed to Gemini so it returns
+// the correct side/gender-specific word, and is the English fallback label.
+export const RELATION_HINTS: Record<string, string> = {
+  // direct
+  father: "your father", mother: "your mother",
+  son: "your son", daughter: "your daughter",
+  brother: "your brother", sister: "your sister",
+  husband: "your husband", wife: "your wife",
+  'ex-husband': "your ex-husband", 'ex-wife': "your ex-wife",
+  // grandparents (by side)
+  'paternal-grandfather': "father's father", 'paternal-grandmother': "father's mother",
+  'maternal-grandfather': "mother's father", 'maternal-grandmother': "mother's mother",
+  grandfather: "grandfather", grandmother: "grandmother", grandparent: "grandparent",
+  // grandchildren (by side: via son = paternal, via daughter = maternal)
+  'paternal-grandson': "son's son", 'paternal-granddaughter': "son's daughter",
+  'maternal-grandson': "daughter's son", 'maternal-granddaughter': "daughter's daughter",
+  grandson: "grandson", granddaughter: "granddaughter", grandchild: "grandchild",
+  // uncles / aunts (by side)
+  'paternal-uncle': "father's brother", 'paternal-aunt': "father's sister",
+  'maternal-uncle': "mother's brother", 'maternal-aunt': "mother's sister",
+  uncle: "uncle", aunt: "aunt", 'uncle/aunt': "uncle or aunt",
+  // nephews / nieces (via brother or sister)
+  'brother-son': "brother's son", 'brother-daughter': "brother's daughter",
+  'sister-son': "sister's son", 'sister-daughter': "sister's daughter",
+  nephew: "nephew", niece: "niece", 'niece/nephew': "niece or nephew",
+  // cousins
+  'cousin-brother': "male cousin", 'cousin-sister': "female cousin", cousin: "cousin",
+  // in-laws
+  'father-in-law': "spouse's father", 'mother-in-law': "spouse's mother",
+  'brother-in-law': "spouse's brother or sister's husband",
+  'sister-in-law': "spouse's sister or brother's wife",
+  'son-in-law': "daughter's husband", 'daughter-in-law': "son's wife",
+  'in-law': "in-law",
+  // distant + generic fallbacks
+  'great-grandparent': "great-grandparent", 'great-grandchild': "great-grandchild",
+  parent: "parent", child: "child", sibling: "sibling",
+  spouse: "spouse", partner: "partner", 'ex-partner': "ex-partner", relative: "relative",
+};
+
+export const RELATION_KEYS: string[] = Object.keys(RELATION_HINTS);
 
 const ALIASES: Record<string, string> = {
   'aunt/uncle': 'uncle/aunt',
   'nephew/niece': 'niece/nephew',
 };
 
-// Normalise an engine label ("Your grandfather", "Uncle/Aunt", "First Cousin")
-// to a dictionary key.
+// Normalise a coarse engine label ("Your grandfather", "Uncle/Aunt", "First
+// Cousin") to a dictionary key — used only for the path-based fallback path.
 export function relKey(label: string): string {
   let k = label.trim().toLowerCase().replace(/^your\s+/, '').replace(/^first\s+/, '');
   k = k.replace(/\s*\(in-law\)\s*$/, '').trim();
   return ALIASES[k] ?? k;
 }
 
-// Swap an English relationship label for its regional term, preserving a leading
-// "Your ". Returns the original when there's no dictionary entry.
+// Swap a coarse English label for its regional term (fallback path). Preserves a
+// leading "Your ". Returns the original when there's no dictionary entry.
 export function localizeLabel(label: string | undefined, terms?: RelTerms | null): string | undefined {
   if (!label || !terms) return label;
   const your = /^your\s+/i.test(label);
@@ -48,7 +74,7 @@ export function localizeLabel(label: string | undefined, terms?: RelTerms | null
 
 export interface RelLangConfig { lang?: string; terms?: RelTerms; }
 
-// Per-user override wins over the family default, else plain English.
+// Per-user override, else family default, else plain English.
 export function resolveRelTerms(
   userOverride: RelLangConfig | null | undefined,
   family: Pick<FamilyTree, 'relLang' | 'relTerms'> | null | undefined,

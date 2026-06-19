@@ -4,7 +4,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Member, Relationship } from './types';
 import { yearOf } from './adjacency';
-import { RELATION_KEYS, type RelTerms } from './relTerms';
+import { RELATION_KEYS, RELATION_HINTS, type RelTerms } from './relTerms';
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
@@ -51,8 +51,9 @@ export async function generateRelationshipTerms(language: string): Promise<RelTe
     if (!API_KEY) throw new Error('Missing API Key. Set EXPO_PUBLIC_GEMINI_API_KEY in your env.');
     if (!language || language.trim().toLowerCase() === 'english') return {};
 
-    const prompt = `For the language "${language}", give the common everyday kinship term for each English relationship key below. Transliterate every term in ENGLISH (Latin) LETTERS ONLY — no native script. Return ONLY a strict JSON object mapping each key to its term (a string); no commentary, no code fences. If one word covers several keys, repeat it. Keys: ${RELATION_KEYS.join(', ')}`;
-    const systemInstruction = 'You translate family/kinship terms. Output strict minified JSON only; every value is in English letters.';
+    const lines = RELATION_KEYS.map((k) => `${k} = ${RELATION_HINTS[k]}`).join('; ');
+    const prompt = `Language: "${language}". For each relationship below, give the everyday ${language} kinship term, transliterated in ENGLISH (Latin) LETTERS ONLY — no native script. "paternal" = father's side, "maternal" = mother's side. Return ONLY a strict JSON object mapping each key to its term (a string); no commentary, no code fences. Relationships (key = meaning): ${lines}`;
+    const systemInstruction = 'You translate family/kinship terms accurately, respecting paternal vs maternal distinctions. Output strict minified JSON only; every value in English letters.';
 
     const run = async (model: string) => {
         const m = genAI.getGenerativeModel({ model, systemInstruction });
@@ -60,19 +61,22 @@ export async function generateRelationshipTerms(language: string): Promise<RelTe
         return res.response.text();
     };
 
+    // Errors propagate so the caller can show "AI unavailable" rather than
+    // silently saving an empty dictionary.
     let text: string;
     try { text = await run('gemini-2.5-flash'); }
     catch { text = await run('gemini-2.5-pro'); }
 
     const jsonStr = text.replace(/```json|```/gi, '').trim();
     let parsed: Record<string, unknown>;
-    try { parsed = JSON.parse(jsonStr); } catch { return {}; }
+    try { parsed = JSON.parse(jsonStr); } catch { throw new Error('AI returned an unexpected format. Please try again.'); }
 
     const out: RelTerms = {};
     for (const k of RELATION_KEYS) {
         const v = parsed[k];
         if (typeof v === 'string' && v.trim()) out[k] = v.trim();
     }
+    if (!Object.keys(out).length) throw new Error('AI returned no terms — check your Gemini API key.');
     return out;
 }
 

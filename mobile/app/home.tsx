@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
+import { reconcileFamilyIndex } from '../src/firebase/families';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
 import { useSettings } from '../src/theme/SettingsContext';
@@ -69,6 +70,15 @@ function MobileHome() {
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading]);
+
+  // Heal a stale switcher-index name (e.g. a family renamed before the
+  // collaborator fan-out existed) using the live tree-doc name.
+  useEffect(() => {
+    if (!user || !activeTreeId || !treeMetadata?.name || !activeFamily) return;
+    if (treeMetadata.name !== activeFamily.name) {
+      reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
+    }
+  }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>

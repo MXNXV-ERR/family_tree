@@ -12,6 +12,7 @@ import { useFamilyTree } from '../firebase/useFamilyTree';
 import { addMember, updateMember, deleteMember, deleteRelationship, deleteRelationships, addRelationships, claimMember } from '../firebase/firestore';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { PROFILE_TO_MEMBER_FIELDS } from '../firebase/userProfile';
+import { reconcileFamilyIndex } from '../firebase/families';
 import { planUnlink, type LinkKind } from '../shared/relationshipActions';
 import { buildAdjacency, computeGenerations, lifespan } from '../shared/adjacency';
 import { useTheme, font, radius, type Palette } from '../theme/theme';
@@ -60,6 +61,13 @@ export function DesktopWorkspace() {
 
   useEffect(() => { if (!focusId && members.length) setFocusId(meId ?? members[Math.floor(Math.random() * members.length)].id); }, [members, meId, focusId]);
   useEffect(() => { setFocusId(''); setDrawer(null); }, [activeTreeId]);
+  // Heal a stale switcher-index name against the live tree-doc name.
+  useEffect(() => {
+    if (!user || !activeTreeId || !treeMetadata?.name || !activeFamily) return;
+    if (treeMetadata.name !== activeFamily.name) {
+      reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
+    }
+  }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
   useEffect(() => { setZoomApi(null); }, [view]); // active view re-registers its zoom
 
   const matches = query.trim() ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6) : [];

@@ -6,10 +6,10 @@ import { useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { useTheme, font, radius } from '../theme/theme';
 import { SheetHead } from './panelChrome';
+import { DateField } from '../ui/DateField';
 import { useAuth } from '../firebase/AuthContext';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { updateUserProfile } from '../firebase/userProfile';
-import { generateRelationshipTerms } from '../shared/gemini';
 import type { UserProfile } from '../shared/types';
 
 const GENDERS: [NonNullable<UserProfile['gender']>, string][] = [['male', 'Male'], ['female', 'Female'], ['other', 'Other']];
@@ -26,7 +26,6 @@ export function UserProfilePanel({ onBack }: { onBack: () => void }) {
   const [location, setLocation] = useState(profile?.location ?? '');
   const [occupation, setOccupation] = useState(profile?.occupation ?? '');
   const [about, setAbout] = useState(profile?.about ?? '');
-  const [relLang, setRelLang] = useState(profile?.relLang ?? '');
   const [busy, setBusy] = useState(false);
 
   const inputStyle = {
@@ -39,19 +38,10 @@ export function UserProfilePanel({ onBack }: { onBack: () => void }) {
     if (!user) return;
     setBusy(true);
     try {
-      // Regenerate the per-user kinship dictionary only when the language changed.
-      const lang = relLang.trim();
-      let relPatch: Partial<UserProfile> = {};
-      if (lang !== (profile?.relLang ?? '')) {
-        const terms = lang && lang.toLowerCase() !== 'english'
-          ? await generateRelationshipTerms(lang).catch(() => ({}))
-          : {};
-        relPatch = { relLang: lang, relTerms: terms };
-      }
       await updateUserProfile(user.uid, {
         name: name.trim(), birthDate: birthDate.trim(), gender,
         phone: phone.trim(), location: location.trim(), occupation: occupation.trim(),
-        about: about.trim(), ...relPatch,
+        about: about.trim(),
       });
       onBack();
     } finally { setBusy(false); }
@@ -76,16 +66,11 @@ export function UserProfilePanel({ onBack }: { onBack: () => void }) {
           </View>
         </Field>
 
-        <Field label="Born" c={c}><TextInput value={birthDate} onChangeText={setBirthDate} placeholder="YYYY-MM-DD" placeholderTextColor={c.mute} style={inputStyle} /></Field>
+        <Field label="Born" c={c}><DateField value={birthDate} onChange={setBirthDate} placeholder="Select date" /></Field>
         <Field label="Phone" c={c}><TextInput value={phone} onChangeText={setPhone} placeholder="Phone (optional)" placeholderTextColor={c.mute} keyboardType="phone-pad" style={inputStyle} /></Field>
         <Field label="Location" c={c}><TextInput value={location} onChangeText={setLocation} placeholder="City / location (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
         <Field label="Occupation" c={c}><TextInput value={occupation} onChangeText={setOccupation} placeholder="Occupation (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
         <Field label="About" c={c}><TextInput value={about} onChangeText={setAbout} placeholder="A short bio (optional)" placeholderTextColor={c.mute} multiline style={[inputStyle, { height: 92, paddingTop: 12, textAlignVertical: 'top' }]} /></Field>
-
-        <Field label="Relationship language" c={c}>
-          <TextInput value={relLang} onChangeText={setRelLang} placeholder="e.g. Hindi, Tamil (overrides the family)" placeholderTextColor={c.mute} autoCapitalize="words" style={inputStyle} />
-          <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, marginTop: 4 }}>Your personal override for relationship names (uncle → Chacha), in English letters.</Text>
-        </Field>
 
         <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 12, lineHeight: 18, marginTop: 2 }}>
           Tip: open your own node in the family and tap “Sync my profile” to copy these details onto it.
