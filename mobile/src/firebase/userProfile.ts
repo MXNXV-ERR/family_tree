@@ -2,7 +2,7 @@
 // from the per-user family index (users/{uid}/families/*). Seeded from the
 // Google account on first login; the user fills in member-like details + a
 // regional-language override. A claimed member can be synced FROM this profile.
-import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { db } from './config';
 import type { UserProfile } from '../shared/types';
@@ -18,6 +18,19 @@ export const subscribeUserProfile = (uid: string, cb: (p: UserProfile | null) =>
 
 export async function updateUserProfile(uid: string, data: Partial<UserProfile>) {
   await setDoc(profileDoc(uid), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+// Replace the user's regional-language dictionary wholesale. updateDoc OVERWRITES
+// the relTerms map; setDoc(merge) would deep-merge it and leave stale keys from a
+// previously chosen language (which mixed Hindi + Tamil terms together). Falls
+// back to setDoc if the profile doc doesn't exist yet.
+export async function setRelLanguage(uid: string, relLang: string, relTerms: Record<string, string>) {
+  const ref = profileDoc(uid);
+  try {
+    await updateDoc(ref, { relLang, relTerms, updatedAt: serverTimestamp() });
+  } catch {
+    await setDoc(ref, { relLang, relTerms, updatedAt: serverTimestamp() }, { merge: true });
+  }
 }
 
 // Seed the profile from the signed-in account on first login. Idempotent — never

@@ -20,7 +20,7 @@ function relaxRing(items: Array<{ id: string; angle: number }>, minGap: number) 
   if (items.length < 2) return;
   const TAU = Math.PI * 2;
   items.sort((a, b) => a.angle - b.angle);
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 6; pass++) {
     let moved = false;
     for (let i = 1; i < items.length; i++) {
       const gap = items[i].angle - items[i - 1].angle;
@@ -64,7 +64,7 @@ export function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: nu
   }
 
   const CARD_ARC_1 = 160 + 40;
-  const CARD_ARC_N = 110 + 30;
+  const CARD_ARC_N = 120 + 44;
   let ring1Radius = 250;
   for (const key in ring1) {
     const sec = SECTORS[key] || { center: Math.PI / 2, max: Math.PI / 2 };
@@ -72,7 +72,7 @@ export function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: nu
     ring1Radius = Math.max(ring1Radius, Math.min(560, need));
   }
   ring1Radius += Math.max(0, ring1Count - 7) * 10;
-  const STEP = 180;
+  const STEP = 210;
   const radiusOf = (d: number) => (d <= 0 ? 0 : ring1Radius + (d - 1) * STEP);
 
   const pos = new Map<string, RadialPos>();

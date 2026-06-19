@@ -9,7 +9,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
+import { LiveCamera, type LiveCameraHandle } from '../src/face/LiveCamera';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
@@ -43,9 +44,10 @@ export default function FaceMatch() {
 
   // scan (live camera)
   const [perm, requestPerm] = useCameraPermissions();
-  const camRef = useRef<CameraView>(null);
+  const camRef = useRef<LiveCameraHandle | null>(null);
   const scanOn = useRef(false);
   const camReady = useRef(false);
+  const [camError, setCamError] = useState<string | null>(null);
   const dbRef = useRef<{ member: Member; desc: Descriptor }[]>([]);
   const [scanReady, setScanReady] = useState(false); // descriptors built, live preview active
   const [frozen, setFrozen] = useState(false);       // a frame is frozen (analysing or done)
@@ -67,8 +69,9 @@ export default function FaceMatch() {
 
   // --- Scan (live camera) ---
   async function startScan() {
-    if (!perm?.granted) { const r = await requestPerm(); if (!r.granted) return; }
-    setBusy(true); setScanReady(false); setFrozen(false); setQueryUri(null); setResults(null);
+    // Web uses getUserMedia (its own prompt); native needs the expo-camera grant.
+    if (Platform.OS !== 'web' && !perm?.granted) { const r = await requestPerm(); if (!r.granted) return; }
+    setBusy(true); setScanReady(false); setFrozen(false); setQueryUri(null); setResults(null); setCamError(null);
     setProg({ phase: 'models', fraction: 0, note: 'Preparing' });
     try {
       dbRef.current = await buildMemberDescriptors(members, setProg);
@@ -79,8 +82,7 @@ export default function FaceMatch() {
   function stopScan() { scanOn.current = false; setScanReady(false); setFrozen(false); setQueryUri(null); setResults(null); }
 
   async function grabFrame(): Promise<string | undefined> {
-    const pic = await camRef.current?.takePictureAsync({ quality: 0.6, base64: true, skipProcessing: true });
-    return pic?.base64 ? `data:image/jpg;base64,${pic.base64}` : pic?.uri;
+    return camRef.current?.capture();
   }
 
   // Detect cheaply until a face appears, then freeze that frame and analyse it.
@@ -152,7 +154,7 @@ export default function FaceMatch() {
               {queryUri ? <Image source={{ uri: queryUri }} style={styles.preview} /> : null}
             </>
           ) : (
-            <ScanPanel c={c} perm={!!perm?.granted} camRef={camRef} onReady={() => { camReady.current = true; }}
+            <ScanPanel c={c} camRef={camRef} camError={camError} onReady={() => { camReady.current = true; }} onError={setCamError}
               scanReady={scanReady} frozen={frozen} frozenUri={queryUri} busy={busy}
               onStart={startScan} onStop={stopScan} onCapture={captureNow} onDiscard={discardAndRescan} />
           )}
@@ -194,8 +196,8 @@ export default function FaceMatch() {
   );
 }
 
-function ScanPanel({ c, perm, camRef, onReady, scanReady, frozen, frozenUri, busy, onStart, onStop, onCapture, onDiscard }: {
-  c: Palette; perm: boolean; camRef: React.RefObject<CameraView | null>; onReady: () => void;
+function ScanPanel({ c, camRef, camError, onReady, onError, scanReady, frozen, frozenUri, busy, onStart, onStop, onCapture, onDiscard }: {
+  c: Palette; camRef: React.RefObject<LiveCameraHandle | null>; camError: string | null; onReady: () => void; onError: (m: string) => void;
   scanReady: boolean; frozen: boolean; frozenUri: string | null; busy: boolean;
   onStart: () => void; onStop: () => void; onCapture: () => void; onDiscard: () => void;
 }) {
@@ -204,12 +206,12 @@ function ScanPanel({ c, perm, camRef, onReady, scanReady, frozen, frozenUri, bus
       <View style={{ height: 380, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: c.line, backgroundColor: '#000' }}>
         {frozen && frozenUri ? (
           <Image source={{ uri: frozenUri }} style={{ flex: 1 }} resizeMode="cover" />
-        ) : Platform.OS === 'web' && !perm ? (
+        ) : camError ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: c.mute, textAlign: 'center', padding: 20 }}>Grant camera access and tap Start to scan.</Text>
+            <Text style={{ color: c.danger, textAlign: 'center', padding: 20 }}>{camError}</Text>
           </View>
         ) : (
-          <CameraView ref={camRef} style={{ flex: 1 }} facing="front" onCameraReady={onReady} />
+          <LiveCamera ref={camRef} facing="front" onReady={onReady} onError={onError} />
         )}
         {scanReady && !frozen ? (
           <View style={[styles.scanHint, { backgroundColor: c.paper, borderColor: c.accent }]}>

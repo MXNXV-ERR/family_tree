@@ -35,6 +35,14 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   const { terms } = useRelTerms();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [depth, setDepth] = useState(1);
+  // Furthest ring that actually has someone on it — lets the slider reach the
+  // whole family (capped for sanity) instead of a fixed 3, so distant kin appear.
+  const reach = useMemo(() => {
+    let m = 1;
+    for (const n of adjacency.neighborhood(focusId, 12).values()) m = Math.max(m, n.depth);
+    return Math.min(Math.max(m, 1), 8);
+  }, [adjacency, focusId]);
+  useEffect(() => { setDepth((d) => Math.min(d, reach)); }, [reach]);
   const [selId, setSelId] = useState<string | null>(null);
   const canvasRef = useRef<CanvasHandle>(null);
   // The canvas tap (onTapEmpty) fires simultaneously with a card press; without
@@ -95,7 +103,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line }}>
           <Icon name="tune" size={14} color={c.mute} />
           <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>Depth</Text>
-          <Slider value={depth} min={1} max={3} step={1} width={92} onChange={(v) => { setDepth(v); setSelId(null); }} />
+          <Slider value={depth} min={1} max={reach} step={1} width={92} onChange={(v) => { setDepth(v); setSelId(null); }} />
           <Text style={{ color: c.inkSoft, fontFamily: font.monoMed, fontSize: 12, width: 10 }}>{depth}</Text>
         </View>
       </View>

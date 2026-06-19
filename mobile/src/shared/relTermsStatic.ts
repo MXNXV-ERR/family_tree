@@ -1,9 +1,10 @@
 // Hand-authored regional kinship dictionaries (transliterated, English letters)
 // so the common languages need NO Gemini call — they're picked from a dropdown.
 // Keys match shared/relTerms.ts RELATION_KEYS; any missing key falls back to the
-// English label (see kinship.ts termOf). Hindi is the most complete; Tamil /
-// Telugu / Kannada cover the core terms (gaps show English). For anything else,
-// the user picks "Other" → Gemini generates once → cached on their profile.
+// English label (see kinship.ts termOf/fallbackKey). Hindi is the most complete;
+// Tamil / Telugu / Kannada now cover the side/gender-specific keys too (cousins,
+// nephews/nieces, in-laws). For anything else, the user picks "Other" → Gemini
+// generates once → cached on the profile.
 import type { RelTerms } from './relTerms';
 
 // Languages offered as instant built-ins (besides English).
@@ -37,54 +38,73 @@ const hindi: RelTerms = {
 const tamil: RelTerms = {
   father: 'Appa', mother: 'Amma', son: 'Magan', daughter: 'Magal',
   brother: 'Annan', sister: 'Akka', husband: 'Kanavan', wife: 'Manaivi',
+  'ex-husband': 'Mun Kanavan', 'ex-wife': 'Mun Manaivi',
   'paternal-grandfather': 'Thatha', 'paternal-grandmother': 'Paati',
   'maternal-grandfather': 'Thatha', 'maternal-grandmother': 'Paati',
   grandfather: 'Thatha', grandmother: 'Paati', grandparent: 'Thatha-Paati',
-  grandson: 'Peran', granddaughter: 'Pethi',
+  'paternal-grandson': 'Peran', 'paternal-granddaughter': 'Pethi',
+  'maternal-grandson': 'Peran', 'maternal-granddaughter': 'Pethi',
+  grandson: 'Peran', granddaughter: 'Pethi', grandchild: 'Peran-Pethi',
   'paternal-uncle': 'Chithappa', 'paternal-aunt': 'Athai',
   'maternal-uncle': 'Maaman', 'maternal-aunt': 'Chithi',
   uncle: 'Maaman', aunt: 'Athai', 'uncle/aunt': 'Maaman/Athai',
-  nephew: 'Marumagan', niece: 'Marumagal',
-  cousin: 'Cousin',
+  'brother-son': 'Marumagan', 'brother-daughter': 'Marumagal',
+  'sister-son': 'Marumagan', 'sister-daughter': 'Marumagal',
+  nephew: 'Marumagan', niece: 'Marumagal', 'niece/nephew': 'Marumagan/Marumagal',
+  'cousin-brother': 'Murai Annan', 'cousin-sister': 'Murai Akka', cousin: 'Murai Sahodaran',
   'father-in-law': 'Maamanaar', 'mother-in-law': 'Maamiyaar',
+  'brother-in-law': 'Maithunan', 'sister-in-law': 'Nathanaar',
   'son-in-law': 'Marumagan', 'daughter-in-law': 'Marumagal', 'in-law': 'Sammandhi',
-  'great-grandparent': 'Kollu Thatha', parent: 'Appa-Amma', child: 'Kuzhandhai',
-  sibling: 'Sahodaran', spouse: 'Thunaivar', relative: 'Uravinar',
+  'great-grandparent': 'Kollu Thatha', 'great-grandchild': 'Kollu Peran',
+  parent: 'Petror', child: 'Kuzhandhai', sibling: 'Sahodaran',
+  spouse: 'Thunaivar', partner: 'Thunai', 'ex-partner': 'Mun Thunai', relative: 'Uravinar',
 };
 
 const telugu: RelTerms = {
   father: 'Nanna', mother: 'Amma', son: 'Koduku', daughter: 'Kuthuru',
   brother: 'Anna', sister: 'Akka', husband: 'Bhartha', wife: 'Bharya',
+  'ex-husband': 'Mun Bhartha', 'ex-wife': 'Mun Bharya',
   'paternal-grandfather': 'Thatha', 'paternal-grandmother': 'Nanamma',
   'maternal-grandfather': 'Thatha', 'maternal-grandmother': 'Ammamma',
   grandfather: 'Thatha', grandmother: 'Ammamma', grandparent: 'Thatha-Ammamma',
-  grandson: 'Manavadu', granddaughter: 'Manavaralu',
+  'paternal-grandson': 'Manavadu', 'paternal-granddaughter': 'Manavaralu',
+  'maternal-grandson': 'Manavadu', 'maternal-granddaughter': 'Manavaralu',
+  grandson: 'Manavadu', granddaughter: 'Manavaralu', grandchild: 'Manavalu',
   'paternal-uncle': 'Babai', 'paternal-aunt': 'Atha',
   'maternal-uncle': 'Mavayya', 'maternal-aunt': 'Pinni',
   uncle: 'Mavayya', aunt: 'Atha', 'uncle/aunt': 'Mavayya/Atha',
-  nephew: 'Menalludu', niece: 'Mena Kuthuru',
-  cousin: 'Cousin',
+  'brother-son': 'Menalludu', 'brother-daughter': 'Mena Kuthuru',
+  'sister-son': 'Menalludu', 'sister-daughter': 'Mena Kuthuru',
+  nephew: 'Menalludu', niece: 'Mena Kuthuru', 'niece/nephew': 'Menalludu/Mena Kuthuru',
+  'cousin-brother': 'Cousin Anna', 'cousin-sister': 'Cousin Akka', cousin: 'Cousin',
   'father-in-law': 'Mamagaru', 'mother-in-law': 'Atthagaru',
   'brother-in-law': 'Bava', 'sister-in-law': 'Vadina',
   'son-in-law': 'Alludu', 'daughter-in-law': 'Kodalu', 'in-law': 'Bandhuvu',
-  'great-grandparent': 'Mutthatha', parent: 'Thallidandrulu', child: 'Pillalu',
-  sibling: 'Anna-Chelli', spouse: 'Bhagaswami', relative: 'Bandhuvu',
+  'great-grandparent': 'Mutthatha', 'great-grandchild': 'Muni Manavadu',
+  parent: 'Thallidandrulu', child: 'Pillalu', sibling: 'Anna-Chelli',
+  spouse: 'Bhagaswami', partner: 'Thodu', 'ex-partner': 'Mun Thodu', relative: 'Bandhuvu',
 };
 
 const kannada: RelTerms = {
   father: 'Appa', mother: 'Amma', son: 'Maga', daughter: 'Magalu',
   brother: 'Anna', sister: 'Akka', husband: 'Ganda', wife: 'Hendathi',
+  'ex-husband': 'Mun Ganda', 'ex-wife': 'Mun Hendathi',
   'paternal-grandfather': 'Ajja', 'paternal-grandmother': 'Ajji',
   'maternal-grandfather': 'Ajja', 'maternal-grandmother': 'Ajji',
   grandfather: 'Ajja', grandmother: 'Ajji', grandparent: 'Ajja-Ajji',
-  grandson: 'Mommaga', granddaughter: 'Mommagalu',
+  'paternal-grandson': 'Mommaga', 'paternal-granddaughter': 'Mommagalu',
+  'maternal-grandson': 'Mommaga', 'maternal-granddaughter': 'Mommagalu',
+  grandson: 'Mommaga', granddaughter: 'Mommagalu', grandchild: 'Mommakkalu',
   'paternal-uncle': 'Chikkappa', 'paternal-aunt': 'Atthe',
   'maternal-uncle': 'Maava', 'maternal-aunt': 'Chikkamma',
   uncle: 'Maava', aunt: 'Atthe', 'uncle/aunt': 'Maava/Atthe',
+  'cousin-brother': 'Cousin Anna', 'cousin-sister': 'Cousin Akka', cousin: 'Cousin',
   'father-in-law': 'Maava', 'mother-in-law': 'Atthe',
+  'brother-in-law': 'Bhava', 'sister-in-law': 'Atthige',
   'son-in-law': 'Aliya', 'daughter-in-law': 'Sose', 'in-law': 'Naentaru',
-  cousin: 'Cousin', parent: 'Appa-Amma', child: 'Magu',
-  sibling: 'Anna-Akka', spouse: 'Sangaathi', relative: 'Naentaru',
+  'great-grandparent': 'Mutthajja', 'great-grandchild': 'Mari Mommaga',
+  parent: 'Appa-Amma', child: 'Magu', sibling: 'Anna-Akka',
+  spouse: 'Sangaathi', partner: 'Jodi', 'ex-partner': 'Mun Jodi', relative: 'Naentaru',
 };
 
 export const STATIC_REL_TERMS: Record<string, RelTerms> = {

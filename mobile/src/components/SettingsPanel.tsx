@@ -8,7 +8,7 @@ import { useTheme, font, radius } from '../theme/theme';
 import { useSettings, type Settings, type TextSize } from '../theme/SettingsContext';
 import { useAuth } from '../firebase/AuthContext';
 import { useUserProfile } from '../firebase/UserProfileContext';
-import { updateUserProfile } from '../firebase/userProfile';
+import { updateUserProfile, setRelLanguage } from '../firebase/userProfile';
 import { generateRelationshipTerms } from '../shared/gemini';
 import { STATIC_REL_TERMS, STATIC_LANGS } from '../shared/relTermsStatic';
 import { GlassSurface } from '../theme/GlassSurface';
@@ -36,8 +36,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     if (!user) return;
     setOtherMode(false); setSavingLang(true); setLangErr(null);
     try {
-      if (lang === 'English') await updateUserProfile(user.uid, { relLang: '', relTerms: {} });
-      else await updateUserProfile(user.uid, { relLang: lang, relTerms: STATIC_REL_TERMS[lang] ?? {} });
+      if (lang === 'English') await setRelLanguage(user.uid, '', {});
+      else await setRelLanguage(user.uid, lang, STATIC_REL_TERMS[lang] ?? {});
     } catch { setLangErr('Could not save. Try again.'); }
     finally { setSavingLang(false); }
   };
@@ -48,10 +48,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     setSavingLang(true); setLangErr(null);
     try {
       if (!lang || lang.toLowerCase() === 'english') {
-        await updateUserProfile(user.uid, { relLang: '', relTerms: {} });
+        await setRelLanguage(user.uid, '', {});
       } else {
         const terms = await generateRelationshipTerms(lang); // throws if AI fails
-        await updateUserProfile(user.uid, { relLang: lang, relTerms: terms });
+        await setRelLanguage(user.uid, lang, terms);
         setOtherMode(false);
       }
     } catch (e) {
