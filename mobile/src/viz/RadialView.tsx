@@ -15,6 +15,8 @@ import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { layoutRadial, type RadialPos } from '../shared/radialLayout';
 import { initials, lifespan } from '../shared/adjacency';
 import { relToMe } from '../shared/relationTo';
+import { localizeLabel } from '../shared/relTerms';
+import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
 import type { Member, Relationship } from '../shared/types';
 
@@ -29,6 +31,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
 }) {
   const { c } = useTheme();
+  const { terms } = useRelTerms();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [depth, setDepth] = useState(1);
   const [selId, setSelId] = useState<string | null>(null);
@@ -139,7 +142,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
             return (
               <RadialCard key={id} m={m} c={c} cx={p.x + C} cy={p.y + C} pos={p}
                 isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id}
-                relLabel={showPill ? REL_LABEL[node?.label ?? ''] ?? node?.label : undefined}
+                relLabel={showPill ? localizeLabel(REL_LABEL[node?.label ?? ''] ?? node?.label, terms) : undefined}
                 relColor={relColor(node?.viaRel)}
                 onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
                 onFocus={() => { setFocusId(id); setSelId(null); }} />
@@ -153,7 +156,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
       {/* Relationship legend — keyed to the line colours; hidden while a card is
           selected so it never collides with the focus bar. */}
       {sel ? (
-        <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId)} />
+        <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId, terms)} />
       ) : (
         <RelationLegend c={c} />
       )}

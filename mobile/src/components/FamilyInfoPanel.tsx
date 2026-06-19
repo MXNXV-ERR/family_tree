@@ -4,6 +4,7 @@
 // Shared by the mobile family sheet and the desktop drawer.
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useTheme, font, radius } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar } from '../ui/primitives';
@@ -11,6 +12,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
 import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf } from '../firebase/families';
+import { generateRelationshipTerms } from '../shared/gemini';
 import { canManageRoles, normalizeRole, isOwner } from '../shared/permissions';
 import { computeGenerations, countCouples } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship } from '../shared/types';
@@ -39,6 +41,17 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const color = fam?.color ?? c.accent;
   const mono = fam?.mono ?? (fam?.name?.[0]?.toUpperCase() ?? 'F');
 
+  // Tap the invite-code row to copy it to the clipboard (transient "Copied").
+  const [copied, setCopied] = useState(false);
+  const copyInvite = async () => {
+    if (!fam?.inviteCode) return;
+    try {
+      await Clipboard.setStringAsync(fam.inviteCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  };
+
   // Owner-only edit + delete. The legacy primary tree (treeId === uid) can't be
   // deleted, so the user is never left with no family at all.
   const owner = isOwner(fam?.role) || isOwner(family?.role);
@@ -50,18 +63,30 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const [fEst, setFEst] = useState('');
   const [fSummary, setFSummary] = useState('');
   const [fColor, setFColor] = useState<string | undefined>(undefined);
+  const [fRelLang, setFRelLang] = useState('');
 
   const startEdit = () => {
     setFName(fam?.name ?? ''); setFRegion(fam?.region ?? ''); setFEst(fam?.established ?? '');
-    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setEditing(true);
+    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setFRelLang(fam?.relLang ?? ''); setEditing(true);
   };
   const saveEdit = async () => {
     if (!user || !fName.trim()) return;
     setBusy(true);
     try {
+      // If the relationship language changed, (re)generate the regional kinship
+      // dictionary via Gemini and cache it on the tree (cleared for English).
+      const lang = fRelLang.trim();
+      let relPatch: Partial<FamilyTree> = {};
+      if (lang !== (fam?.relLang ?? '')) {
+        const terms = lang && lang.toLowerCase() !== 'english'
+          ? await generateRelationshipTerms(lang).catch(() => ({}))
+          : {};
+        relPatch = { relLang: lang, relTerms: terms };
+      }
       await updateFamily(treeId, user.uid, {
         name: fName.trim(), mono: monoOf(fName.trim()), region: fRegion.trim(),
         established: fEst.trim(), summary: fSummary.trim(), ...(fColor ? { color: fColor } : {}),
+        ...relPatch,
       });
       setEditing(false);
     } finally { setBusy(false); }
@@ -84,13 +109,14 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
     if (!members.length) return 0;
     return Math.max(...computeGenerations(members, relationships).values()) + 1;
   }, [members, relationships]);
-  const couples = countCouples(relationships);
+  const couples = countCouples(members, relationships);
   const stats: [string, number][] = [['Members', members.length], ['Generations', gens], ['Couples', couples]];
 
   const ownerEmail = collabs.find((x) => x.role === 'owner')?.email || fam?.ownerUid || '—';
   const meta: [IconName, string, string | undefined][] = [
     ['pin', 'Region', fam?.region],
     ['cake', 'Established', fam?.established],
+    ['globe', 'Language', fam?.relLang],
     ['user', 'Owner', ownerEmail],
     ['link', 'Invite code', fam?.inviteCode],
   ];
@@ -105,6 +131,10 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
             <Field label="Region" c={c}><TextInput value={fRegion} onChangeText={setFRegion} placeholder="Region (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
             <Field label="Established" c={c}><TextInput value={fEst} onChangeText={setFEst} placeholder="Year (optional)" placeholderTextColor={c.mute} style={inputStyle} /></Field>
             <Field label="Summary" c={c}><TextInput value={fSummary} onChangeText={setFSummary} placeholder="A short description (optional)" placeholderTextColor={c.mute} multiline style={[inputStyle, { height: 92, paddingTop: 12, textAlignVertical: 'top' }]} /></Field>
+            <Field label="Relationship language" c={c}>
+              <TextInput value={fRelLang} onChangeText={setFRelLang} placeholder="e.g. Hindi, Tamil, Telugu (optional)" placeholderTextColor={c.mute} autoCapitalize="words" style={inputStyle} />
+              <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, marginTop: 4 }}>Shows relationship names (uncle → Chacha) in this language, written in English letters.</Text>
+            </Field>
             <Field label="Colour" c={c}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {FAMILY_COLORS.map((col) => {
@@ -168,15 +198,30 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
         {/* metadata */}
         <GlassSurface rounded={radius.lg}>
           <View style={{ paddingHorizontal: 16 }}>
-            {meta.filter((r) => r[2]).map((r, i, a) => (
-              <View key={r[1]} style={{ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13, borderBottomWidth: i < a.length - 1 ? 1 : 0, borderColor: c.lineSoft }}>
-                <Icon name={r[0]} size={18} color={c.mute} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' }}>{r[1]}</Text>
-                  <Text style={{ color: r[1] === 'Invite code' ? c.accent : c.ink, fontFamily: r[1] === 'Invite code' ? font.monoSemi : font.sansMed, fontSize: 14.5, marginTop: 2 }}>{r[2]}</Text>
-                </View>
-              </View>
-            ))}
+            {meta.filter((r) => r[2]).map((r, i, a) => {
+              const isInvite = r[1] === 'Invite code';
+              const rowStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 13, paddingVertical: 13, borderBottomWidth: i < a.length - 1 ? 1 : 0, borderColor: c.lineSoft };
+              const inner = (
+                <>
+                  <Icon name={r[0]} size={18} color={c.mute} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' }}>{r[1]}</Text>
+                    <Text style={{ color: isInvite ? c.accent : c.ink, fontFamily: isInvite ? font.monoSemi : font.sansMed, fontSize: 14.5, marginTop: 2 }}>{r[2]}</Text>
+                  </View>
+                  {isInvite ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Icon name={copied ? 'check' : 'copy'} size={15} color={c.accent} />
+                      <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 12 }}>{copied ? 'Copied' : 'Copy'}</Text>
+                    </View>
+                  ) : null}
+                </>
+              );
+              return isInvite ? (
+                <Pressable key={r[1]} onPress={copyInvite} style={({ pressed }) => ({ ...rowStyle, opacity: pressed ? 0.6 : 1 })}>{inner}</Pressable>
+              ) : (
+                <View key={r[1]} style={rowStyle}>{inner}</View>
+              );
+            })}
           </View>
         </GlassSurface>
 

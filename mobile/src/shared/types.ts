@@ -72,6 +72,31 @@ export interface FamilyTree {
     established?: string;
     summary?: string;
     role?: FamilyRole;      // the current user's role in this tree
+    // Regional-language relationship terms (family default). relTerms maps a
+    // canonical kinship key (see shared/relTerms.ts) → transliterated word
+    // (English letters), generated once via Gemini.
+    relLang?: string;
+    relTerms?: Record<string, string>;
+}
+
+// Per-user profile (users/{uid}) — distinct from any family member node and from
+// the per-user family index. Seeded from the account on first login; holds
+// member-like details the user can sync onto their claimed node, plus a
+// regional-language override that wins over the family default.
+export interface UserProfile {
+    uid: string;
+    name?: string;
+    email?: string;
+    photoUrl?: string;
+    birthDate?: string;
+    gender?: 'male' | 'female' | 'other';
+    phone?: string;
+    address?: string;
+    location?: string;
+    occupation?: string;
+    about?: string;
+    relLang?: string;
+    relTerms?: Record<string, string>;
 }
 
 // Index entry under users/{uid}/families/{treeId} — denormalised basics so the

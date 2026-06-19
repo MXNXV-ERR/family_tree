@@ -46,7 +46,7 @@ function MobileHome() {
   const openChat = () => { if (Platform.OS === 'web') setChatOpen(true); else router.push('/chat'); };
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
-  const couples = useMemo(() => countCouples(relationships), [relationships]);
+  const couples = useMemo(() => countCouples(members, relationships), [members, relationships]);
   const gens = useMemo(() => {
     if (!members.length) return 0;
     const g = computeGenerations(members, relationships);
@@ -57,7 +57,9 @@ function MobileHome() {
     ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase()))
     : members;
 
-  const treeName = activeFamily?.name ?? treeMetadata?.name ?? 'My Family Tree';
+  // Prefer the LIVE tree doc (treeMetadata) over the denormalised switcher index
+  // (activeFamily) so a rename by any user shows immediately for everyone.
+  const treeName = treeMetadata?.name ?? activeFamily?.name ?? 'My Family Tree';
   const mono = activeFamily?.mono ?? (treeName.trim().charAt(0).toUpperCase() || 'F');
   const famColor = activeFamily?.color ?? c.accent;
   const famSub = activeFamily?.role

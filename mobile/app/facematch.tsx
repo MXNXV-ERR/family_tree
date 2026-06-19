@@ -15,11 +15,14 @@ import { GlassSurface } from '../src/theme/GlassSurface';
 import { useResponsive } from '../src/ui/useResponsive';
 import { pickFromGallery, takePhoto } from '../src/shared/photo';
 import { matchImage, buildMemberDescriptors, matchPrebuilt, clearMemberDescriptors } from '../src/face/faceRunner';
+import { detectFace } from '../src/face/faceEngine';
 import { initials } from '../src/shared/adjacency';
 import type { Progress, MatchResult, Descriptor } from '../src/face/faceMatch';
 import type { Member } from '../src/shared/types';
 
 type Mode = 'upload' | 'capture' | 'live';
+
+const wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
 export default function FaceMatch() {
   const { c } = useTheme();
@@ -42,6 +45,8 @@ export default function FaceMatch() {
   const [liveTop, setLiveTop] = useState<MatchResult | null>(null);
   const [liveReady, setLiveReady] = useState(false);
   const dbRef = useRef<{ member: Member; desc: Descriptor }[]>([]);
+  const lastEmbed = useRef(0);
+  const camReady = useRef(false);
 
   useEffect(() => () => { liveOn.current = false; }, []);
 
@@ -66,7 +71,7 @@ export default function FaceMatch() {
     setBusy(true); setLiveReady(false); setProg({ phase: 'models', fraction: 0, note: 'Preparing' });
     try {
       dbRef.current = await buildMemberDescriptors(members, setProg);
-      setLiveReady(true); setBusy(false); liveOn.current = true;
+      setLiveReady(true); setBusy(false); liveOn.current = true; lastEmbed.current = 0;
       loop();
     } catch {
       setBusy(false);
@@ -74,23 +79,39 @@ export default function FaceMatch() {
   }
   function stopLive() { liveOn.current = false; }
 
+  // Two-rate live loop: a cheap BlazeFace detection every tick keeps the preview
+  // responsive; the expensive MobileNet embed + rank runs only when a face is
+  // present and at most every EMBED_MS. The awaits + the low-res capture yield to
+  // the renderer so the camera never freezes (the old loop embedded EVERY frame,
+  // which saturated the GPU and "broke" the engine).
   async function loop() {
+    const DETECT_MS = 500;
+    const EMBED_MS = 1800;
     while (liveOn.current) {
       try {
-        const pic = await camRef.current?.takePictureAsync({ quality: 0.5, base64: true, skipProcessing: true });
+        if (!camReady.current) { await wait(140); continue; }
+        const pic = await camRef.current?.takePictureAsync({ quality: 0.4, base64: true, skipProcessing: true });
         const uri = pic?.base64 ? `data:image/jpg;base64,${pic.base64}` : pic?.uri;
-        if (uri) {
-          const r = await matchPrebuilt(uri, dbRef.current);
-          if (liveOn.current) setLiveTop(r[0] ?? null);
+        if (uri && liveOn.current) {
+          if (Date.now() - lastEmbed.current >= EMBED_MS) {
+            await wait(0); // let the preview paint before the heavy embed
+            const r = await matchPrebuilt(uri, dbRef.current);
+            lastEmbed.current = Date.now();
+            if (liveOn.current) setLiveTop(r[0] ?? null);
+          } else {
+            const hasFace = await detectFace(uri).catch(() => false);
+            if (!hasFace && liveOn.current) setLiveTop(null);
+          }
         }
       } catch { /* skip frame */ }
-      await new Promise((res) => setTimeout(res, 1400));
+      await wait(DETECT_MS);
     }
   }
 
   useEffect(() => {
     // Switching modes resets transient state and stops the live loop.
     stopLive(); setLiveTop(null); setLiveReady(false); setResults(null); setQueryUri(null); setProg(null);
+    camReady.current = false;
   }, [mode]);
 
   return (
@@ -129,7 +150,7 @@ export default function FaceMatch() {
           </>
         ) : (
           <LivePanel c={c} perm={!!perm?.granted} liveOn={liveOn.current} liveReady={liveReady}
-            camRef={camRef} onStart={startLive} onStop={stopLive} top={liveTop} onOpen={(m) => { stopLive(); router.push({ pathname: '/profile', params: { id: m.id } }); }} />
+            camRef={camRef} onReady={() => { camReady.current = true; }} onStart={startLive} onStop={stopLive} top={liveTop} onOpen={(m) => { stopLive(); router.push({ pathname: '/profile', params: { id: m.id } }); }} />
         )}
 
         {busy && prog ? <ProgressBar c={c} p={prog} /> : null}
@@ -169,9 +190,9 @@ export default function FaceMatch() {
   );
 }
 
-function LivePanel({ c, perm, liveReady, camRef, onStart, onStop, top, onOpen }: {
+function LivePanel({ c, perm, liveReady, camRef, onReady, onStart, onStop, top, onOpen }: {
   c: Palette; perm: boolean; liveOn: boolean; liveReady: boolean;
-  camRef: React.RefObject<CameraView | null>; onStart: () => void; onStop: () => void;
+  camRef: React.RefObject<CameraView | null>; onReady: () => void; onStart: () => void; onStop: () => void;
   top: MatchResult | null; onOpen: (m: Member) => void;
 }) {
   return (
@@ -182,7 +203,7 @@ function LivePanel({ c, perm, liveReady, camRef, onStart, onStop, top, onOpen }:
             <Text style={{ color: c.mute, textAlign: 'center', padding: 20 }}>Grant camera access and tap Start to scan live.</Text>
           </View>
         ) : (
-          <CameraView ref={camRef} style={{ flex: 1 }} facing="front" />
+          <CameraView ref={camRef} style={{ flex: 1 }} facing="front" onCameraReady={onReady} />
         )}
         {top ? (
           <Pressable onPress={() => onOpen(top.member)} style={[styles.liveTag, { backgroundColor: c.paper, borderColor: c.accent }]}>

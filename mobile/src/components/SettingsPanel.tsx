@@ -1,20 +1,25 @@
 // Settings panel — the design's Settings sheet. Theme Dark/Light cards, the
 // Display toggles (birth years, glass surfaces, motion) wired to SettingsContext,
 // and sign out. Shared by the mobile settings sheet and the desktop drawer.
+import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme, font, radius } from '../theme/theme';
 import { useSettings, type Settings, type TextSize } from '../theme/SettingsContext';
 import { useAuth } from '../firebase/AuthContext';
+import { useUserProfile } from '../firebase/UserProfileContext';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead, Toggle } from './panelChrome';
+import { UserProfilePanel } from './UserProfilePanel';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const { c, mode, setMode } = useTheme();
   const s = useSettings();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const profile = useUserProfile();
   const router = useRouter();
+  const [editingProfile, setEditingProfile] = useState(false);
 
   // Close the panel first, sign out, then send the user to login. (Closing
   // first avoids the sheet lingering over the redirect.)
@@ -32,10 +37,27 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     ['motion', 'Motion & animation', 'sparkles'],
   ];
 
+  if (editingProfile) return <UserProfilePanel onBack={() => setEditingProfile(false)} />;
+
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="settings" title="Settings" sub="Appearance & display" onClose={onClose} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 18 }}>
+        {/* Your profile */}
+        <View>
+          <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Account</Text>
+          <Pressable onPress={() => setEditingProfile(true)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: c.accent }}>
+              <Text style={{ color: c.accent, fontFamily: font.serif, fontSize: 19 }}>{(profile?.name ?? user?.email ?? 'U').trim().charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansBold, fontSize: 15 }}>{profile?.name ?? user?.displayName ?? 'Your profile'}</Text>
+              <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.sans, fontSize: 12 }}>{user?.email ?? 'Edit your details'}</Text>
+            </View>
+            <Icon name="chevR" size={18} color={c.faint} />
+          </Pressable>
+        </View>
+
         {/* Theme */}
         <View>
           <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Theme</Text>

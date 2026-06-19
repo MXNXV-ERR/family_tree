@@ -1,7 +1,7 @@
 // Firestore data access. Same structure as web: trees/{uid}/members + /relationships.
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot,
-  serverTimestamp, getDocs, writeBatch,
+  serverTimestamp, getDocs, writeBatch, query, where,
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Member, Relationship } from '../shared/types';
@@ -29,8 +29,25 @@ export const updateMember = (uid: string, id: string, data: Partial<Member>) =>
 export const claimMember = (treeId: string, memberId: string, uid: string) =>
   updateMember(treeId, memberId, { associatedUserId: uid });
 
-export const deleteMember = (uid: string, id: string) =>
-  deleteDoc(doc(treeRef(uid), 'members', id));
+// Delete a member AND every relationship edge that touches them, atomically, so
+// no orphaned spouse/parent edges are left behind (those inflated the couples
+// count and broke generation math).
+export async function deleteMember(uid: string, id: string) {
+  const relsCol = collection(treeRef(uid), 'relationships');
+  const [fromSnap, toSnap] = await Promise.all([
+    getDocs(query(relsCol, where('fromId', '==', id))),
+    getDocs(query(relsCol, where('toId', '==', id))),
+  ]);
+  const batch = writeBatch(db);
+  const seen = new Set<string>();
+  [...fromSnap.docs, ...toSnap.docs].forEach((d) => {
+    if (seen.has(d.id)) return;
+    seen.add(d.id);
+    batch.delete(d.ref);
+  });
+  batch.delete(doc(treeRef(uid), 'members', id));
+  await batch.commit();
+}
 
 export const addRelationship = (uid: string, r: Omit<Relationship, 'id'>) =>
   addDoc(collection(treeRef(uid), 'relationships'), r);

@@ -17,6 +17,12 @@ service cloud.firestore {
       );
     }
 
+    // Per-user profile doc (users/{uid}) — the user owns their own profile only.
+    // Matches the document itself, not the /families/* subcollection rule above.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /trees/{treeId} {
       function signedIn() { return request.auth != null; }
       function uid() { return request.auth.uid; }

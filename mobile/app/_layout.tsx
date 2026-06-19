@@ -9,6 +9,8 @@ import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { SettingsProvider } from '../src/theme/SettingsContext';
 import { AuthProvider, useAuth } from '../src/firebase/AuthContext';
 import { FamilyProvider } from '../src/firebase/FamilyContext';
+import { UserProfileProvider } from '../src/firebase/UserProfileContext';
+import { RelTermsProvider } from '../src/theme/RelTermsContext';
 import { useTheme } from '../src/theme/theme';
 import { useAppFonts } from '../src/theme/fonts';
 
@@ -42,7 +44,11 @@ export default function RootLayout() {
           <SettingsProvider>
             <AuthProvider>
               <FamilyProvider>
-                <NavShell />
+                <UserProfileProvider>
+                  <RelTermsProvider>
+                    <NavShell />
+                  </RelTermsProvider>
+                </UserProfileProvider>
               </FamilyProvider>
             </AuthProvider>
           </SettingsProvider>
