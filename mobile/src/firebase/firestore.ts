@@ -3,20 +3,42 @@ import {
   collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot,
   serverTimestamp, getDocs, writeBatch, query, where,
 } from 'firebase/firestore';
-import { db } from './config';
-import type { Member, Relationship } from '../shared/types';
+import { db, auth } from './config';
+import type { Member, Relationship, FamilyEvent } from '../shared/types';
 
 const treeRef = (uid: string) => doc(db, 'trees', uid);
 
+// Resilient collection listener: on error (e.g. the ID token expired after the
+// tab sat idle, or a transient network drop) it refreshes the token and
+// re-subscribes, instead of dying silently and leaving the UI stuck loading.
+function resilientCollection<T>(
+  makeQuery: () => ReturnType<typeof collection>,
+  toItem: (d: any) => T,
+  cb: (items: T[]) => void,
+  label: string,
+): () => void {
+  let stopped = false;
+  let unsub: () => void = () => {};
+  const start = () => {
+    unsub = onSnapshot(
+      makeQuery(),
+      (snap) => cb(snap.docs.map(toItem)),
+      async (e) => {
+        console.warn(label, (e as any)?.message ?? e);
+        try { await auth.currentUser?.getIdToken(true); } catch {}
+        if (!stopped) setTimeout(() => { if (!stopped) start(); }, 3000);
+      },
+    );
+  };
+  start();
+  return () => { stopped = true; unsub(); };
+}
+
 export const subscribeMembers = (uid: string, cb: (m: Member[]) => void) =>
-  onSnapshot(collection(treeRef(uid), 'members'), (snap) =>
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Member[]),
-  );
+  resilientCollection(() => collection(treeRef(uid), 'members'), (d) => ({ id: d.id, ...d.data() }) as Member, cb, 'subscribeMembers');
 
 export const subscribeRelationships = (uid: string, cb: (r: Relationship[]) => void) =>
-  onSnapshot(collection(treeRef(uid), 'relationships'), (snap) =>
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Relationship[]),
-  );
+  resilientCollection(() => collection(treeRef(uid), 'relationships'), (d) => ({ id: d.id, ...d.data() }) as Relationship, cb, 'subscribeRelationships');
 
 export const addMember = (uid: string, m: Omit<Member, 'id'>) =>
   addDoc(collection(treeRef(uid), 'members'), { ...m, createdAt: serverTimestamp() });
@@ -131,6 +153,36 @@ export async function commitMerge(
 
   await batch.commit();
   return { added: plan.newMembers.length, links };
+}
+
+// ---- Family events (trees/{treeId}/events) ----
+// Degrades to an empty list if the events rules aren't deployed yet.
+export const subscribeEvents = (treeId: string, cb: (e: FamilyEvent[]) => void) =>
+  onSnapshot(
+    collection(treeRef(treeId), 'events'),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FamilyEvent[]),
+    (e) => { console.warn('subscribeEvents', (e as any)?.message ?? e); cb([]); },
+  );
+
+export const addEvent = (treeId: string, e: Omit<FamilyEvent, 'id'>) =>
+  addDoc(collection(treeRef(treeId), 'events'), { ...e, createdAt: serverTimestamp() });
+
+export const updateEvent = (treeId: string, id: string, data: Partial<FamilyEvent>) =>
+  updateDoc(doc(treeRef(treeId), 'events', id), data);
+
+export const deleteEvent = (treeId: string, id: string) =>
+  deleteDoc(doc(treeRef(treeId), 'events', id));
+
+// Update many members' fields in one chunked batch — the master-edit grid Save
+// and the family-photo face assignment both write several members at once.
+export async function bulkUpdateMembers(treeId: string, changes: { id: string; data: Partial<Member> }[]) {
+  if (!changes.length) return;
+  const col = collection(treeRef(treeId), 'members');
+  for (let i = 0; i < changes.length; i += 450) {
+    const batch = writeBatch(db);
+    changes.slice(i, i + 450).forEach(({ id, data }) => batch.update(doc(col, id), data as any));
+    await batch.commit();
+  }
 }
 
 export const _getDocs = getDocs; // re-export for export feature

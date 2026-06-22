@@ -28,16 +28,19 @@ import { DesktopProfile } from './DesktopProfile';
 import { MemberForm } from '../components/MemberForm';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { FamilyInfoPanel } from '../components/FamilyInfoPanel';
+import { FamilyPhotoFlow } from '../components/FamilyPhotoFlow';
+import { EventsPanel } from '../components/EventsPanel';
+import { MasterEditGrid } from '../components/MasterEditGrid';
 import { FamilyPickerPanel } from '../components/FamilyPickerPanel';
 import { ChatPanel } from '../components/ChatPanel';
 import { MembersPanel } from '../components/MembersPanel';
 import { ExportPanel } from '../components/ExportPanel';
 import { LinkForm } from '../components/LinkForm';
-import { canEditMember, canDeleteMember, canEditRelationship, canImport } from '../shared/permissions';
+import { canEditMember, canDeleteMember, canEditRelationship, canImport, canManageData } from '../shared/permissions';
 import type { Member, Relationship } from '../shared/types';
 
-type ViewKind = 'tree' | 'radial' | 'timeline';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
+type ViewKind = 'tree' | 'radial' | 'timeline' | 'master';
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -45,7 +48,7 @@ export function DesktopWorkspace() {
   const { user } = useAuth();
   const profile = useUserProfile();
   const { activeTreeId, activeFamily } = useFamily();
-  const { members, relationships, treeMetadata } = useFamilyTree(activeTreeId);
+  const { members, relationships, events, treeMetadata } = useFamilyTree(activeTreeId);
 
   const [view, setView] = useState<ViewKind>('tree');
   const [drawer, setDrawer] = useState<Drawer>(null);
@@ -212,7 +215,9 @@ export function DesktopWorkspace() {
       {/* CANVAS + DRAWER — drawer is confined here (not the whole workspace) so
           the top toolbar stays visible and clickable while a panel is open. */}
       <View style={{ flex: 1 }}>
-        {members.length === 0 ? (
+        {view === 'master' ? (
+          <MasterEditGrid treeId={activeTreeId} members={members} canManage={canManageData(role)} onClose={() => setView('tree')} />
+        ) : members.length === 0 ? (
           <EmptyCanvas c={c} family={activeFamily} onAddFirst={() => editMember()} onPickFamily={() => setDrawer({ type: 'familyPicker' })} />
         ) : !focusId ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>
@@ -220,7 +225,7 @@ export function DesktopWorkspace() {
           <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree'].indexOf(view)} style={{ flex: 1 }}>
             {view === 'tree' ? <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />
               : view === 'radial' ? <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />
-              : <TimelineView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+              : <TimelineView {...shared} events={events} onZoomReady={setZoomApi} hideZoomUI />}
           </SlideSwap>
         )}
 
@@ -251,7 +256,15 @@ export function DesktopWorkspace() {
         {drawer?.type === 'settings' ? <SettingsPanel onClose={() => setDrawer(null)} /> : null}
         {drawer?.type === 'family' && activeTreeId ? (
           <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
-            onClose={() => setDrawer(null)} onSwitchFamily={() => setDrawer({ type: 'familyPicker' })} />
+            onClose={() => setDrawer(null)} onSwitchFamily={() => setDrawer({ type: 'familyPicker' })}
+            onUploadPhoto={() => setDrawer({ type: 'familyPhoto' })} onOpenEvents={() => setDrawer({ type: 'events' })}
+            onOpenMasterEdit={() => { setDrawer(null); setView('master'); }} />
+        ) : null}
+        {drawer?.type === 'familyPhoto' && activeTreeId ? (
+          <FamilyPhotoFlow treeId={activeTreeId} members={members} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'events' && activeTreeId ? (
+          <EventsPanel treeId={activeTreeId} members={members} events={events} canManage={canManageData(role)} onClose={() => setDrawer(null)} />
         ) : null}
         {drawer?.type === 'familyPicker' ? (
           <FamilyPickerPanel onClose={() => setDrawer(null)} onOpenInfo={() => setDrawer({ type: 'family' })} />

@@ -1,0 +1,10 @@
+continue
+
+also if we leave the website on for too long, and we didnt do anything, it is only loading state
+what is happening? 
+
+can improve face detection more? like better models or croping and then analysis each part or something else
+
+Check if there are any security vulnerabilities are there and since this is currently frontend only app how to make it secure
+and in general how can we make this more secure? given everything is running on free firebase
+is there any simple way to add security at very minmum cost 

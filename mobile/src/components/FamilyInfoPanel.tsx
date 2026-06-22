@@ -3,7 +3,7 @@
 // the people who have access. Subscribes to the tree doc + membership docs.
 // Shared by the mobile family sheet and the desktop drawer.
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator, Image } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme, font, radius } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
@@ -11,29 +11,35 @@ import { Avatar } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
-import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf } from '../firebase/families';
-import { canManageRoles, normalizeRole, isOwner } from '../shared/permissions';
+import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf, subscribeJoinRequests, approveJoinRequest, rejectJoinRequest } from '../firebase/families';
+import { canManageRoles, canManageData, normalizeRole, isOwner } from '../shared/permissions';
 import { computeGenerations, countCouples } from '../shared/adjacency';
-import type { FamilyTree, Collaborator, Member, Relationship } from '../shared/types';
+import type { FamilyTree, Collaborator, Member, Relationship, JoinRequest, JoinPolicy } from '../shared/types';
 
-export function FamilyInfoPanel({ treeId, family, members, relationships, onClose, onSwitchFamily }: {
+export function FamilyInfoPanel({ treeId, family, members, relationships, onClose, onSwitchFamily, onUploadPhoto, onOpenEvents, onOpenMasterEdit }: {
   treeId: string;
   family: FamilyTree | null;
   members: Member[];
   relationships: Relationship[];
   onClose: () => void;
   onSwitchFamily?: () => void;
+  onUploadPhoto?: () => void;
+  onOpenEvents?: () => void;
+  onOpenMasterEdit?: () => void;
 }) {
   const { c } = useTheme();
   const { user } = useAuth();
   const [doc, setDoc] = useState<FamilyTree | null>(family);
   const [collabs, setCollabs] = useState<Collaborator[]>([]);
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
   const canManage = canManageRoles(family?.role);
+  const canApprove = canManageData(family?.role);
 
   useEffect(() => {
     const u1 = subscribeFamilyDoc(treeId, (f) => f && setDoc(f));
     const u2 = subscribeCollaborators(treeId, setCollabs);
-    return () => { u1(); u2(); };
+    const u3 = subscribeJoinRequests(treeId, setRequests);
+    return () => { u1(); u2(); u3(); };
   }, [treeId]);
 
   const fam = doc ?? family;
@@ -62,10 +68,11 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const [fEst, setFEst] = useState('');
   const [fSummary, setFSummary] = useState('');
   const [fColor, setFColor] = useState<string | undefined>(undefined);
+  const [fJoinPolicy, setFJoinPolicy] = useState<JoinPolicy>('open');
 
   const startEdit = () => {
     setFName(fam?.name ?? ''); setFRegion(fam?.region ?? ''); setFEst(fam?.established ?? '');
-    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setEditing(true);
+    setFSummary(fam?.summary ?? ''); setFColor(fam?.color); setFJoinPolicy(fam?.joinPolicy ?? 'open'); setEditing(true);
   };
   const saveEdit = async () => {
     if (!user || !fName.trim()) return;
@@ -73,7 +80,7 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
     try {
       await updateFamily(treeId, user.uid, {
         name: fName.trim(), mono: monoOf(fName.trim()), region: fRegion.trim(),
-        established: fEst.trim(), summary: fSummary.trim(), ...(fColor ? { color: fColor } : {}),
+        established: fEst.trim(), summary: fSummary.trim(), joinPolicy: fJoinPolicy, ...(fColor ? { color: fColor } : {}),
       });
       setEditing(false);
     } finally { setBusy(false); }
@@ -129,6 +136,21 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
                 })}
               </View>
             </Field>
+            <Field label="Joining" c={c}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {(['open', 'approval'] as const).map((p) => {
+                  const on = fJoinPolicy === p;
+                  return (
+                    <Pressable key={p} onPress={() => setFJoinPolicy(p)} style={{ flex: 1, height: 46, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.accentSoft : c.paper }}>
+                      <Text style={{ color: on ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 13.5 }}>{p === 'open' ? 'Open' : 'Approval'}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Field>
+            <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 12, lineHeight: 17, marginTop: -4 }}>
+              {fJoinPolicy === 'open' ? 'Anyone with the invite code joins instantly.' : 'Invite-code joins must be approved by an owner or admin.'}
+            </Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
               <Pressable onPress={() => setEditing(false)} style={{ flex: 1, height: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.line }}>
                 <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 15 }}>Cancel</Text>
@@ -157,11 +179,36 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
 
         {fam?.summary ? <Text style={{ color: c.inkSoft, fontFamily: font.sans, fontSize: 14.5, lineHeight: 22 }}>{fam.summary}</Text> : null}
 
+        {fam?.photoUrl ? (
+          <Image source={{ uri: fam.photoUrl }} style={{ width: '100%', height: 170, borderRadius: radius.lg, backgroundColor: c.paper2 }} resizeMode="cover" />
+        ) : null}
+
         {/* switch family — the picker now lives inside the details panel */}
         {onSwitchFamily ? (
           <Pressable onPress={onSwitchFamily} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, backgroundColor: c.accentSoft, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
             <Icon name="users" size={17} color={c.accent} />
             <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 14.5 }}>Switch family</Text>
+          </Pressable>
+        ) : null}
+
+        {canApprove && onUploadPhoto ? (
+          <Pressable onPress={onUploadPhoto} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+            <Icon name="image" size={17} color={c.inkSoft} />
+            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>{fam?.photoUrl ? 'Update family photo' : 'Upload family photo'}</Text>
+          </Pressable>
+        ) : null}
+
+        {onOpenEvents ? (
+          <Pressable onPress={onOpenEvents} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+            <Icon name="calendar" size={17} color={c.inkSoft} />
+            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Family events</Text>
+          </Pressable>
+        ) : null}
+
+        {canApprove && onOpenMasterEdit ? (
+          <Pressable onPress={onOpenMasterEdit} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+            <Icon name="edit" size={17} color={c.inkSoft} />
+            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Edit all members</Text>
           </Pressable>
         ) : null}
 
@@ -242,6 +289,36 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
             ) : null}
           </View>
         </View>
+
+        {/* pending join requests (owner/admin) */}
+        {canApprove && requests.some((r) => r.status === 'pending') ? (
+          <View>
+            <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Join requests</Text>
+            <View style={{ gap: 8 }}>
+              {requests.filter((r) => r.status === 'pending').map((r) => (
+                <GlassSurface key={r.uid} rounded={radius.md}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11 }}>
+                    <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="user" size={18} color={c.accent} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>{r.email || r.name || r.uid}</Text>
+                      <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5 }}>wants to join</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable onPress={() => rejectJoinRequest(treeId, r.uid)} hitSlop={6} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.md, borderWidth: 1, borderColor: c.line }}>
+                        <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 12 }}>Reject</Text>
+                      </Pressable>
+                      <Pressable onPress={() => approveJoinRequest(treeId, r.uid, r.email)} hitSlop={6} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.md, backgroundColor: c.accent }}>
+                        <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 12 }}>Approve</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </GlassSurface>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         {/* owner actions */}
         {owner ? (

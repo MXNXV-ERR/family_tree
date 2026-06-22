@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Platform, Modal, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
@@ -29,6 +29,9 @@ import type { Member } from '../src/shared/types';
 // native always get the mobile home below.
 export default function Home() {
   const { isDesktop } = useResponsive();
+  const { needsOnboarding, loadingFamilies } = useFamily();
+  // Brand-new accounts (no family yet) are routed to Create-or-Join.
+  if (!loadingFamilies && needsOnboarding) return <Redirect href="/onboard" />;
   return isDesktop ? <DesktopWorkspace /> : <MobileHome />;
 }
 
@@ -228,7 +231,10 @@ function MobileHome() {
         {activeTreeId ? (
           <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
             onClose={() => setFamilyInfoOpen(false)}
-            onSwitchFamily={() => { setFamilyInfoOpen(false); setFamilyOpen(true); }} />
+            onSwitchFamily={() => { setFamilyInfoOpen(false); setFamilyOpen(true); }}
+            onUploadPhoto={() => { setFamilyInfoOpen(false); router.push('/familyphoto'); }}
+            onOpenEvents={() => { setFamilyInfoOpen(false); router.push('/events'); }}
+            onOpenMasterEdit={() => { setFamilyInfoOpen(false); router.push('/masteredit'); }} />
         ) : null}
       </BottomSheet>
 

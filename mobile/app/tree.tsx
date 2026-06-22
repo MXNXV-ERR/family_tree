@@ -22,7 +22,7 @@ export default function VizScreen() {
   const { c } = useTheme();
   const { user } = useAuth();
   const { activeTreeId } = useFamily();
-  const { members, relationships, loading } = useFamilyTree(activeTreeId);
+  const { members, relationships, events, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [view, setView] = useState<ViewKind>('tree');
   const [focusId, setFocusId] = useState<string>('');
@@ -59,7 +59,7 @@ export default function VizScreen() {
       <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline'].indexOf(view)} style={{ flex: 1 }}>
         {view === 'tree' ? <TreeView {...shared} />
           : view === 'radial' ? <RadialView {...shared} />
-          : <TimelineView {...shared} />}
+          : <TimelineView {...shared} events={events} />}
       </SlideSwap>
     </View>
   );

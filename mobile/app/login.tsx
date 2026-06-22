@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
@@ -24,36 +25,64 @@ const GOOGLE = {
   androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
 };
 
+type Mode = 'signin' | 'signup';
+
 export default function Login() {
   const { c } = useTheme();
   const { isDesktop } = useResponsive();
-  const { signIn, signInWithGoogleIdToken } = useAuth();
+  const { signIn, signUp, signInWithGoogleIdToken } = useAuth();
   const router = useRouter();
+  const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const googleConfigured = !!(GOOGLE.webClientId || GOOGLE.androidClientId || GOOGLE.iosClientId);
+  const isSignup = mode === 'signup';
 
   const onSubmit = async () => {
     setError('');
+    if (isSignup && password !== confirm) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (isSignup && password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
     setLoading(true);
     try {
-      await signIn(email, password);
-      router.replace('/home');
+      if (isSignup) {
+        await signUp(email, password);
+        router.replace('/onboard'); // new account → create or join a family
+      } else {
+        await signIn(email, password);
+        router.replace('/home');    // home gate routes to /onboard if no family yet
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message.replace('Firebase: ', '') : 'Login failed');
+      setError(e instanceof Error ? e.message.replace('Firebase: ', '') : 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
 
+  const toggleMode = () => {
+    setError('');
+    setConfirm('');
+    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
+  };
+
   const card = (
       <GlassSurface style={styles.card} rounded={radius.xl}>
         <View style={{ padding: space(7) }}>
-          <Text style={[styles.title, { color: c.ink, fontFamily: font.serifItalic }]}>{isDesktop ? 'Sign in' : 'Family Tree'}</Text>
-          <Text style={[styles.sub, { color: c.mute, fontFamily: font.mono, letterSpacing: 1.5, textTransform: 'uppercase', fontSize: 11 }]}>Welcome back</Text>
+          <Text style={[styles.title, { color: c.ink, fontFamily: font.serifItalic }]}>
+            {isSignup ? 'Create account' : (isDesktop ? 'Sign in' : 'Family Tree')}
+          </Text>
+          <Text style={[styles.sub, { color: c.mute, fontFamily: font.mono, letterSpacing: 1.5, textTransform: 'uppercase', fontSize: 11 }]}>
+            {isSignup ? 'Start your family tree' : 'Welcome back'}
+          </Text>
 
           <TextInput
             placeholder="Email"
@@ -72,6 +101,16 @@ export default function Login() {
             onChangeText={setPassword}
             style={[styles.input, { color: c.ink, borderColor: c.line, backgroundColor: c.paper }]}
           />
+          {isSignup ? (
+            <TextInput
+              placeholder="Confirm password"
+              placeholderTextColor={c.mute}
+              secureTextEntry
+              value={confirm}
+              onChangeText={setConfirm}
+              style={[styles.input, { color: c.ink, borderColor: c.line, backgroundColor: c.paper }]}
+            />
+          ) : null}
 
           {error ? <Text style={{ color: c.danger, marginBottom: space(2) }}>{error}</Text> : null}
 
@@ -83,7 +122,7 @@ export default function Login() {
               { backgroundColor: c.accent, opacity: pressed || loading ? 0.85 : 1 },
             ]}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Sign In</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{isSignup ? 'Create account' : 'Sign In'}</Text>}
           </Pressable>
 
           {/* Google sign-in via expo-auth-session. Enabled once OAuth client IDs
@@ -105,6 +144,20 @@ export default function Login() {
               <Text style={{ color: c.inkSoft, fontWeight: '600' }}>Google (add OAuth client IDs)</Text>
             </Pressable>
           )}
+
+          {/* Apple sign-in (iOS only; hidden where unavailable). */}
+          <AppleButton
+            onDone={() => router.replace('/home')}
+            onError={setError}
+            setLoading={setLoading}
+          />
+
+          <Pressable onPress={toggleMode} style={{ marginTop: space(4), alignItems: 'center' }}>
+            <Text style={{ color: c.mute, fontFamily: font.sans }}>
+              {isSignup ? 'Have an account? ' : 'New here? '}
+              <Text style={{ color: c.accent, fontFamily: font.sansSemi }}>{isSignup ? 'Sign in' : 'Create account'}</Text>
+            </Text>
+          </Pressable>
         </View>
       </GlassSurface>
   );
@@ -190,6 +243,38 @@ function GoogleButton({ onToken, loading, c }: { onToken: (idToken: string) => v
     <Pressable disabled={!request || loading} onPress={() => promptAsync()} style={[styles.btnOutline, { borderColor: c.line }]}>
       <Text style={{ color: c.inkSoft, fontWeight: '600' }}>Continue with Google</Text>
     </Pressable>
+  );
+}
+
+// Apple Sign In button. iOS-native (expo-apple-authentication); renders nothing
+// on web/Android or where Apple auth is unavailable.
+function AppleButton({ onDone, onError, setLoading }: { onDone: () => void; onError: (m: string) => void; setLoading: (b: boolean) => void }) {
+  const { signInWithApple } = useAuth();
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    AppleAuthentication.isAvailableAsync().then((a) => { if (alive) setAvailable(a); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  if (Platform.OS !== 'ios' || !available) return null;
+  return (
+    <AppleAuthentication.AppleAuthenticationButton
+      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+      cornerRadius={radius.md}
+      style={{ height: 48, marginTop: 12 }}
+      onPress={async () => {
+        setLoading(true);
+        try {
+          await signInWithApple();
+          onDone();
+        } catch (e: any) {
+          if (e?.code !== 'ERR_REQUEST_CANCELED') onError(e?.message ?? 'Apple sign-in failed');
+        } finally {
+          setLoading(false);
+        }
+      }}
+    />
   );
 }
 

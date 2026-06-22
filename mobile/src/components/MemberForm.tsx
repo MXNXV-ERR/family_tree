@@ -5,14 +5,15 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, Image, ScrollView,
-  ActivityIndicator, Platform, type KeyboardTypeOptions,
+  ActivityIndicator, Platform, Modal, type KeyboardTypeOptions,
 } from 'react-native';
 import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { IconBtn } from '../ui/primitives';
 import { DateField } from '../ui/DateField';
+import { CropBox } from './CropBox';
 import { validateMember, hasErrors, type FieldErrors } from '../shared/validation';
-import { pickFromGallery, takePhoto } from '../shared/photo';
+import { pickFromGallery, takePhoto, pickRawImage } from '../shared/photo';
 import { initials } from '../shared/adjacency';
 import type { Member } from '../shared/types';
 
@@ -35,6 +36,7 @@ export function MemberForm({
   const [d, setD] = useState<Draft>(initial ?? { gender: 'male' });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [cropSrc, setCropSrc] = useState<{ uri: string; base64?: string } | null>(null);
   const [custom, setCustom] = useState<{ k: string; v: string }[]>(
     Object.entries(initial?.customFields ?? {}).map(([k, v]) => ({ k, v })),
   );
@@ -49,6 +51,14 @@ export function MemberForm({
     } finally {
       setPhotoBusy(false);
     }
+  }
+
+  // Web: pick raw + open the interactive crop. Native keeps the system crop UI.
+  async function onGallery() {
+    if (Platform.OS !== 'web') return choosePhoto(pickFromGallery);
+    setPhotoBusy(true);
+    try { const raw = await pickRawImage(); if (raw) setCropSrc(raw); }
+    finally { setPhotoBusy(false); }
   }
 
   function submit() {
@@ -88,7 +98,7 @@ export function MemberForm({
           {photoBusy && <View style={styles.photoBusy}><ActivityIndicator color={c.accent} /></View>}
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <SmallBtn label="Gallery" onPress={() => choosePhoto(pickFromGallery)} c={c} />
+          <SmallBtn label="Gallery" onPress={onGallery} c={c} />
           <SmallBtn label="Camera" onPress={() => choosePhoto(takePhoto)} c={c} />
           {d.photoUrl ? <SmallBtn label="Remove" onPress={() => set('photoUrl', undefined)} c={c} danger /> : null}
         </View>
@@ -147,6 +157,14 @@ export function MemberForm({
         </Pressable>
       ) : null}
       </ScrollView>
+
+      {cropSrc ? (
+        <Modal transparent animationType="fade" onRequestClose={() => setCropSrc(null)}>
+          <CropBox uri={cropSrc.uri} base64={cropSrc.base64}
+            onCancel={() => setCropSrc(null)}
+            onDone={(dataUri) => { set('photoUrl', dataUri); setCropSrc(null); }} />
+        </Modal>
+      ) : null}
     </View>
   );
 }

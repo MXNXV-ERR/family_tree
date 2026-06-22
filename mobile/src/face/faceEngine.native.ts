@@ -8,7 +8,7 @@ import { decodeJpeg } from '@tensorflow/tfjs-react-native';
 import * as blazeface from '@tensorflow-models/blazeface';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 import * as FileSystem from 'expo-file-system/legacy';
-import { l2normalize, type Descriptor, type Progress } from './faceMatch';
+import { l2normalize, type Descriptor, type Progress, type DetectedFaces } from './faceMatch';
 
 let detector: blazeface.BlazeFaceModel | null = null;
 let embedder: mobilenet.MobileNet | null = null;
@@ -77,6 +77,28 @@ export async function detectFace(uri: string): Promise<boolean> {
   try {
     const faces = await detector!.estimateFaces(pixels, false);
     return faces.length > 0;
+  } finally {
+    pixels.dispose();
+  }
+}
+
+// Detect ALL faces in an image → boxes in source pixels (+ image dims). Used by
+// the family group-photo flow to crop each face out and assign it to a member.
+export async function detectFaces(uri: string): Promise<DetectedFaces> {
+  if (!detector) await loadModels();
+  const pixels = await uriToTensor(uri);
+  try {
+    const found = await detector!.estimateFaces(pixels, false);
+    const W = pixels.shape[1], H = pixels.shape[0];
+    const faces = found
+      .map((f) => {
+        const [x1, y1] = f.topLeft as [number, number];
+        const [x2, y2] = f.bottomRight as [number, number];
+        const x = Math.max(0, Math.floor(x1)), y = Math.max(0, Math.floor(y1));
+        return { x, y, w: Math.ceil(x2 - x1), h: Math.ceil(y2 - y1) };
+      })
+      .filter((b) => b.w > 8 && b.h > 8);
+    return { width: W, height: H, faces };
   } finally {
     pixels.dispose();
   }

@@ -7,40 +7,62 @@ import { yearOf } from './adjacency';
 import { RELATION_KEYS, RELATION_HINTS, type RelTerms } from './relTerms';
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+// When set, all Gemini calls go through this proxy (e.g. a Cloudflare Worker) so
+// the API key lives server-side and never ships in the client bundle. See
+// infra/gemini-proxy-worker.js. With a proxy configured, leave the API key UNSET.
+const PROXY_URL = process.env.EXPO_PUBLIC_GEMINI_PROXY_URL;
+const hasGemini = !!(API_KEY || PROXY_URL);
 
-if (!API_KEY) {
-    console.warn('EXPO_PUBLIC_GEMINI_API_KEY not set. Chat features will error.');
+if (!hasGemini) {
+    console.warn('No Gemini config (EXPO_PUBLIC_GEMINI_API_KEY or EXPO_PUBLIC_GEMINI_PROXY_URL). Chat features will error.');
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY || '');
 
-export async function generateResponse(message: string, language: string = 'English') {
-    if (!API_KEY) {
-        throw new Error('Missing API Key. Set EXPO_PUBLIC_GEMINI_API_KEY in your env.');
+// One model call — via the secure proxy when configured, else the client SDK.
+// `turns` is the full conversation; a single 'user' turn is a one-shot prompt.
+async function runModel(model: string, systemInstruction: string, turns: ChatTurn[]): Promise<string> {
+    if (PROXY_URL) {
+        const res = await fetch(PROXY_URL, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model, systemInstruction, history: turns }),
+        });
+        if (!res.ok) throw new Error(`Gemini proxy error ${res.status}`);
+        const data = await res.json();
+        if (typeof data?.text !== 'string') throw new Error('Gemini proxy returned no text');
+        return data.text;
     }
+    const m = genAI.getGenerativeModel({ model, systemInstruction });
+    if (turns.length <= 1) {
+        const res = await m.generateContent(turns[0]?.content ?? '');
+        return res.response.text();
+    }
+    const chatSession = m.startChat({
+        history: turns.slice(0, -1).map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] })),
+    });
+    const res = await chatSession.sendMessage(turns[turns.length - 1].content);
+    return res.response.text();
+}
+
+// Flash → Pro fallback wrapper.
+async function withFallback(systemInstruction: string, turns: ChatTurn[]): Promise<string> {
+    try { return await runModel('gemini-2.5-flash', systemInstruction, turns); }
+    catch (e) {
+        console.warn('Flash failed, trying Pro:', e instanceof Error ? e.message : String(e));
+        return runModel('gemini-2.5-pro', systemInstruction, turns);
+    }
+}
+
+export async function generateResponse(message: string, language: string = 'English') {
+    if (!hasGemini) throw new Error('Missing Gemini config. Set EXPO_PUBLIC_GEMINI_API_KEY or EXPO_PUBLIC_GEMINI_PROXY_URL.');
 
     const systemInstruction = `You are a warm, concise family assistant.
 Answer questions about family relationships clearly.
 If asked to translate a relationship term, give the term in ${language} (with native script) and a one-line note.
 Keep answers short and friendly.`;
 
-    try {
-        const flash = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction });
-        const result = await flash.generateContent(message);
-        return result.response.text();
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.warn('Gemini 2.5 Flash failed, falling back to Pro:', msg);
-        try {
-            const pro = genAI.getGenerativeModel({ model: 'gemini-2.5-pro', systemInstruction });
-            const result = await pro.generateContent(message);
-            return result.response.text();
-        } catch (proError: unknown) {
-            const pmsg = proError instanceof Error ? proError.message : String(proError);
-            console.error('Gemini 2.5 Pro also failed:', pmsg);
-            throw new Error('AI generation failed. Please check your API key and usage.');
-        }
-    }
+    return withFallback(systemInstruction, [{ role: 'user', content: message }]);
 }
 
 // Generate a regional-language kinship dictionary once for a language: maps each
@@ -48,24 +70,16 @@ Keep answers short and friendly.`;
 // the family / user profile so it isn't regenerated per render. Returns {} for
 // English or on parse failure (callers fall back to plain English).
 export async function generateRelationshipTerms(language: string): Promise<RelTerms> {
-    if (!API_KEY) throw new Error('Missing API Key. Set EXPO_PUBLIC_GEMINI_API_KEY in your env.');
+    if (!hasGemini) throw new Error('Missing Gemini config. Set EXPO_PUBLIC_GEMINI_API_KEY or EXPO_PUBLIC_GEMINI_PROXY_URL.');
     if (!language || language.trim().toLowerCase() === 'english') return {};
 
     const lines = RELATION_KEYS.map((k) => `${k} = ${RELATION_HINTS[k]}`).join('; ');
     const prompt = `Language: "${language}". For each relationship below, give the everyday ${language} kinship term, transliterated in ENGLISH (Latin) LETTERS ONLY — no native script. "paternal" = father's side, "maternal" = mother's side. Return ONLY a strict JSON object mapping each key to its term (a string); no commentary, no code fences. Relationships (key = meaning): ${lines}`;
     const systemInstruction = 'You translate family/kinship terms accurately, respecting paternal vs maternal distinctions. Output strict minified JSON only; every value in English letters.';
 
-    const run = async (model: string) => {
-        const m = genAI.getGenerativeModel({ model, systemInstruction });
-        const res = await m.generateContent(prompt);
-        return res.response.text();
-    };
-
     // Errors propagate so the caller can show "AI unavailable" rather than
     // silently saving an empty dictionary.
-    let text: string;
-    try { text = await run('gemini-2.5-flash'); }
-    catch { text = await run('gemini-2.5-pro'); }
+    const text = await withFallback(systemInstruction, [{ role: 'user', content: prompt }]);
 
     const jsonStr = text.replace(/```json|```/gi, '').trim();
     let parsed: Record<string, unknown>;
@@ -117,7 +131,7 @@ export async function chat(
     relationships: Relationship[],
     opts: { meName?: string; language?: string } = {},
 ): Promise<string> {
-    if (!API_KEY) throw new Error('Missing API Key. Set EXPO_PUBLIC_GEMINI_API_KEY in your env.');
+    if (!hasGemini) throw new Error('Missing Gemini config. Set EXPO_PUBLIC_GEMINI_API_KEY or EXPO_PUBLIC_GEMINI_PROXY_URL.');
 
     // Tell the model who "me" is so it can answer first-person questions, and
     // which regional language to transliterate relationship terms into.
@@ -125,7 +139,7 @@ export async function chat(
         ? `\n\nThe current user ("me", "I", "my") is ${opts.meName}. Answer first-person questions ("who am I", "how is X related to me", "who are my cousins") about that person.`
         : '';
     const langLine = opts.language && opts.language.trim().toLowerCase() !== 'english'
-        ? `\n\nWhen you name a family relationship, also give the ${opts.language} term written in English letters (transliteration) in parentheses, e.g. "uncle (Chacha)". Keep the English term too.`
+        ? `\n\nThe family's preferred regional language is ${opts.language}. Answer in whatever language the user writes in — never refuse, restrict, or change the subject of a question because of language. You MAY additionally show the ${opts.language} kinship term in English letters (transliteration) in parentheses when you name a relationship, e.g. "uncle (Chacha)", but that is optional and must never replace a normal answer.`
         : '';
 
     const systemInstruction = `You are a warm, concise family-tree assistant. Use ONLY the family data below to answer questions about who's who, how people are related, dates, counts, and ancestry. If asked "how is A related to B", reason over the parent/spouse links and give the everyday term (e.g. uncle, grandmother, cousin). Refer to people by their exact names as written. If the data doesn't contain the answer, say so briefly. Keep replies short and friendly. Do not invent members or relationships.${meLine}${langLine}\n\n${buildTreePrompt(members, relationships)}`;

@@ -8,7 +8,7 @@ import { useTheme, font, radius } from '../theme/theme';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
-import { createFamily, joinFamilyByInvite, monoOf } from '../firebase/families';
+import { createFamily, requestToJoinFamily, monoOf } from '../firebase/families';
 import { claimMember } from '../firebase/firestore';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { Icon } from '../ui/Icon';
@@ -46,6 +46,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
   const [code, setCode] = useState('');
+  const [joinMsg, setJoinMsg] = useState<string | null>(null);
 
   const switchTo = (id: string) => { setActiveTreeId(id); onClose(); };
 
@@ -64,12 +65,17 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
 
   async function doJoin() {
     if (!user || !code.trim()) return;
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setJoinMsg(null);
     try {
-      const id = await joinFamilyByInvite(user.uid, user.email, code.trim());
-      if (!id) { setErr('No family found for that invite code.'); return; }
-      // Switch to the joined tree and offer to claim a node, rather than closing.
-      setActiveTreeId(id); setCode(''); setMode('claim');
+      const res = await requestToJoinFamily(user.uid, user.email, code.trim());
+      if (!res) { setErr('No family found for that invite code.'); return; }
+      if (res.status === 'joined') {
+        // Open-policy family — joined instantly; offer to claim a node.
+        setActiveTreeId(res.treeId); setCode(''); setMode('claim');
+      } else {
+        // Approval-policy family — request sent, awaiting owner/admin approval.
+        setCode(''); setJoinMsg('Request sent — an owner or admin needs to approve it before you get access.');
+      }
     } catch (e) { setErr('Could not join. Check the code and your rules.'); }
     finally { setBusy(false); }
   }
@@ -168,6 +174,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
           <View style={{ gap: 12 }}>
             {input(code, setCode, 'Invite code (e.g. MEHTA-7K2X)', 'characters')}
             {err ? <Text style={{ color: c.danger, fontFamily: font.sans, fontSize: 13 }}>{err}</Text> : null}
+            {joinMsg ? <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 13 }}>{joinMsg}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable onPress={() => setMode('list')} style={({ pressed }) => [actionStyle(c, pressed), { flex: 1 }]}><Text style={actionText(c)}>Back</Text></Pressable>
               <Pressable onPress={doJoin} disabled={busy || !code.trim()} style={{ flex: 1, height: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accent, opacity: busy || !code.trim() ? 0.6 : 1 }}>
