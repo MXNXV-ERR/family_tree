@@ -73,7 +73,12 @@ export function DesktopWorkspace() {
       reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
     }
   }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
-  useEffect(() => { setZoomApi(null); }, [view]); // active view re-registers its zoom
+  // Don't blanket-reset zoomApi on view change: child effects run BEFORE parent
+  // effects, so the incoming view registers its api first and a reset here would
+  // null it right back — leaving the sub-bar zoom permanently disabled. Only the
+  // master edit grid (no canvas) clears it; a swapped-out view's stale closures
+  // are safe no-ops (`canvasRef.current?.`) until the next view re-registers.
+  useEffect(() => { if (view === 'master') setZoomApi(null); }, [view]);
 
   const matches = query.trim() ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6) : [];
 

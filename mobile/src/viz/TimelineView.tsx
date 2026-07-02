@@ -173,8 +173,8 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
         </View>
         {!hideZoomUI && (
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {([['minus', () => zoom((p) => p / 1.3)], ['plus', () => zoom((p) => p * 1.3)], ['target', () => { setUserZoomed(false); setPxPerYear(fitPx); }]] as [IconName, () => void][]).map(([n, fn]) => (
-              <Pressable key={n} onPress={fn} style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.92 : 1 }] })}>
+            {([['minus', 'zoom out', () => zoom((p) => p / 1.3)], ['plus', 'zoom in', () => zoom((p) => p * 1.3)], ['target', 'zoom fit', () => { setUserZoomed(false); setPxPerYear(fitPx); }]] as [IconName, string, () => void][]).map(([n, label, fn]) => (
+              <Pressable key={n} onPress={fn} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.92 : 1 }] })}>
                 <Icon name={n} size={16} color={c.inkSoft} />
               </Pressable>
             ))}

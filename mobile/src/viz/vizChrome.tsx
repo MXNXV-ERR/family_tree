@@ -24,11 +24,12 @@ export function VizSegment({ value, onChange, options }: {
 
 export function ZoomButtons({ onIn, onOut, onFit }: { onIn: () => void; onOut: () => void; onFit: () => void }) {
   const { c } = useTheme();
-  const btns: [IconName, () => void][] = [['plus', onIn], ['minus', onOut], ['target', onFit]];
+  const btns: [IconName, string, () => void][] = [['plus', 'zoom in', onIn], ['minus', 'zoom out', onOut], ['target', 'zoom fit', onFit]];
   return (
     <View style={styles.zoom}>
-      {btns.map(([name, fn], i) => (
-        <Pressable key={i} onPress={fn} style={({ pressed }) => [styles.zoomBtn, { backgroundColor: c.paper, borderColor: c.line, transform: [{ scale: pressed ? 0.92 : 1 }] }]}>
+      {btns.map(([name, label, fn], i) => (
+        <Pressable key={i} onPress={fn} accessibilityRole="button" accessibilityLabel={label}
+          style={({ pressed }) => [styles.zoomBtn, { backgroundColor: c.paper, borderColor: c.line, transform: [{ scale: pressed ? 0.92 : 1 }] }]}>
           <Icon name={name} size={18} color={c.inkSoft} />
         </Pressable>
       ))}
@@ -43,11 +44,12 @@ export type ZoomApi = { in: () => void; out: () => void; fit: () => void };
 // Inline −/+/fit cluster for the desktop sub-bar (drives the active view's api).
 export function SubBarZoom({ api }: { api: ZoomApi | null }) {
   const { c } = useTheme();
-  const btns: [IconName, () => void][] = [['minus', () => api?.out()], ['plus', () => api?.in()], ['target', () => api?.fit()]];
+  const btns: [IconName, string, () => void][] = [['minus', 'zoom out', () => api?.out()], ['plus', 'zoom in', () => api?.in()], ['target', 'zoom fit', () => api?.fit()]];
   return (
     <View style={{ flexDirection: 'row', gap: 6 }}>
-      {btns.map(([name, fn], i) => (
-        <Pressable key={i} onPress={fn} disabled={!api} style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', opacity: api ? 1 : 0.5, transform: [{ scale: pressed ? 0.92 : 1 }] })}>
+      {btns.map(([name, label, fn], i) => (
+        <Pressable key={i} onPress={fn} disabled={!api} accessibilityRole="button" accessibilityLabel={label}
+          style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', opacity: api ? 1 : 0.5, transform: [{ scale: pressed ? 0.92 : 1 }] })}>
           <Icon name={name} size={16} color={c.inkSoft} />
         </Pressable>
       ))}
