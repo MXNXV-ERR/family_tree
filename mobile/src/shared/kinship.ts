@@ -284,15 +284,20 @@ export function descentKinship(adj: Adjacency, meId: string, id: string): Kin | 
   }
   // one generation apart: my parent's cousin is uncle/aunt-class (word by side
   // + age vs MY connecting parent: mother's elder female cousin = Periyamma),
-  // and my cousin's child is nephew/niece-class (Marumagan/Marumagal).
+  // and my cousin's child is nephew/niece-class (Marumagan/Marumagal). The
+  // English reads "Mother's cousin" / "Cousin's son" — friendlier than the
+  // genealogical "first cousin once removed".
   if (removed === 1) {
     if (b < a && (m || f)) {
       const myParent = parentToward(adj, meId, lca);
       const side = sideToAncestor(adj, meId, lca);
       const age = myParent ? ageVs(adj, id, myParent) : '';
-      if (side) return mk(`${side}-cousin-${m ? 'uncle' : 'aunt'}${age ? `-${age}` : ''}`, english);
+      if (side) return mk(
+        `${side}-cousin-${m ? 'uncle' : 'aunt'}${age ? `-${age}` : ''}`,
+        `${side === 'maternal' ? "Mother's" : "Father's"} cousin`,
+      );
     }
-    if (a < b && (m || f)) return mk(`cousin-${m ? 'son' : 'daughter'}`, english);
+    if (a < b && (m || f)) return mk(`cousin-${m ? 'son' : 'daughter'}`, `Cousin's ${m ? 'son' : 'daughter'}`);
   }
   const key = degree === 1 && removed === 0 ? byG('cousin-brother', 'cousin-sister', 'cousin')
     : removed > 0 ? 'cousin-once-removed' : 'cousin';
