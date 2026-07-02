@@ -2,7 +2,7 @@
 // monogram, summary, stat cards, metadata (region/established/owner/invite) and
 // the people who have access. Subscribes to the tree doc + membership docs.
 // Shared by the mobile family sheet and the desktop drawer.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator, Image, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
@@ -82,8 +82,12 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
 
   // Legacy trees predate invite codes — heal one in so the QR/share works.
   // The live doc subscription picks the write up and re-renders with the code.
+  // healedRef stops a second write racing in before the snapshot returns (that
+  // would regenerate the code and break already-shared links).
+  const healedRef = useRef(false);
   useEffect(() => {
-    if (!owner || !doc || doc.inviteCode) return;
+    if (!owner || !doc || doc.inviteCode || healedRef.current) return;
+    healedRef.current = true;
     ensureInviteCode(treeId, (doc as any).surname || doc.name).catch((e) => console.warn('ensureInviteCode', (e as any)?.message ?? e));
   }, [owner, doc, treeId]);
   const isPrimary = treeId === user?.uid;
@@ -209,34 +213,32 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
           <Image source={{ uri: fam.photoUrl }} style={{ width: '100%', height: 170, borderRadius: radius.lg, backgroundColor: c.paper2 }} resizeMode="cover" />
         ) : null}
 
-        {/* switch family — the picker now lives inside the details panel */}
-        {onSwitchFamily ? (
-          <Pressable onPress={onSwitchFamily} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, backgroundColor: c.accentSoft, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-            <Icon name="users" size={17} color={c.accent} />
-            <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 14.5 }}>Switch family</Text>
-          </Pressable>
-        ) : null}
-
-        {canApprove && onUploadPhoto ? (
-          <Pressable onPress={onUploadPhoto} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-            <Icon name="image" size={17} color={c.inkSoft} />
-            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>{fam?.photoUrl ? 'Update family photo' : 'Upload family photo'}</Text>
-          </Pressable>
-        ) : null}
-
-        {onOpenEvents ? (
-          <Pressable onPress={onOpenEvents} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-            <Icon name="calendar" size={17} color={c.inkSoft} />
-            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Family events</Text>
-          </Pressable>
-        ) : null}
-
-        {canApprove && onOpenMasterEdit ? (
-          <Pressable onPress={onOpenMasterEdit} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-            <Icon name="edit" size={17} color={c.inkSoft} />
-            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Edit all members</Text>
-          </Pressable>
-        ) : null}
+        {/* actions — compact 2-up grid instead of four stacked rows */}
+        {(() => {
+          const actions: { key: string; icon: IconName; label: string; onPress: () => void; primary?: boolean }[] = [];
+          if (onSwitchFamily) actions.push({ key: 'switch', icon: 'users', label: 'Switch family', onPress: onSwitchFamily, primary: true });
+          if (canApprove && onUploadPhoto) actions.push({ key: 'photo', icon: 'image', label: fam?.photoUrl ? 'Update photo' : 'Upload photo', onPress: onUploadPhoto });
+          if (onOpenEvents) actions.push({ key: 'events', icon: 'calendar', label: 'Family events', onPress: onOpenEvents });
+          if (canApprove && onOpenMasterEdit) actions.push({ key: 'edit-all', icon: 'edit', label: 'Edit all members', onPress: onOpenMasterEdit });
+          if (!actions.length) return null;
+          return (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {actions.map((a) => (
+                <Pressable key={a.key} onPress={a.onPress}
+                  style={({ pressed }) => ({
+                    flexBasis: '48%', flexGrow: 1, height: 46, borderRadius: radius.md,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    backgroundColor: a.primary ? c.accentSoft : 'transparent',
+                    borderWidth: a.primary ? 0 : 1, borderColor: c.line,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  })}>
+                  <Icon name={a.icon} size={16} color={a.primary ? c.accent : c.inkSoft} />
+                  <Text numberOfLines={1} style={{ color: a.primary ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 13.5 }}>{a.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
 
         {/* stats */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
