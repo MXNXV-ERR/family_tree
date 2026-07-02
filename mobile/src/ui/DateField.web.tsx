@@ -9,16 +9,18 @@ export interface DateFieldProps {
   onChange: (v: string) => void;
   placeholder?: string;
   error?: boolean;
+  // Birth/death dates cap at today (default); events may lie in the future.
+  allowFuture?: boolean;
 }
 
-export function DateField({ value, onChange, error }: DateFieldProps) {
+export function DateField({ value, onChange, error, allowFuture }: DateFieldProps) {
   const { c, mode } = useTheme();
   return (
     // Raw DOM <input> — valid on web (react-native-web renders to the DOM).
     <input
       type="date"
       value={value || ''}
-      max={new Date().toISOString().slice(0, 10)}
+      max={allowFuture ? undefined : new Date().toISOString().slice(0, 10)}
       onChange={(e: any) => onChange(e.target.value)}
       style={{
         height: 44,

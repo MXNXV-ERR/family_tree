@@ -77,8 +77,8 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
           <Lbl c={c}>Title</Lbl>
           {input(editing.title, (v) => setEditing({ ...editing, title: v }), 'e.g. Diwali get-together')}
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}><Lbl c={c}>Date</Lbl><DateField value={editing.date} onChange={(v) => setEditing({ ...editing, date: v })} placeholder="Date" /></View>
-            <View style={{ flex: 1 }}><Lbl c={c}>End (optional)</Lbl><DateField value={editing.endDate} onChange={(v) => setEditing({ ...editing, endDate: v })} placeholder="End date" /></View>
+            <View style={{ flex: 1 }}><Lbl c={c}>Date</Lbl><DateField value={editing.date} onChange={(v) => setEditing({ ...editing, date: v })} placeholder="Date" allowFuture /></View>
+            <View style={{ flex: 1 }}><Lbl c={c}>End (optional)</Lbl><DateField value={editing.endDate} onChange={(v) => setEditing({ ...editing, endDate: v })} placeholder="End date" allowFuture /></View>
           </View>
           <Lbl c={c}>Location</Lbl>
           {input(editing.location, (v) => setEditing({ ...editing, location: v }), 'Where it happened')}
