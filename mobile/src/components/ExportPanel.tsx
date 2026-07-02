@@ -13,6 +13,7 @@ import { SheetHead } from './panelChrome';
 import { Icon, type IconName } from '../ui/Icon';
 import { buildJSON, buildCSV, buildXLSXBase64, buildViewSVG, buildDirectoryHTML, buildCSVTemplate, type ExportView } from '../shared/exportData';
 import { parseJSON, parseCSV, parseXLSXBase64, planMerge } from '../shared/importData';
+import { buildGEDCOM, parseGEDCOM } from '../shared/gedcom';
 import { saveText, saveBase64, exportPDF, pickImportFile } from '../export/fileExport';
 import { viewToPngDataUri } from '../export/treeImage';
 import { commitMerge } from '../firebase/firestore';
@@ -54,6 +55,7 @@ export function ExportPanel({ treeId, members, relationships, treeName = 'Family
     { key: 'json', label: 'JSON', icon: 'file', fn: () => saveText('family-tree.json', buildJSON(members, relationships), 'application/json') },
     { key: 'csv', label: 'CSV', icon: 'grid', fn: () => saveText('family-tree.csv', buildCSV(members, relationships), 'text/csv') },
     { key: 'excel', label: 'Excel', icon: 'grid', fn: () => saveBase64('family-tree.xlsx', buildXLSXBase64(members, relationships), XLSX_MIME) },
+    { key: 'gedcom', label: 'GEDCOM', icon: 'share', fn: () => saveText('family-tree.ged', buildGEDCOM(members, relationships, treeName), 'text/plain') },
     { key: 'svg', label: 'SVG', icon: 'edit', view: true, fn: () => saveText(`family-tree-${view}.svg`, svg, 'image/svg+xml') },
     { key: 'png', label: 'PNG', icon: 'image', view: true, fn: async () => { const d = await viewToPngDataUri(svg, shotRef.current); await saveBase64(`family-tree-${view}.png`, d.split(',')[1], 'image/png'); } },
     { key: 'pdf', label: 'PDF', icon: 'download', view: true, fn: async () => { const img = await viewToPngDataUri(svg, shotRef.current).catch(() => undefined); await exportPDF(buildDirectoryHTML(members, relationships, img, treeName)); } },
@@ -67,6 +69,7 @@ export function ExportPanel({ treeId, members, relationships, treeName = 'Family
       const lower = file.name.toLowerCase();
       const parsed = lower.endsWith('.xlsx') ? parseXLSXBase64(file.base64)
         : lower.endsWith('.csv') ? parseCSV(file.text)
+        : lower.endsWith('.ged') || lower.endsWith('.gedcom') ? parseGEDCOM(file.text)
         : parseJSON(file.text);
       const plan = planMerge(members, parsed, relationships);
       if (!plan.newMembers.length && !plan.newRelationships.length) {
@@ -122,7 +125,7 @@ export function ExportPanel({ treeId, members, relationships, treeName = 'Family
                 </Pressable>
               ))}
             </View>
-            <Text style={{ color: c.mute, fontSize: 11.5, marginTop: 10 }}>SVG · PNG · PDF use the selected view above. JSON · CSV · Excel export the full dataset.</Text>
+            <Text style={{ color: c.mute, fontSize: 11.5, marginTop: 10 }}>SVG · PNG · PDF use the selected view above. JSON · CSV · Excel · GEDCOM export the full dataset (GEDCOM opens in Gramps, Ancestry, MyHeritage…).</Text>
           </View>
         </GlassSurface>
 
@@ -130,7 +133,7 @@ export function ExportPanel({ treeId, members, relationships, treeName = 'Family
           <GlassSurface>
             <View style={{ padding: space(4) }}>
               <Text style={[styles.h, { color: c.mute }]}>IMPORT</Text>
-              <Text style={{ color: c.mute, fontSize: 13, marginBottom: 12 }}>Pick a JSON, CSV or Excel file. New members merge in; duplicates (same name + birth date) are skipped. See the import format guide for relationship columns.</Text>
+              <Text style={{ color: c.mute, fontSize: 13, marginBottom: 12 }}>Pick a JSON, CSV, Excel or GEDCOM (.ged) file. New members merge in; duplicates (same name + birth date) are skipped. See the import format guide for relationship columns.</Text>
               <Pressable disabled={!!busy} onPress={doImport} style={[styles.importBtn, { borderColor: c.accent, backgroundColor: c.accentSoft, opacity: busy ? 0.6 : 1 }]}>
                 {busy === 'Import' ? <ActivityIndicator color={c.accent} /> : <Text style={{ color: c.accent, fontWeight: '800' }}>Choose file to import</Text>}
               </Pressable>
