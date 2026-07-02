@@ -14,6 +14,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
 import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, ensureInviteCode, FAMILY_COLORS, monoOf, subscribeJoinRequests, approveJoinRequest, rejectJoinRequest } from '../firebase/families';
+import { subscribeActivity, timeAgo, type ActivityEntry } from '../firebase/activity';
 import { canManageRoles, canManageData, normalizeRole, isOwner } from '../shared/permissions';
 import { computeGenerations, countCouples } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship, JoinRequest, JoinPolicy } from '../shared/types';
@@ -37,11 +38,13 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   const canManage = canManageRoles(family?.role);
   const canApprove = canManageData(family?.role);
 
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
   useEffect(() => {
     const u1 = subscribeFamilyDoc(treeId, (f) => f && setDoc(f));
     const u2 = subscribeCollaborators(treeId, setCollabs);
     const u3 = subscribeJoinRequests(treeId, setRequests);
-    return () => { u1(); u2(); u3(); };
+    const u4 = subscribeActivity(treeId, setActivity);
+    return () => { u1(); u2(); u3(); u4(); };
   }, [treeId]);
 
   const fam = doc ?? family;
@@ -363,6 +366,29 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
                 </GlassSurface>
               ))}
             </View>
+          </View>
+        ) : null}
+
+        {/* recent activity (who changed what) — hidden until entries exist */}
+        {activity.length ? (
+          <View>
+            <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Recent activity</Text>
+            <GlassSurface rounded={radius.lg}>
+              <View style={{ paddingHorizontal: 14 }}>
+                {activity.slice(0, 10).map((a, i, arr) => {
+                  const who = members.find((m) => m.associatedUserId === a.uid)?.name ?? a.email?.split('@')[0] ?? 'Someone';
+                  return (
+                    <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderColor: c.lineSoft }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.accent, opacity: 0.7 }} />
+                      <Text numberOfLines={1} style={{ flex: 1, color: c.inkSoft, fontFamily: font.sansMed, fontSize: 12.5 }}>
+                        <Text style={{ fontFamily: font.sansSemi, color: c.ink }}>{who}</Text> {a.action}{a.detail ? ` ${a.detail}` : ''}
+                      </Text>
+                      <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 10 }}>{timeAgo(a.at)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </GlassSurface>
           </View>
         ) : null}
 

@@ -163,6 +163,14 @@ service cloud.firestore {
         allow delete: if canManageData();
       }
 
+      // Activity trail (who changed what). Any member appends their OWN entry;
+      // entries are immutable (no edit/delete — owner deletes the whole tree).
+      match /activity/{entryId} {
+        allow read: if isMemberHere();
+        allow create: if isMemberHere() && request.resource.data.uid == uid();
+        allow update, delete: if false;
+      }
+
       // Relationships: owner/admin link anyone; a normal member may only
       // add/remove edges that touch their own node (depth 1).
       match /relationships/{rid} {

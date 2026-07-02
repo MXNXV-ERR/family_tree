@@ -4,6 +4,7 @@ import {
   serverTimestamp, getDocs, writeBatch, query, where,
 } from 'firebase/firestore';
 import { db, auth } from './config';
+import { logActivity } from './activity';
 import type { Member, Relationship, FamilyEvent } from '../shared/types';
 
 const treeRef = (uid: string) => doc(db, 'trees', uid);
@@ -40,11 +41,15 @@ export const subscribeMembers = (uid: string, cb: (m: Member[]) => void) =>
 export const subscribeRelationships = (uid: string, cb: (r: Relationship[]) => void) =>
   resilientCollection(() => collection(treeRef(uid), 'relationships'), (d) => ({ id: d.id, ...d.data() }) as Relationship, cb, 'subscribeRelationships');
 
-export const addMember = (uid: string, m: Omit<Member, 'id'>) =>
-  addDoc(collection(treeRef(uid), 'members'), { ...m, createdAt: serverTimestamp() });
+export const addMember = (uid: string, m: Omit<Member, 'id'>) => {
+  logActivity(uid, 'added', m.name);
+  return addDoc(collection(treeRef(uid), 'members'), { ...m, createdAt: serverTimestamp() });
+};
 
-export const updateMember = (uid: string, id: string, data: Partial<Member>) =>
-  updateDoc(doc(treeRef(uid), 'members', id), data);
+export const updateMember = (uid: string, id: string, data: Partial<Member>) => {
+  logActivity(uid, 'updated', data.name ?? 'a member');
+  return updateDoc(doc(treeRef(uid), 'members', id), data);
+};
 
 // Claim a member node as "this is me" — sets associatedUserId to the signed-in
 // user. The rules let a plain member do this only on a node with no owner yet.
@@ -69,6 +74,7 @@ export async function deleteMember(uid: string, id: string) {
   });
   batch.delete(doc(treeRef(uid), 'members', id));
   await batch.commit();
+  logActivity(uid, 'removed', 'a member');
 }
 
 export const addRelationship = (uid: string, r: Omit<Relationship, 'id'>) =>
@@ -81,6 +87,7 @@ export async function addRelationships(uid: string, edges: Omit<Relationship, 'i
   const col = collection(treeRef(uid), 'relationships');
   edges.forEach((e) => batch.set(doc(col), e));
   await batch.commit();
+  logActivity(uid, 'linked', `${edges.length} relationship${edges.length === 1 ? '' : 's'}`);
 }
 
 export const deleteRelationship = (uid: string, id: string) =>
@@ -152,6 +159,7 @@ export async function commitMerge(
   });
 
   await batch.commit();
+  logActivity(uid, 'imported', `${plan.newMembers.length} member${plan.newMembers.length === 1 ? '' : 's'}, ${links} link${links === 1 ? '' : 's'}`);
   return { added: plan.newMembers.length, links };
 }
 
@@ -164,8 +172,10 @@ export const subscribeEvents = (treeId: string, cb: (e: FamilyEvent[]) => void) 
     (e) => { console.warn('subscribeEvents', (e as any)?.message ?? e); cb([]); },
   );
 
-export const addEvent = (treeId: string, e: Omit<FamilyEvent, 'id'>) =>
-  addDoc(collection(treeRef(treeId), 'events'), { ...e, createdAt: serverTimestamp() });
+export const addEvent = (treeId: string, e: Omit<FamilyEvent, 'id'>) => {
+  logActivity(treeId, 'added event', e.title);
+  return addDoc(collection(treeRef(treeId), 'events'), { ...e, createdAt: serverTimestamp() });
+};
 
 export const updateEvent = (treeId: string, id: string, data: Partial<FamilyEvent>) =>
   updateDoc(doc(treeRef(treeId), 'events', id), data);
