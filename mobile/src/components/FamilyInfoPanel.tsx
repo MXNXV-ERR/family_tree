@@ -3,15 +3,17 @@
 // the people who have access. Subscribes to the tree doc + membership docs.
 // Shared by the mobile family sheet and the desktop drawer.
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator, Image, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import QRCode from 'react-native-qrcode-svg';
+import { joinUrl, inviteMessage } from '../shared/invite';
 import { useTheme, font, radius } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
-import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, FAMILY_COLORS, monoOf, subscribeJoinRequests, approveJoinRequest, rejectJoinRequest } from '../firebase/families';
+import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, ensureInviteCode, FAMILY_COLORS, monoOf, subscribeJoinRequests, approveJoinRequest, rejectJoinRequest } from '../firebase/families';
 import { canManageRoles, canManageData, normalizeRole, isOwner } from '../shared/permissions';
 import { computeGenerations, countCouples } from '../shared/adjacency';
 import type { FamilyTree, Collaborator, Member, Relationship, JoinRequest, JoinPolicy } from '../shared/types';
@@ -57,9 +59,33 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
     } catch {}
   };
 
+  // Share the invite link (native share sheet / web share). Browsers without
+  // navigator.share reject — fall back to copying the message.
+  const [linkCopied, setLinkCopied] = useState(false);
+  const shareInvite = async () => {
+    if (!fam?.inviteCode) return;
+    const message = inviteMessage(fam.name ?? 'our family', fam.inviteCode);
+    try {
+      await Share.share({ message, url: joinUrl(fam.inviteCode), title: `Join ${fam.name ?? 'our family'}` } as any);
+    } catch {
+      try {
+        await Clipboard.setStringAsync(message);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 1500);
+      } catch {}
+    }
+  };
+
   // Owner-only edit + delete. The legacy primary tree (treeId === uid) can't be
   // deleted, so the user is never left with no family at all.
   const owner = isOwner(fam?.role) || isOwner(family?.role);
+
+  // Legacy trees predate invite codes — heal one in so the QR/share works.
+  // The live doc subscription picks the write up and re-renders with the code.
+  useEffect(() => {
+    if (!owner || !doc || doc.inviteCode) return;
+    ensureInviteCode(treeId, (doc as any).surname || doc.name).catch((e) => console.warn('ensureInviteCode', (e as any)?.message ?? e));
+  }, [owner, doc, treeId]);
   const isPrimary = treeId === user?.uid;
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -253,6 +279,24 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
             })}
           </View>
         </GlassSurface>
+
+        {/* invite QR + share link */}
+        {fam?.inviteCode ? (
+          <GlassSurface rounded={radius.lg}>
+            <View style={{ padding: 16, alignItems: 'center', gap: 12 }}>
+              <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' }}>Scan to join</Text>
+              {/* fixed black-on-white so the code scans in both themes */}
+              <View style={{ padding: 10, borderRadius: radius.md, backgroundColor: '#ffffff' }}>
+                <QRCode value={joinUrl(fam.inviteCode)} size={148} color="#111111" backgroundColor="#ffffff" />
+              </View>
+              <Text selectable numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>{joinUrl(fam.inviteCode)}</Text>
+              <Pressable onPress={shareInvite} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'stretch', height: 46, borderRadius: radius.md, backgroundColor: c.accent, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+                <Icon name="share" size={16} color={c.accentInk} />
+                <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 14 }}>{linkCopied ? 'Link copied' : 'Share invite link'}</Text>
+              </Pressable>
+            </View>
+          </GlassSurface>
+        ) : null}
 
         {/* collaborators */}
         <View>

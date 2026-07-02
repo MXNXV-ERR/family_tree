@@ -214,6 +214,14 @@ export async function deleteFamily(treeId: string, uid: string) {
   }
 }
 
+// Backfill an invite code onto a legacy tree doc that predates invites (only
+// createFamily / ensurePrimaryFamily wrote them). Owner-only via rules.
+export async function ensureInviteCode(treeId: string, surname?: string): Promise<string> {
+  const code = genInvite(surname);
+  await updateDoc(treeDoc(treeId), { inviteCode: code });
+  return code;
+}
+
 // Live full metadata for one family (region/summary/invite/etc.).
 export const subscribeFamilyDoc = (treeId: string, cb: (f: FamilyTree | null) => void) =>
   onSnapshot(
