@@ -12,6 +12,11 @@ export interface MatchResult {
   score: number; // cosine similarity in [-1, 1]; higher = closer
 }
 
+// A face bounding box in source-image pixels.
+export interface FaceRegion { x: number; y: number; w: number; h: number }
+// Result of detecting ALL faces in one image (for the family group photo).
+export interface DetectedFaces { width: number; height: number; faces: FaceRegion[] }
+
 export type Phase = 'models' | 'members' | 'analyze' | 'match' | 'done';
 export interface Progress {
   phase: Phase;
@@ -46,7 +51,9 @@ const djb2 = (s: string) => {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
 };
-const keyFor = (m: Member) => `ft.face.${m.id}.${djb2(m.photoUrl ?? '')}`;
+// v2: the web engine now produces 128-D face-api descriptors (was 1024-D MobileNet);
+// the version segment invalidates any stale cached vectors of the old dimensions.
+const keyFor = (m: Member) => `ft.face.v2.${m.id}.${djb2(m.photoUrl ?? '')}`;
 
 export async function getCached(m: Member): Promise<Descriptor | null> {
   try {

@@ -15,6 +15,7 @@ import { GlassSurface } from '../theme/GlassSurface';
 import { Icon, type IconName } from '../ui/Icon';
 import { SheetHead, Toggle } from './panelChrome';
 import { UserProfilePanel } from './UserProfilePanel';
+import { remindersSupported, requestReminderPermission, clearReminders } from '../notifications/reminders';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const { c, mode, setMode } = useTheme();
@@ -74,6 +75,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     ['glass', 'Glass surfaces', 'grid'],
     ['motion', 'Motion & animation', 'sparkles'],
   ];
+
+  // Birthday/anniversary reminders — native-only; enabling asks permission,
+  // the actual (re)scheduling runs from home whenever tree data changes.
+  const [remMsg, setRemMsg] = useState<string | null>(null);
+  const toggleReminders = async () => {
+    if (s.reminders) {
+      s.setOption('reminders', false);
+      setRemMsg(null);
+      await clearReminders();
+      return;
+    }
+    if (!remindersSupported) { setRemMsg('Reminders fire from the mobile app — not available on web.'); return; }
+    const ok = await requestReminderPermission();
+    if (!ok) { setRemMsg('Notification permission was denied.'); return; }
+    s.setOption('reminders', true);
+    setRemMsg(null);
+  };
 
   if (editingProfile) return <UserProfilePanel onBack={() => setEditingProfile(false)} />;
 
@@ -143,12 +161,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <GlassSurface rounded={radius.lg}>
             <View style={{ paddingHorizontal: 16 }}>
               {rows.map(([k, lb, ic], i) => (
-                <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderBottomWidth: i < rows.length - 1 ? 1 : 0, borderColor: c.lineSoft }}>
+                <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderColor: c.lineSoft }}>
                   <Icon name={ic} size={18} color={c.mute} />
                   <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansMed, fontSize: 14.5 }}>{lb}</Text>
                   <Toggle on={s[k]} onPress={() => s.setOption(k, !s[k])} />
                 </View>
               ))}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13 }}>
+                <Icon name="calendar" size={18} color={c.mute} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.ink, fontFamily: font.sansMed, fontSize: 14.5 }}>Birthday & anniversary reminders</Text>
+                  {remMsg ? <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, marginTop: 2 }}>{remMsg}</Text> : null}
+                </View>
+                <Toggle on={s.reminders} onPress={toggleReminders} />
+              </View>
             </View>
           </GlassSurface>
         </View>

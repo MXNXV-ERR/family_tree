@@ -12,6 +12,7 @@ import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { canEditMember, canEditRelationship, myMemberId } from '../src/shared/permissions';
 import { planUnlink, type LinkKind } from '../src/shared/relationshipActions';
 import { deleteRelationships, claimMember, updateMember } from '../src/firebase/firestore';
+import { splitId, nsId } from '../src/firebase/masters';
 import { useUserProfile } from '../src/firebase/UserProfileContext';
 import { PROFILE_TO_MEMBER_FIELDS } from '../src/firebase/userProfile';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
@@ -28,50 +29,58 @@ export default function Profile() {
   const { c } = useTheme();
   const { years } = useSettings();
   const { user } = useAuth();
-  const { activeTreeId, activeFamily } = useFamily();
-  const { members, relationships, loading } = useFamilyTree(activeTreeId);
+  const { activeTreeId, activeFamily, families } = useFamily();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string }>();
   const [tab, setTab] = useState<Tab>('info');
+  // A master (combined) view passes a namespaced `treeId:localId`; read + write
+  // against the ORIGIN tree, and keep in-profile navigation namespaced so
+  // browsing relatives stays in the combined context.
+  const split = rawId ? splitId(rawId) : null;
+  const treeId = split ? split.treeId : activeTreeId;
+  const localId = split ? split.localId : rawId;
+  const role = split ? families.find((f) => f.id === treeId)?.role : activeFamily?.role;
+  const nav = (lid: string) => (split && treeId ? nsId(treeId, lid) : lid);
+  const { members, relationships, loading } = useFamilyTree(treeId);
 
   const adj = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
-  const m = id ? members.find((x) => x.id === id) : undefined;
-  const canEdit = canEditMember(activeFamily?.role, m, user?.uid);
-  const canLink = !!m && canEditRelationship(activeFamily?.role, m.id, m.id, members, user?.uid);
+  const m = localId ? members.find((x) => x.id === localId) : undefined;
+  const canEdit = canEditMember(role, m, user?.uid);
+  const canLink = !!m && canEditRelationship(role, m.id, m.id, members, user?.uid);
   const myId = myMemberId(members, user?.uid);
   const profile = useUserProfile();
 
   // Remove a relationship (direct edges + now-unsupported inferred siblings).
   const removeLink = (kind: string, relatedId: string) => {
-    if (!m || !activeTreeId) return;
+    if (!m || !treeId) return;
     const plan = planUnlink(members, relationships, m.id, relatedId, kind as LinkKind);
     if (!plan.ids.length) return;
     const other = members.find((x) => x.id === relatedId)?.name ?? 'this person';
     const msg = `Remove the link between ${m.name} and ${other}?`;
-    const go = () => { deleteRelationships(activeTreeId, plan.ids); };
+    const go = () => { deleteRelationships(treeId, plan.ids); };
     if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
     else Alert.alert('Remove link', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: go }]);
   };
 
   // Claim this node as "this is me" (only when the user has no node yet).
   const claimThis = () => {
-    if (!m || !activeTreeId || !user) return;
+    if (!m || !treeId || !user) return;
     const msg = `Set ${m.name} as you? You'll get the “You” badge and can edit this profile.`;
-    const go = () => { claimMember(activeTreeId, m.id, user.uid); };
+    const go = () => { claimMember(treeId, m.id, user.uid); };
     if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
     else Alert.alert('This is me', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Yes', onPress: go }]);
   };
 
   // One-way push: copy the signed-in user's profile details onto their own node.
   const syncProfile = () => {
-    if (!m || !activeTreeId || !profile) return;
+    if (!m || !treeId || !profile) return;
     const patch: Partial<Member> = {};
     for (const f of PROFILE_TO_MEMBER_FIELDS) {
       const v = (profile as any)[f];
       if (v !== undefined && v !== null && v !== '') (patch as any)[f] = v;
     }
     if (!Object.keys(patch).length) return;
-    const go = () => { updateMember(activeTreeId, m.id, patch); };
+    const go = () => { updateMember(treeId, m.id, patch); };
     const msg = `Copy your profile details onto ${m.name}? This overwrites their name, photo, dates, contact, and bio with your profile.`;
     if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) go(); }
     else Alert.alert('Sync my profile', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Sync', onPress: go }]);
@@ -115,7 +124,7 @@ export default function Profile() {
             ) : null}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
               {canEdit ? (
-                <Pressable onPress={() => router.push({ pathname: '/member', params: { id: m.id } })} style={[styles.editBtn, { borderColor: c.accent, marginTop: 0 }]}>
+                <Pressable onPress={() => router.push({ pathname: '/member', params: { id: nav(m.id) } })} style={[styles.editBtn, { borderColor: c.accent, marginTop: 0 }]}>
                   <Text style={{ color: c.accent, fontWeight: '700' }}>Edit</Text>
                 </Pressable>
               ) : null}
@@ -148,7 +157,7 @@ export default function Profile() {
 
         <Fade trigger={tab}>
           {tab === 'info' && <InfoTab m={m} c={c} />}
-          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: rid } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: m.id, kind } })} />}
+          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: nav(rid) } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: nav(m.id), kind } })} />}
           {tab === 'story' && <StoryTab m={m} c={c} />}
         </Fade>
       </ScrollView>

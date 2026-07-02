@@ -22,22 +22,26 @@ import { Icon } from '../ui/Icon';
 import { TreeView } from '../viz/TreeView';
 import { RadialView } from '../viz/RadialView';
 import { TimelineView } from '../viz/TimelineView';
+import { NetworkView } from '../viz/NetworkView';
 import { SubBarZoom, type ZoomApi } from '../viz/vizChrome';
 import { DesktopDrawer } from './DesktopDrawer';
 import { DesktopProfile } from './DesktopProfile';
 import { MemberForm } from '../components/MemberForm';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { FamilyInfoPanel } from '../components/FamilyInfoPanel';
+import { FamilyPhotoFlow } from '../components/FamilyPhotoFlow';
+import { EventsPanel } from '../components/EventsPanel';
+import { MasterEditGrid } from '../components/MasterEditGrid';
 import { FamilyPickerPanel } from '../components/FamilyPickerPanel';
 import { ChatPanel } from '../components/ChatPanel';
 import { MembersPanel } from '../components/MembersPanel';
 import { ExportPanel } from '../components/ExportPanel';
 import { LinkForm } from '../components/LinkForm';
-import { canEditMember, canDeleteMember, canEditRelationship, canImport } from '../shared/permissions';
+import { canEditMember, canDeleteMember, canEditRelationship, canImport, canManageData } from '../shared/permissions';
 import type { Member, Relationship } from '../shared/types';
 
-type ViewKind = 'tree' | 'radial' | 'timeline';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
+type ViewKind = 'tree' | 'radial' | 'timeline' | 'network' | 'master';
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -45,7 +49,7 @@ export function DesktopWorkspace() {
   const { user } = useAuth();
   const profile = useUserProfile();
   const { activeTreeId, activeFamily } = useFamily();
-  const { members, relationships, treeMetadata } = useFamilyTree(activeTreeId);
+  const { members, relationships, events, treeMetadata } = useFamilyTree(activeTreeId);
 
   const [view, setView] = useState<ViewKind>('tree');
   const [drawer, setDrawer] = useState<Drawer>(null);
@@ -197,6 +201,7 @@ export function DesktopWorkspace() {
         <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase' }}>
           {view === 'radial' ? `Radial — kinship around ${adjacency.get(focusId)?.name ?? ''}`
             : view === 'timeline' ? 'Timeline — lifespans across the decades'
+            : view === 'network' ? 'Network — force-directed relationship graph'
             : 'Tree — pyramid · ancestors · hourglass'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
@@ -212,15 +217,18 @@ export function DesktopWorkspace() {
       {/* CANVAS + DRAWER — drawer is confined here (not the whole workspace) so
           the top toolbar stays visible and clickable while a panel is open. */}
       <View style={{ flex: 1 }}>
-        {members.length === 0 ? (
+        {view === 'master' ? (
+          <MasterEditGrid treeId={activeTreeId} members={members} canManage={canManageData(role)} onClose={() => setView('tree')} />
+        ) : members.length === 0 ? (
           <EmptyCanvas c={c} family={activeFamily} onAddFirst={() => editMember()} onPickFamily={() => setDrawer({ type: 'familyPicker' })} />
         ) : !focusId ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>
         ) : (
-          <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree'].indexOf(view)} style={{ flex: 1 }}>
+          <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree', 'network'].indexOf(view)} style={{ flex: 1 }}>
             {view === 'tree' ? <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />
               : view === 'radial' ? <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />
-              : <TimelineView {...shared} onZoomReady={setZoomApi} hideZoomUI />}
+              : view === 'network' ? <NetworkView {...shared} onZoomReady={setZoomApi} hideZoomUI />
+              : <TimelineView {...shared} events={events} onZoomReady={setZoomApi} hideZoomUI />}
           </SlideSwap>
         )}
 
@@ -251,13 +259,21 @@ export function DesktopWorkspace() {
         {drawer?.type === 'settings' ? <SettingsPanel onClose={() => setDrawer(null)} /> : null}
         {drawer?.type === 'family' && activeTreeId ? (
           <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
-            onClose={() => setDrawer(null)} onSwitchFamily={() => setDrawer({ type: 'familyPicker' })} />
+            onClose={() => setDrawer(null)} onSwitchFamily={() => setDrawer({ type: 'familyPicker' })}
+            onUploadPhoto={() => setDrawer({ type: 'familyPhoto' })} onOpenEvents={() => setDrawer({ type: 'events' })}
+            onOpenMasterEdit={() => { setDrawer(null); setView('master'); }} />
+        ) : null}
+        {drawer?.type === 'familyPhoto' && activeTreeId ? (
+          <FamilyPhotoFlow treeId={activeTreeId} members={members} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'events' && activeTreeId ? (
+          <EventsPanel treeId={activeTreeId} members={members} events={events} canManage={canManageData(role)} onClose={() => setDrawer(null)} />
         ) : null}
         {drawer?.type === 'familyPicker' ? (
           <FamilyPickerPanel onClose={() => setDrawer(null)} onOpenInfo={() => setDrawer({ type: 'family' })} />
         ) : null}
         {drawer?.type === 'chat' ? (
-          <ChatPanel members={members} relationships={relationships} onOpenMember={(m) => setDrawer({ type: 'profile', id: m.id })} onClose={() => setDrawer(null)} />
+          <ChatPanel members={members} relationships={relationships} sessionKey={activeTreeId ?? 'default'} onOpenMember={(m) => setDrawer({ type: 'profile', id: m.id })} onClose={() => setDrawer(null)} />
         ) : null}
         {drawer?.type === 'members' ? (
           <MembersPanel members={members} meId={meId} onOpenProfile={openProfile} onOpenFamilyInfo={() => setDrawer({ type: 'family' })} onClose={() => setDrawer(null)} />
@@ -307,8 +323,8 @@ function ViewSwitcher({ value, onChange }: { value: ViewKind; onChange: (v: View
   return (
     <SegTabs<ViewKind>
       value={value} onChange={onChange}
-      options={[['radial', 'Radial'], ['timeline', 'Timeline'], ['tree', 'Tree']]}
-      icons={{ radial: 'radial', timeline: 'timeline', tree: 'tree' }}
+      options={[['radial', 'Radial'], ['timeline', 'Timeline'], ['tree', 'Tree'], ['network', 'Network']]}
+      icons={{ radial: 'radial', timeline: 'timeline', tree: 'tree', network: 'link' }}
       fill={false} fontSize={14} />
   );
 }

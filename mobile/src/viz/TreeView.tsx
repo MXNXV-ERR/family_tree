@@ -12,7 +12,7 @@ import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
 import { VizSegment, FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { NodePop } from '../ui/primitives';
 import {
-  layoutPyramid, layoutInverted, layoutHourglass,
+  layoutPyramid, layoutLayered, layoutInverted, layoutHourglass,
   NODE_W, NODE_H, COUPLE_W, type LayoutResult,
 } from '../shared/treeLayout';
 import { initials, lifespan } from '../shared/adjacency';
@@ -30,8 +30,11 @@ const RnPath = Reanimated.createAnimatedComponent(Path);
 // (width + height ≥ any M…L… path). Reanimated drives the SVG prop so it works
 // on web + native. Restarts when `drawKey` changes; skipped (solid lines) when
 // `animate` is off (motion off / large tree).
-function DrawLines({ lines, color, dash, animate, drawKey }: {
-  lines: { d: string }[]; color: string; dash: number; animate: boolean; drawKey: string;
+function DrawLines({ lines, color, colorFor, dash, animate, drawKey }: {
+  lines: { d: string; ownerId?: string }[]; color: string;
+  // combined view: per-line family tint (falls back to `color`)
+  colorFor?: (ownerId?: string) => string | undefined;
+  dash: number; animate: boolean; drawKey: string;
 }) {
   const p = useSharedValue(animate ? 0 : 1);
   useEffect(() => {
@@ -43,7 +46,7 @@ function DrawLines({ lines, color, dash, animate, drawKey }: {
   return (
     <>
       {lines.map((l, i) => (
-        <RnPath key={i} d={l.d} fill="none" stroke={color} strokeWidth={1.5} opacity={0.5}
+        <RnPath key={i} d={l.d} fill="none" stroke={colorFor?.(l.ownerId) ?? color} strokeWidth={1.5} opacity={0.5}
           strokeLinecap="round" strokeDasharray={dash} animatedProps={animatedProps} />
       ))}
     </>
@@ -52,10 +55,13 @@ function DrawLines({ lines, color, dash, animate, drawKey }: {
 
 type TreeLayout = 'pyramid' | 'inverted' | 'hourglass';
 
-export function TreeView({ members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI }: {
+export function TreeView({ members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI, layered, colorOf }: {
   members: Member[]; relationships: Relationship[]; adjacency: Adjacency; focusId: string; meId?: string;
   setFocusId: (id: string) => void; onOpenProfile: (m: Member) => void;
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
+  // Combined-view extras: `layered` joins bridged families into one tree;
+  // `colorOf` tints each node by its source family.
+  layered?: boolean; colorOf?: (id: string) => string | undefined;
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
@@ -66,10 +72,10 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   const canvasRef = useRef<CanvasHandle>(null);
 
   const res = useMemo<LayoutResult>(() => {
-    if (layout === 'pyramid') return layoutPyramid(members, adjacency);
+    if (layout === 'pyramid') return layered ? layoutLayered(members, adjacency) : layoutPyramid(members, adjacency);
     if (layout === 'inverted') return layoutInverted(focusId, adjacency);
     return layoutHourglass(focusId, members, adjacency);
-  }, [layout, focusId, members, adjacency]);
+  }, [layout, focusId, members, relationships, adjacency, layered]);
 
   const { positions, couplePills, lines, width, height } = res;
 
@@ -131,7 +137,8 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
               </Pattern>
             </Defs>
             <Rect x={0} y={0} width={width} height={height} fill="url(#ft-dots)" />
-            <DrawLines lines={lines} color={c.relParent} dash={dash} animate={animate} drawKey={drawKey} />
+            <DrawLines lines={lines} color={c.relParent} dash={dash} animate={animate} drawKey={drawKey}
+              colorFor={layered && colorOf ? (ownerId) => (ownerId ? colorOf(ownerId) : undefined) : undefined} />
           </Svg>
 
           {couplePills.map((p, i) => (
@@ -153,7 +160,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
             return (
               <NodePop key={id} i={idx} disabled={!animate} style={{ position: 'absolute', left: pos.x, top: pos.y }}>
                 <NodeCard m={m} c={c}
-                  isFocus={isFocus} isMe={isMe} dim={dim} hl={hl}
+                  isFocus={isFocus} isMe={isMe} dim={dim} hl={hl} tint={colorOf?.(id)}
                   onPress={() => { setSelId(id); setFocusId(id); }} />
               </NodePop>
             );
@@ -167,16 +174,18 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   );
 }
 
-function NodeCard({ m, c, isFocus, isMe, dim, hl, onPress }: {
-  m: Member; c: Palette; isFocus: boolean; isMe: boolean; dim: boolean; hl: boolean; onPress: () => void;
+function NodeCard({ m, c, isFocus, isMe, dim, hl, tint, onPress }: {
+  m: Member; c: Palette; isFocus: boolean; isMe: boolean; dim: boolean; hl: boolean; tint?: string; onPress: () => void;
 }) {
   const { years } = useSettings();
   const bg = m.gender === 'female' ? c.cardF : m.gender === 'male' ? c.cardM : c.paper;
-  const border = isFocus ? c.accent : hl ? c.relChild : m.gender === 'female' ? c.cardFBorder : c.cardMBorder;
+  // In the combined view `tint` is the source-family colour — it wins the border
+  // (except on the focused card) so you can tell which family a person is from.
+  const border = isFocus ? c.accent : tint ?? (hl ? c.relChild : m.gender === 'female' ? c.cardFBorder : c.cardMBorder);
   return (
     <Pressable onPress={onPress} style={{
       width: NODE_W, height: NODE_H,
-      borderRadius: radius.md, borderWidth: isFocus ? 2 : 1, borderColor: border, backgroundColor: bg,
+      borderRadius: radius.md, borderWidth: isFocus ? 2 : tint ? 2 : 1, borderColor: border, backgroundColor: bg,
       opacity: dim ? 0.35 : 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8,
       // depth + accent glow on the focused card (design look)
       shadowColor: isFocus ? c.accent : '#000',

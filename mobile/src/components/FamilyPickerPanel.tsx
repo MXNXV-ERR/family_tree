@@ -4,11 +4,12 @@
 // header sheet and the desktop switcher dropdown.
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme, font, radius } from '../theme/theme';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
-import { createFamily, joinFamilyByInvite, monoOf } from '../firebase/families';
+import { createFamily, requestToJoinFamily, monoOf } from '../firebase/families';
 import { claimMember } from '../firebase/firestore';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { Icon } from '../ui/Icon';
@@ -22,8 +23,9 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
   const { c } = useTheme();
   const { user } = useAuth();
   const profile = useUserProfile();
-  const { families, activeTreeId, setActiveTreeId } = useFamily();
+  const { families, masters, activeTreeId, setActiveTreeId } = useFamily();
   const { members, treeMetadata } = useFamilyTree(activeTreeId);
+  const router = useRouter();
 
   // The membership index can be empty (e.g. multi-family rules not deployed yet)
   // even though the user clearly has an active tree. Always surface at least the
@@ -46,6 +48,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
   const [code, setCode] = useState('');
+  const [joinMsg, setJoinMsg] = useState<string | null>(null);
 
   const switchTo = (id: string) => { setActiveTreeId(id); onClose(); };
 
@@ -64,12 +67,17 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
 
   async function doJoin() {
     if (!user || !code.trim()) return;
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setJoinMsg(null);
     try {
-      const id = await joinFamilyByInvite(user.uid, user.email, code.trim());
-      if (!id) { setErr('No family found for that invite code.'); return; }
-      // Switch to the joined tree and offer to claim a node, rather than closing.
-      setActiveTreeId(id); setCode(''); setMode('claim');
+      const res = await requestToJoinFamily(user.uid, user.email, code.trim());
+      if (!res) { setErr('No family found for that invite code.'); return; }
+      if (res.status === 'joined') {
+        // Open-policy family — joined instantly; offer to claim a node.
+        setActiveTreeId(res.treeId); setCode(''); setMode('claim');
+      } else {
+        // Approval-policy family — request sent, awaiting owner/admin approval.
+        setCode(''); setJoinMsg('Request sent — an owner or admin needs to approve it before you get access.');
+      }
     } catch (e) { setErr('Could not join. Check the code and your rules.'); }
     finally { setBusy(false); }
   }
@@ -136,9 +144,35 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
               );
             })}
 
+            {masters.length > 0 ? (
+              <>
+                <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 8, marginBottom: 2 }}>Combined</Text>
+                {masters.map((m) => (
+                  <Pressable key={m.masterId} onPress={() => { onClose(); router.push({ pathname: '/master' as never, params: { id: m.masterId } }); }} style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', gap: 13, padding: 13, borderRadius: radius.lg,
+                    backgroundColor: c.paper, borderWidth: 1.5, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }],
+                  })}>
+                    <View style={{ width: 50, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: c.paper2, borderWidth: 1.5, borderColor: m.color ?? c.accent }}>
+                      <Icon name="users" size={22} color={m.color ?? c.accent} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansBold, fontSize: 16 }}>{m.name}</Text>
+                      <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11, marginTop: 2 }}>{m.treeCount ?? 0} families</Text>
+                    </View>
+                    <Icon name="chevR" size={18} color={c.faint} />
+                  </Pressable>
+                ))}
+              </>
+            ) : null}
+
             <Pressable onPress={onOpenInfo} style={({ pressed }) => actionStyle(c, pressed)}>
               <Icon name="info" size={18} color={c.inkSoft} /><Text style={actionText(c)}>View family info</Text>
             </Pressable>
+            {families.length >= 2 ? (
+              <Pressable onPress={() => { onClose(); router.push('/combine' as never); }} style={({ pressed }) => actionStyle(c, pressed)}>
+                <Icon name="users" size={18} color={c.accent} /><Text style={[actionText(c), { color: c.accent }]}>Combine families</Text>
+              </Pressable>
+            ) : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable onPress={() => { setMode('new'); setErr(null); }} style={({ pressed }) => [actionStyle(c, pressed), { flex: 1 }]}>
                 <Icon name="plus" size={18} stroke={2.1} color={c.accent} /><Text style={[actionText(c), { color: c.accent }]}>New family</Text>
@@ -168,6 +202,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
           <View style={{ gap: 12 }}>
             {input(code, setCode, 'Invite code (e.g. MEHTA-7K2X)', 'characters')}
             {err ? <Text style={{ color: c.danger, fontFamily: font.sans, fontSize: 13 }}>{err}</Text> : null}
+            {joinMsg ? <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 13 }}>{joinMsg}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable onPress={() => setMode('list')} style={({ pressed }) => [actionStyle(c, pressed), { flex: 1 }]}><Text style={actionText(c)}>Back</Text></Pressable>
               <Pressable onPress={doJoin} disabled={busy || !code.trim()} style={{ flex: 1, height: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accent, opacity: busy || !code.trim() ? 0.6 : 1 }}>

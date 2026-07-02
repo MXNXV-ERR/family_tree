@@ -6,6 +6,7 @@ import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { addMember, updateMember, deleteMember, deleteRelationship } from '../src/firebase/firestore';
+import { splitId } from '../src/firebase/masters';
 import { MemberForm } from '../src/components/MemberForm';
 import { canEditMember, canAddMember, canDeleteMember } from '../src/shared/permissions';
 import { useTheme } from '../src/theme/theme';
@@ -14,17 +15,22 @@ import type { Member } from '../src/shared/types';
 export default function MemberRoute() {
   const { c } = useTheme();
   const { user } = useAuth();
-  const { activeTreeId, activeFamily } = useFamily();
-  const { members, relationships, loading } = useFamilyTree(activeTreeId);
+  const { activeTreeId, activeFamily, families } = useFamily();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string }>();
+  // A master (combined) view passes a namespaced `treeId:localId`; route the
+  // edit to the ORIGIN tree instead of the active one.
+  const split = rawId ? splitId(rawId) : null;
+  const treeId = split ? split.treeId : activeTreeId;
+  const memberId = split ? split.localId : rawId;
+  const { members, relationships, loading } = useFamilyTree(treeId);
   const [saving, setSaving] = useState(false);
 
-  const initial = id ? members.find((m) => m.id === id) : undefined;
-  const role = activeFamily?.role;
-  const allowed = id ? canEditMember(role, initial, user?.uid) : canAddMember(role);
+  const initial = memberId ? members.find((m) => m.id === memberId) : undefined;
+  const role = split ? families.find((f) => f.id === treeId)?.role : activeFamily?.role;
+  const allowed = memberId ? canEditMember(role, initial, user?.uid) : canAddMember(role);
 
-  if (loading && id) {
+  if (loading && memberId) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={c.accent} />
@@ -32,7 +38,7 @@ export default function MemberRoute() {
     );
   }
 
-  if (id && !initial) {
+  if (memberId && !initial) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: c.mute }}>Member not found.</Text>
@@ -51,11 +57,11 @@ export default function MemberRoute() {
   }
 
   async function handleSubmit(data: Omit<Member, 'id'>) {
-    if (!activeTreeId) return;
+    if (!treeId) return;
     setSaving(true);
     try {
-      if (id) await updateMember(activeTreeId, id, data);
-      else await addMember(activeTreeId, data);
+      if (memberId) await updateMember(treeId, memberId, data);
+      else await addMember(treeId, data);
       router.back();
     } finally {
       setSaving(false);
@@ -63,13 +69,13 @@ export default function MemberRoute() {
   }
 
   async function doDelete() {
-    if (!activeTreeId || !id) return;
+    if (!treeId || !memberId) return;
     setSaving(true);
     try {
       // Cascade: remove every relationship edge touching this member first.
-      const edges = relationships.filter((r) => r.fromId === id || r.toId === id);
-      await Promise.all(edges.map((r) => deleteRelationship(activeTreeId, r.id)));
-      await deleteMember(activeTreeId, id);
+      const edges = relationships.filter((r) => r.fromId === memberId || r.toId === memberId);
+      await Promise.all(edges.map((r) => deleteRelationship(treeId, r.id)));
+      await deleteMember(treeId, memberId);
       router.back();
     } finally {
       setSaving(false);
@@ -95,7 +101,7 @@ export default function MemberRoute() {
       saving={saving}
       onSubmit={handleSubmit}
       onCancel={() => router.back()}
-      onDelete={id && canDeleteMember(role) ? confirmDelete : undefined}
+      onDelete={memberId && canDeleteMember(role) ? confirmDelete : undefined}
     />
   );
 }

@@ -8,16 +8,18 @@
 // (EAS build); web runs the same pipeline on the WebGL backend.
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator, ScrollView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCameraPermissions } from 'expo-camera';
 import { LiveCamera, type LiveCameraHandle } from '../src/face/LiveCamera';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
+import { useMasterTree } from '../src/firebase/useMasterTree';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { Icon } from '../src/ui/Icon';
 import { GlassSurface } from '../src/theme/GlassSurface';
 import { useResponsive } from '../src/ui/useResponsive';
-import { pickFromGallery } from '../src/shared/photo';
+import { pickRawImage } from '../src/shared/photo';
+import { CropSheet } from '../src/components/CropSheet';
 import { matchImage, buildMemberDescriptors, matchPrebuilt } from '../src/face/faceRunner';
 import { detectFace } from '../src/face/faceEngine';
 import { initials } from '../src/shared/adjacency';
@@ -32,13 +34,20 @@ export default function FaceMatch() {
   const { c } = useTheme();
   const { isDesktop } = useResponsive();
   const { activeTreeId } = useFamily();
-  const { members } = useFamilyTree(activeTreeId);
+  // ?master=<id> runs the match across a combined (master) family — every
+  // member of every constituent tree. Ids are namespaced, so opening a result
+  // profile routes back to the origin tree.
+  const { master: masterId } = useLocalSearchParams<{ master?: string }>();
+  const { members: treeMembers } = useFamilyTree(masterId ? null : activeTreeId);
+  const { master, members: masterMembers } = useMasterTree(masterId);
+  const members = masterId ? masterMembers : treeMembers;
   const router = useRouter();
 
   const [mode, setMode] = useState<Mode>('upload');
   const [busy, setBusy] = useState(false);
   const [prog, setProg] = useState<Progress | null>(null);
   const [queryUri, setQueryUri] = useState<string | null>(null); // picked photo OR frozen scan frame
+  const [cropUri, setCropUri] = useState<string | null>(null);   // picked photo awaiting manual crop
   const [results, setResults] = useState<MatchResult[] | null>(null);
   const [faceFound, setFaceFound] = useState(true);
 
@@ -65,7 +74,8 @@ export default function FaceMatch() {
       setResults([]);
     } finally { setBusy(false); }
   }
-  async function onUpload() { const u = await pickFromGallery(); if (u) runOneShot(u); }
+  // Pick raw (no forced system crop) → manual crop step → match the crop.
+  async function onUpload() { const r = await pickRawImage(); if (r) setCropUri(r.uri); }
 
   // --- Scan (live camera) ---
   async function startScan() {
@@ -126,7 +136,14 @@ export default function FaceMatch() {
       <View style={{ flex: 1, width: '100%', maxWidth: isDesktop ? 760 : undefined, alignSelf: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingTop: isDesktop ? 24 : 16, paddingBottom: 6 }}>
           <Pressable onPress={() => { stopScan(); router.back(); }} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
-          <Text style={{ color: c.ink, fontSize: 22, fontFamily: font.serifItalic }}>Face match</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: c.ink, fontSize: 22, fontFamily: font.serifItalic }}>Face match</Text>
+            {masterId ? (
+              <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 10.5 }}>
+                across {master?.name ?? 'combined family'} · {members.length} people
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         {/* Mode segment */}
@@ -192,6 +209,12 @@ export default function FaceMatch() {
           ) : null}
         </ScrollView>
       </View>
+
+      {cropUri ? (
+        <CropSheet uri={cropUri}
+          onDone={(cropped) => { setCropUri(null); runOneShot(cropped); }}
+          onCancel={() => setCropUri(null)} />
+      ) : null}
     </View>
   );
 }

@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Platform, Modal, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
@@ -23,19 +23,23 @@ import { Avatar, IconBtn, SectionLabel, Counter, ThemeToggle, Rise } from '../sr
 import { useResponsive } from '../src/ui/useResponsive';
 import { DesktopWorkspace } from '../src/desktop/DesktopWorkspace';
 import { lifespan, computeGenerations, countCouples } from '../src/shared/adjacency';
+import { remindersSupported, syncReminders } from '../src/notifications/reminders';
 import type { Member } from '../src/shared/types';
 
 // On wide web viewports the home route becomes the desktop workspace; phones and
 // native always get the mobile home below.
 export default function Home() {
   const { isDesktop } = useResponsive();
+  const { needsOnboarding, loadingFamilies } = useFamily();
+  // Brand-new accounts (no family yet) are routed to Create-or-Join.
+  if (!loadingFamilies && needsOnboarding) return <Redirect href="/onboard" />;
   return isDesktop ? <DesktopWorkspace /> : <MobileHome />;
 }
 
 function MobileHome() {
   const { c } = useTheme();
   const { user, loading: authLoading } = useAuth();
-  const { years } = useSettings();
+  const { years, reminders } = useSettings();
   const { activeTreeId, activeFamily, families } = useFamily();
   const { members, relationships, treeMetadata, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
@@ -79,6 +83,15 @@ function MobileHome() {
       reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
     }
   }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
+
+  // Re-schedule birthday/anniversary reminders whenever the tree data changes
+  // (native only; a no-op on web / when the toggle is off). Debounced a little
+  // so a burst of snapshot updates doesn't thrash the scheduler.
+  useEffect(() => {
+    if (!reminders || !remindersSupported || loading || !members.length) return;
+    const t = setTimeout(() => { syncReminders(members, relationships); }, 1500);
+    return () => clearTimeout(t);
+  }, [reminders, members, relationships, loading]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -202,9 +215,44 @@ function MobileHome() {
                 </Pressable>
               </Rise>
             ))}
-            {!loading && shown.length === 0 && (
-              <GlassSurface><Text style={{ color: c.mute, fontFamily: font.sansMed, textAlign: 'center', padding: 24 }}>{query.trim() ? 'No matches found.' : 'No members yet. Tap Add.'}</Text></GlassSurface>
-            )}
+            {loading && !members.length ? (
+              // skeleton rows while the first snapshot loads
+              <>
+                {[0, 1, 2, 3].map((i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: 15, backgroundColor: c.paper, borderWidth: 1, borderColor: c.lineSoft, opacity: 0.55 - i * 0.08 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.paper2 }} />
+                    <View style={{ flex: 1, gap: 7 }}>
+                      <View style={{ width: '55%', height: 12, borderRadius: 6, backgroundColor: c.paper2 }} />
+                      <View style={{ width: '35%', height: 9, borderRadius: 5, backgroundColor: c.paper2 }} />
+                    </View>
+                  </View>
+                ))}
+              </>
+            ) : null}
+            {!loading && shown.length === 0 && query.trim() ? (
+              <GlassSurface><Text style={{ color: c.mute, fontFamily: font.sansMed, textAlign: 'center', padding: 24 }}>No matches found.</Text></GlassSurface>
+            ) : null}
+            {!loading && members.length === 0 && !query.trim() ? (
+              // first-run nudge — mirror the desktop EmptyCanvas
+              <GlassSurface rounded={radius.xl}>
+                <View style={{ padding: 26, alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: famColor }}>
+                    <Icon name="tree" size={30} stroke={1.5} color={famColor} />
+                  </View>
+                  <Text style={{ color: c.ink, fontFamily: font.serifItalic, fontSize: 22, textAlign: 'center' }}>Start your family tree</Text>
+                  <Text style={{ color: c.mute, fontFamily: font.sansMed, fontSize: 13.5, lineHeight: 19, textAlign: 'center' }}>
+                    Add your first person, then connect parents, partners, and children.
+                  </Text>
+                  <Pressable onPress={() => router.push('/member')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 18, height: 46, borderRadius: radius.md, backgroundColor: c.accent, marginTop: 6, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+                    <Icon name="plus" size={17} stroke={2.2} color={c.accentInk} />
+                    <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 14 }}>Add your first member</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setFamilyOpen(true)} hitSlop={6}>
+                    <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 12.5 }}>Create or join another family</Text>
+                  </Pressable>
+                </View>
+              </GlassSurface>
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -228,7 +276,10 @@ function MobileHome() {
         {activeTreeId ? (
           <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
             onClose={() => setFamilyInfoOpen(false)}
-            onSwitchFamily={() => { setFamilyInfoOpen(false); setFamilyOpen(true); }} />
+            onSwitchFamily={() => { setFamilyInfoOpen(false); setFamilyOpen(true); }}
+            onUploadPhoto={() => { setFamilyInfoOpen(false); router.push('/familyphoto'); }}
+            onOpenEvents={() => { setFamilyInfoOpen(false); router.push('/events'); }}
+            onOpenMasterEdit={() => { setFamilyInfoOpen(false); router.push('/masteredit'); }} />
         ) : null}
       </BottomSheet>
 
@@ -241,6 +292,7 @@ function MobileHome() {
               <ChatPanel
                 members={members}
                 relationships={relationships}
+                sessionKey={activeTreeId ?? 'default'}
                 onOpenMember={(m: Member) => { setChatOpen(false); router.push({ pathname: '/profile', params: { id: m.id } }); }}
                 onClose={() => setChatOpen(false)}
               />

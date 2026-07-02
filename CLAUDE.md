@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working agreements
+
+- **Ask questions before big changes.** For any large or architecturally significant change — new screens/routes, data-model or Firestore-shape changes, multi-file refactors, new dependencies, or layout/algorithm rewrites — ask clarifying questions (AskUserQuestion / plan flow) BEFORE implementing. Small, obvious edits don't need this.
+- **Record big changes in `.context/`.** After completing a large change, save a short summary in the repo-root `.context/` folder (a `.md`/`.txt`: what changed, why, key files, how to verify). This is the durable cross-session handoff log. On resume, read the newest `.context/` file first.
+
 ## What's here
 
 The repository is the **family-tree app: an Expo (managed) React Native product in `/mobile`** (Android · iOS · web via react-native-web). The original Next.js web app that used to live at the repo root has been removed; `/mobile` is the only app now.

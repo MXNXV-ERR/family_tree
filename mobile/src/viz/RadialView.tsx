@@ -14,22 +14,16 @@ import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
 import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { layoutRadial, type RadialPos } from '../shared/radialLayout';
 import { initials, lifespan } from '../shared/adjacency';
-import { relToMe } from '../shared/relationTo';
-import { localizeLabel } from '../shared/relTerms';
-import { kinshipLabel } from '../shared/kinship';
+import { relToMe, relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
 import type { Member, Relationship } from '../shared/types';
 
-const REL_LABEL: Record<string, string> = {
-  parent: 'Parent', child: 'Child', partner: 'Partner', 'ex-partner': 'Ex-partner', sibling: 'Sibling',
-  mother: 'Mother', father: 'Father', son: 'Son', daughter: 'Daughter', brother: 'Brother', sister: 'Sister',
-};
-
-export function RadialView({ members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI }: {
+export function RadialView({ members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI, colorOf }: {
   members: Member[]; relationships: Relationship[]; adjacency: Adjacency; focusId: string; meId?: string;
   setFocusId: (id: string) => void; onOpenProfile: (m: Member) => void;
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
+  colorOf?: (id: string) => string | undefined; // combined view: tint by source family
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
@@ -49,6 +43,10 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   // this guard the empty-tap clears a selection the card just set — making the
   // "Bring into focus" affordance appear only intermittently.
   const lastCardPress = useRef(0);
+
+  // Entering radial (or refocusing) always leaves a node selected, so the focus
+  // bar — not the bare legend — is what greets you.
+  useEffect(() => { if (focusId) setSelId((s) => s ?? focusId); }, [focusId]);
 
   const { positions, nodes, ringRadii } = useMemo(
     () => layoutRadial(adjacency, focusId, depth), [adjacency, focusId, depth],
@@ -150,8 +148,8 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
             const showPill = !isFocus && (!highlight || (highlight && highlight.has(id)));
             return (
               <RadialCard key={id} m={m} c={c} cx={p.x + C} cy={p.y + C} pos={p}
-                isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id}
-                relLabel={showPill ? (kinshipLabel(members, relationships, focusId, id, terms) ?? localizeLabel(REL_LABEL[node?.label ?? ''] ?? node?.label, terms)) : undefined}
+                isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id} tint={colorOf?.(id)}
+                relLabel={showPill ? relationLabel(members, relationships, id, focusId, terms) : undefined}
                 relColor={relColor(node?.viaRel)}
                 onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
                 onFocus={() => { setFocusId(id); setSelId(null); }} />
@@ -200,13 +198,14 @@ function RelationLegend({ c }: { c: Palette }) {
   );
 }
 
-function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel, relColor, onPress, onFocus }: {
+function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel, relColor, tint, onPress, onFocus }: {
   m: Member; c: Palette; cx: number; cy: number; pos: RadialPos; isFocus: boolean; isMe: boolean;
-  dim: boolean; selected: boolean; relLabel?: string; relColor: string; onPress: () => void; onFocus: () => void;
+  dim: boolean; selected: boolean; relLabel?: string; relColor: string; tint?: string; onPress: () => void; onFocus: () => void;
 }) {
   const { years } = useSettings();
   const w = isFocus ? 168 : pos.depth === 1 ? 150 : 116;
   const bg = m.gender === 'female' ? c.cardF : m.gender === 'male' ? c.cardM : c.paper;
+  const cardBorder = isFocus ? c.accent : selected ? c.relChild : tint ?? c.line;
   return (
     <View style={{ position: 'absolute', left: cx - w / 2, top: cy - 34, width: w, opacity: dim ? 0.3 : 1, alignItems: 'center' }}>
       {/* Relationship pill — sits ABOVE the card so it never overlaps the name */}
@@ -217,7 +216,7 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
       ) : null}
       <View style={{ width: '100%' }}>
         <Pressable onPress={onPress} style={{ width: '100%' }}>
-          <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: isFocus ? c.accent : selected ? c.relChild : c.line, borderWidth: isFocus ? 2 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
+          <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: cardBorder, borderWidth: isFocus ? 2 : tint ? 1.5 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
             <View style={{ padding: 10, alignItems: 'center', flexDirection: w > 130 ? 'row' : 'column', gap: 8 }}>
               <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {m.photoUrl

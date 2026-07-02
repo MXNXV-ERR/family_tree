@@ -10,22 +10,25 @@ import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { useTheme, radius } from '../src/theme/theme';
 import { Icon } from '../src/ui/Icon';
 import { SegTabs, SlideSwap } from '../src/ui/primitives';
+import { SearchOverlay } from '../src/components/SearchOverlay';
 import { buildAdjacency } from '../src/shared/adjacency';
 import { TreeView } from '../src/viz/TreeView';
 import { RadialView } from '../src/viz/RadialView';
 import { TimelineView } from '../src/viz/TimelineView';
+import { NetworkView } from '../src/viz/NetworkView';
 import type { Member } from '../src/shared/types';
 
-type ViewKind = 'tree' | 'radial' | 'timeline';
+type ViewKind = 'tree' | 'radial' | 'timeline' | 'network';
 
 export default function VizScreen() {
   const { c } = useTheme();
   const { user } = useAuth();
   const { activeTreeId } = useFamily();
-  const { members, relationships, loading } = useFamilyTree(activeTreeId);
+  const { members, relationships, events, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [view, setView] = useState<ViewKind>('tree');
   const [focusId, setFocusId] = useState<string>('');
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
@@ -51,16 +54,25 @@ export default function VizScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
         <SegTabs<ViewKind>
           value={view} onChange={setView}
-          options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline']]}
+          options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline'], ['network', 'Network']]}
           activeBg={c.accentSoft} activeColor={c.accent} rad={radius.md} pad={3} gap={3} padV={8} fontSize={13}
           style={{ flex: 1 }} />
+        <Pressable onPress={() => setSearchOpen(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="search"
+          style={{ padding: 7, borderRadius: radius.md, borderWidth: 1, borderColor: c.line }}>
+          <Icon name="search" size={18} color={c.accent} />
+        </Pressable>
       </View>
 
-      <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline'].indexOf(view)} style={{ flex: 1 }}>
+      <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline', 'network'].indexOf(view)} style={{ flex: 1 }}>
         {view === 'tree' ? <TreeView {...shared} />
           : view === 'radial' ? <RadialView {...shared} />
-          : <TimelineView {...shared} />}
+          : view === 'timeline' ? <TimelineView {...shared} events={events} />
+          : <NetworkView {...shared} />}
       </SlideSwap>
+
+      <SearchOverlay visible={searchOpen} members={members}
+        onPick={(m) => { setFocusId(m.id); setSearchOpen(false); }}
+        onClose={() => setSearchOpen(false)} />
     </View>
   );
 }

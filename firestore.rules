@@ -23,6 +23,20 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Per-user master (combined-family) index — the switcher list. Self only.
+    match /users/{userId}/masters/{masterId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Master families (virtual overlays). Owner-private in v1: only the creator
+    // can read/write. The doc holds constituent treeIds + bridge links only —
+    // the actual member/relationship data stays in the trees the master
+    // references, each still guarded by its own /trees rules above.
+    match /masters/{masterId} {
+      allow read, update, delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+    }
+
     match /trees/{treeId} {
       function signedIn() { return request.auth != null; }
       function uid() { return request.auth.uid; }
@@ -78,8 +92,10 @@ service cloud.firestore {
       }
       function ownsTreeDoc() { return treeExists() && treeData().ownerUid == uid(); }
 
-      allow get: if signedIn();   // read a tree (also used to look up an invite)
-      allow list: if signedIn();  // query trees by inviteCode to join
+      // Members read their tree by id; invite-code joins use the collection query
+      // (allow list) below, which doesn't need broad per-doc read access.
+      allow get: if isMember();
+      allow list: if signedIn();  // query trees by inviteCode to join (residual: enumerable — mitigated by App Check)
       allow create: if signedIn() && (uid() == treeId || request.resource.data.ownerUid == uid());
       allow update: if isMember() || isJoining() || isOwnerRole();
       allow delete: if isOwnerRole();
@@ -87,10 +103,16 @@ service cloud.firestore {
       // Collaborators / membership records.
       match /memberships/{memberUid} {
         allow read: if isMemberHere();
-        // Self-join keeps the default 'member' role; the tree owner may seed any
-        // role for their own membership when creating a new family.
-        allow create: if signedIn() && memberUid == uid() && (
-          request.resource.data.role == 'member' || ownsTreeDoc()
+        // No blanket self-serve member join. A creator seeds their OWN 'owner'
+        // membership; an owner/admin creates a member's membership after approving
+        // a join request; and 'open' joinPolicy families (incl. legacy trees with
+        // no joinPolicy field) still allow instant self-join.
+        allow create: if signedIn() && (
+          (memberUid == uid() && request.resource.data.role == 'owner') ||
+          (canManageData() && request.resource.data.role == 'member') ||
+          (memberUid == uid() && request.resource.data.role == 'member' &&
+            treeExists() &&
+            (!('joinPolicy' in treeData()) || treeData().joinPolicy == 'open'))
         );
         // Owner promotes / demotes (admin|member only — never reassigns owner).
         // A user may patch their own membership without changing their role.
@@ -99,6 +121,25 @@ service cloud.firestore {
           (memberUid == uid() && request.resource.data.role == resource.data.role)
         );
         allow delete: if signedIn() && (isOwnerRole() || memberUid == uid());
+      }
+
+      // Join requests (approval joinPolicy). A user creates/cancels their own
+      // pending request; an owner/admin reads all + approves/rejects.
+      match /joinRequests/{requestUid} {
+        allow read: if signedIn() && (requestUid == uid() || canManageData());
+        allow create: if signedIn() && requestUid == uid()
+          && request.resource.data.status == 'pending';
+        allow update: if signedIn() && (
+          canManageData() ||
+          (requestUid == uid() && request.resource.data.status == 'pending')
+        );
+        allow delete: if signedIn() && (requestUid == uid() || canManageData());
+      }
+
+      // Family events (timeline). Members read; owner/admin write.
+      match /events/{eventId} {
+        allow read: if isMemberHere();
+        allow create, update, delete: if canManageData();
       }
 
       // Members: owner/admin manage everyone; a normal member may add nodes
@@ -120,6 +161,14 @@ service cloud.firestore {
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['associatedUserId'])
           );
         allow delete: if canManageData();
+      }
+
+      // Activity trail (who changed what). Any member appends their OWN entry;
+      // entries are immutable (no edit/delete — owner deletes the whole tree).
+      match /activity/{entryId} {
+        allow read: if isMemberHere();
+        allow create: if isMemberHere() && request.resource.data.uid == uid();
+        allow update, delete: if false;
       }
 
       // Relationships: owner/admin link anyone; a normal member may only

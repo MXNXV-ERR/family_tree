@@ -6,7 +6,7 @@
 // that person: relatives highlight with their relationship to the focused
 // person, and the tooltip shows the focused person's relationship to YOU.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Linking, useWindowDimensions } from 'react-native';
 import Svg, { Rect, Circle, Defs, LinearGradient, Stop, Line as SvgLine } from 'react-native-svg';
 import { useTheme, radius, font, genderTint, type Palette } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
@@ -19,7 +19,7 @@ import { yearOf, computeGenerations } from '../shared/adjacency';
 import { relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
-import type { Member, Relationship } from '../shared/types';
+import type { Member, Relationship, FamilyEvent } from '../shared/types';
 
 type Mode = 'dot' | 'bar' | 'events';
 const ROW_H = 48;
@@ -27,8 +27,8 @@ const LABEL_W = 132;
 
 type LifeEvent = { year: number; icon: IconName; color: string; soft: string; label: string };
 
-export function TimelineView({ members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI }: {
-  members: Member[]; relationships: Relationship[]; adjacency: Adjacency; focusId: string; meId?: string;
+export function TimelineView({ members, relationships, events, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI }: {
+  members: Member[]; relationships: Relationship[]; events?: FamilyEvent[]; adjacency: Adjacency; focusId: string; meId?: string;
   setFocusId: (id: string) => void; onOpenProfile: (m: Member) => void;
   onZoomReady?: (api: ZoomApi) => void; hideZoomUI?: boolean;
 }) {
@@ -41,6 +41,7 @@ export function TimelineView({ members, relationships, adjacency, focusId, meId,
   const [userZoomed, setUserZoomed] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tip, setTip] = useState<{ text: string } | null>(null);
+  const [evTip, setEvTip] = useState<FamilyEvent | null>(null);
   const currentYear = new Date().getFullYear();
   const zoom = (fn: (p: number) => number) => { setUserZoomed(true); setPxPerYear((p) => Math.max(2, Math.min(60, fn(p)))); };
 
@@ -109,8 +110,25 @@ export function TimelineView({ members, relationships, adjacency, focusId, meId,
       if (d) out.push({ year: d, icon: 'flower', color: c.amber, soft: c.bg, label: `${m.name} passed away · ${d}` });
       map.set(m.id, out);
     });
+    // Custom events linked to members also surface on those members' rows.
+    (events ?? []).forEach((ev) => {
+      const y = yearOf(ev.date);
+      if (!y || !ev.memberIds) return;
+      ev.memberIds.forEach((mid) => {
+        const arr = map.get(mid);
+        if (arr) arr.push({ year: y, icon: 'calendar', color: c.accent, soft: c.accentSoft, label: `${ev.title} · ${y}` });
+      });
+    });
     return map;
-  }, [mode, members, relationships, adjacency, c]);
+  }, [mode, members, relationships, adjacency, events, c]);
+
+  // Standalone events lane (year-sorted) for all family events.
+  const eventLane = useMemo(
+    () => (mode === 'events' ? (events ?? []) : [])
+      .map((ev) => ({ ev, year: yearOf(ev.date) }))
+      .filter((e): e is { ev: FamilyEvent; year: number } => e.year != null),
+    [mode, events],
+  );
 
   const ticks = useMemo(() => {
     const step = pxPerYear < 6 ? 50 : pxPerYear < 12 ? 25 : pxPerYear < 25 ? 10 : 5;
@@ -184,6 +202,22 @@ export function TimelineView({ members, relationships, adjacency, focusId, meId,
               </View>
             </View>
 
+            {/* Events lane — all family events on their own row */}
+            {mode === 'events' && eventLane.length ? (
+              <View style={{ flexDirection: 'row', height: ROW_H, marginBottom: 2 }}>
+                <View style={{ width: LABEL_W, justifyContent: 'center', paddingLeft: 6 }}>
+                  <Text style={{ color: c.accent, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.4 }}>EVENTS</Text>
+                </View>
+                <View style={{ width: contentW, height: ROW_H }}>
+                  {eventLane.map(({ ev, year }) => (
+                    <Pressable key={ev.id} onPress={() => { setEvTip(ev); setTip(null); setSelId(null); }}
+                      style={{ position: 'absolute', left: xOf(year) - 11, top: ROW_H / 2 - 11, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: c.accent }}>
+                      <Icon name="calendar" size={11} color={c.accent} />
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
             {/* Rows */}
             {rows.map((row, idx) => {
               const m = row.m;
@@ -289,6 +323,28 @@ export function TimelineView({ members, relationships, adjacency, focusId, meId,
                 </Pressable>
               ) : null}
               <Pressable onPress={() => { setTip(null); setSelId(null); }} hitSlop={10}><Icon name="close" size={17} color={c.mute} /></Pressable>
+            </View>
+          </GlassSurface>
+        </View>
+      ) : null}
+
+      {/* Event detail card (tap an events-lane marker) */}
+      {evTip ? (
+        <View style={{ position: 'absolute', left: 12, right: 12, bottom: 16 }} pointerEvents="box-none">
+          <GlassSurface rounded={radius.lg}>
+            <View style={{ padding: 12, gap: 5 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Icon name="calendar" size={16} color={c.accent} />
+                <Text style={{ color: c.ink, flex: 1, fontFamily: font.sansBold, fontSize: 14 }}>{evTip.title}</Text>
+                <Pressable onPress={() => setEvTip(null)} hitSlop={10}><Icon name="close" size={16} color={c.mute} /></Pressable>
+              </View>
+              <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>{evTip.date}{evTip.location ? ` · ${evTip.location}` : ''}</Text>
+              {evTip.description ? <Text style={{ color: c.inkSoft, fontFamily: font.sans, fontSize: 12.5, lineHeight: 18 }}>{evTip.description}</Text> : null}
+              {evTip.driveUrl ? (
+                <Pressable onPress={() => Linking.openURL(evTip.driveUrl!).catch(() => {})} style={{ alignSelf: 'flex-start', marginTop: 3, backgroundColor: c.accent, borderRadius: radius.pill, paddingHorizontal: 13, paddingVertical: 6 }}>
+                  <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 12 }}>Open link →</Text>
+                </Pressable>
+              ) : null}
             </View>
           </GlassSurface>
         </View>

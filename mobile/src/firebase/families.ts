@@ -10,11 +10,11 @@
 // old security rules continue to work. New families use generated treeIds and
 // need the membership-aware rules in mobile/firestore.rules.
 import {
-  collection, doc, setDoc, addDoc, updateDoc, getDoc, getDocs,
+  collection, doc, setDoc, addDoc, updateDoc, deleteDoc, getDoc, getDocs,
   onSnapshot, query, where, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { FamilyTree, Membership, Collaborator, FamilyRole } from '../shared/types';
+import type { FamilyTree, Membership, Collaborator, FamilyRole, JoinPolicy, JoinRequest } from '../shared/types';
 
 export const FAMILY_COLORS = ['#8f8bff', '#ff8caf', '#5fd0b0', '#e0b873', '#6fb1ff', '#b1a6ff'];
 export const colorForIndex = (i: number) => FAMILY_COLORS[i % FAMILY_COLORS.length];
@@ -27,15 +27,19 @@ const familyIndexCol = (uid: string) => collection(db, 'users', uid, 'families')
 const familyIndexDoc = (uid: string, treeId: string) => doc(db, 'users', uid, 'families', treeId);
 const treeDoc = (treeId: string) => doc(db, 'trees', treeId);
 const membershipDoc = (treeId: string, uid: string) => doc(db, 'trees', treeId, 'memberships', uid);
+const joinRequestsCol = (treeId: string) => collection(db, 'trees', treeId, 'joinRequests');
+const joinRequestDoc = (treeId: string, uid: string) => doc(db, 'trees', treeId, 'joinRequests', uid);
 
 // Live list of the families a user belongs to (one listener, denormalised).
 // Degrades to an empty list if the membership-aware rules aren't deployed yet,
 // so the app still loads the user's primary (treeId === uid) tree.
-export const subscribeMyFamilies = (uid: string, cb: (f: Membership[]) => void) =>
+export const subscribeMyFamilies = (uid: string, cb: (f: Membership[]) => void, onError?: (e: unknown) => void) =>
   onSnapshot(
     familyIndexCol(uid),
     (snap) => cb(snap.docs.map((d) => ({ treeId: d.id, ...(d.data() as Omit<Membership, 'treeId'>) }))),
-    (e) => { console.warn('subscribeMyFamilies', e?.message ?? e); cb([]); },
+    // Don't cb([]) on error: an errored read isn't a real "no families" (that would
+    // wrongly trigger onboarding). Surface it so the caller can keep the last list.
+    (e) => { console.warn('subscribeMyFamilies', (e as any)?.message ?? e); onError?.(e); },
   );
 
 // Backfill: guarantee the user's own primary tree (treeId === uid) is registered
@@ -47,7 +51,10 @@ export async function ensurePrimaryFamily(uid: string, email?: string | null) {
 
   const treeRef = treeDoc(uid);
   const treeSnap = await getDoc(treeRef);
-  const existing = treeSnap.exists() ? (treeSnap.data() as any) : {};
+  // Brand-new account with no legacy tree → don't auto-create one; the user is
+  // routed to onboarding (Create or Join) instead. Backfill only EXISTING trees.
+  if (!treeSnap.exists()) return;
+  const existing = treeSnap.data() as any;
   const name: string = existing.name || 'My Family';
   const mono = monoOf(name);
   const color = FAMILY_COLORS[0];
@@ -62,6 +69,14 @@ export async function ensurePrimaryFamily(uid: string, email?: string | null) {
 
   await setDoc(membershipDoc(uid, uid), { uid, email: email || '', role: 'owner', joinedAt: serverTimestamp() }, { merge: true });
   await setDoc(idxRef, { treeId: uid, role: 'owner', name, mono, color } as Membership);
+}
+
+// Does the user have a legacy primary tree (treeId === uid)? Used to decide
+// whether a signed-in user with no family memberships is a brand-new account
+// (→ onboarding) or an existing user whose index just hasn't loaded.
+export async function hasPrimaryTree(uid: string): Promise<boolean> {
+  const snap = await getDoc(treeDoc(uid));
+  return snap.exists();
 }
 
 // Create a brand-new family the user owns. Seeds the creator as the "you" node.
@@ -87,6 +102,7 @@ export async function createFamily(
       kind: 'Your family',
       established: String(new Date().getFullYear()),
       inviteCode: genInvite(input.surname || name),
+      joinPolicy: 'approval',   // new families require approval to join by default
       createdAt: serverTimestamp(),
     });
 
@@ -123,7 +139,7 @@ export async function joinFamilyByInvite(uid: string, email: string | null | und
 
   await setDoc(membershipDoc(treeId, uid), { uid, email: email || '', role, joinedAt: serverTimestamp() }, { merge: true });
   await setDoc(familyIndexDoc(uid, treeId), {
-    treeId, role, name: data.name || 'Family', mono: data.mono || monoOf(data.name || 'F'), color: data.color || FAMILY_COLORS[0],
+    treeId, role, status: 'active', name: data.name || 'Family', mono: data.mono || monoOf(data.name || 'F'), color: data.color || FAMILY_COLORS[0],
   } as Membership);
   return treeId;
 }
@@ -198,6 +214,14 @@ export async function deleteFamily(treeId: string, uid: string) {
   }
 }
 
+// Backfill an invite code onto a legacy tree doc that predates invites (only
+// createFamily / ensurePrimaryFamily wrote them). Owner-only via rules.
+export async function ensureInviteCode(treeId: string, surname?: string): Promise<string> {
+  const code = genInvite(surname);
+  await updateDoc(treeDoc(treeId), { inviteCode: code });
+  return code;
+}
+
 // Live full metadata for one family (region/summary/invite/etc.).
 export const subscribeFamilyDoc = (treeId: string, cb: (f: FamilyTree | null) => void) =>
   onSnapshot(
@@ -213,3 +237,82 @@ export const subscribeCollaborators = (treeId: string, cb: (c: Collaborator[]) =
     (snap) => cb(snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Omit<Collaborator, 'uid'>) }))),
     (e) => { console.warn('subscribeCollaborators', e?.message ?? e); cb([]); },
   );
+
+// ---- Family group photo ----
+export async function setFamilyPhoto(treeId: string, photoUrl: string) {
+  await updateDoc(treeDoc(treeId), { photoUrl });
+}
+
+// ---- Request-based joining (joinPolicy: 'approval') ----
+
+// Request to join by invite code. Open-policy families join instantly (legacy);
+// approval-policy families get a pending request + a 'pending' switcher entry.
+export async function requestToJoinFamily(
+  uid: string, email: string | null | undefined, code: string,
+): Promise<{ treeId: string; status: 'joined' | 'requested' } | null> {
+  const trimmed = code.trim().toUpperCase();
+  if (!trimmed) return null;
+  const snap = await getDocs(query(collection(db, 'trees'), where('inviteCode', '==', trimmed)));
+  if (snap.empty) return null;
+  const t = snap.docs[0];
+  const data = t.data() as any;
+  const treeId = t.id;
+  const policy: JoinPolicy = data.joinPolicy === 'approval' ? 'approval' : 'open';
+
+  if (policy === 'open') {
+    await joinFamilyByInvite(uid, email, trimmed);
+    return { treeId, status: 'joined' };
+  }
+  // Approval: write the request + a pending index entry the user owns.
+  await setDoc(joinRequestDoc(treeId, uid), {
+    uid, email: email || '', requestedAt: Date.now(), status: 'pending',
+  } as JoinRequest, { merge: true });
+  await setDoc(familyIndexDoc(uid, treeId), {
+    treeId, role: 'member', status: 'pending',
+    name: data.name || 'Family', mono: data.mono || monoOf(data.name || 'F'), color: data.color || FAMILY_COLORS[0],
+  } as Membership, { merge: true });
+  return { treeId, status: 'requested' };
+}
+
+// Live join requests for a family (owner/admin approver UI).
+export const subscribeJoinRequests = (treeId: string, cb: (r: JoinRequest[]) => void) =>
+  onSnapshot(
+    joinRequestsCol(treeId),
+    (snap) => cb(snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Omit<JoinRequest, 'uid'>) }))),
+    (e) => { console.warn('subscribeJoinRequests', (e as any)?.message ?? e); cb([]); },
+  );
+
+// The requester's view of their own request (to detect approval/rejection).
+export const subscribeJoinRequest = (treeId: string, uid: string, cb: (r: JoinRequest | null) => void) =>
+  onSnapshot(
+    joinRequestDoc(treeId, uid),
+    (snap) => cb(snap.exists() ? ({ uid, ...(snap.data() as Omit<JoinRequest, 'uid'>) }) : null),
+    (e) => { console.warn('subscribeJoinRequest', (e as any)?.message ?? e); cb(null); },
+  );
+
+// Approve (owner/admin): create the member's membership, then mark the request.
+// The requester's switcher index flips to 'active' on their own client
+// (settleApprovedJoin) — admins can't write another user's index per the rules.
+export async function approveJoinRequest(treeId: string, requesterUid: string, email?: string | null) {
+  await setDoc(membershipDoc(treeId, requesterUid), {
+    uid: requesterUid, email: email || '', role: 'member', joinedAt: serverTimestamp(),
+  }, { merge: true });
+  await setDoc(joinRequestDoc(treeId, requesterUid), { status: 'approved' }, { merge: true });
+}
+
+export async function rejectJoinRequest(treeId: string, requesterUid: string) {
+  await setDoc(joinRequestDoc(treeId, requesterUid), { status: 'rejected' }, { merge: true });
+}
+
+// Requester cancels a pending request (or clears a rejected one).
+export async function cancelJoinRequest(uid: string, treeId: string) {
+  await deleteDoc(joinRequestDoc(treeId, uid)).catch((e) => console.warn('cancelJoinRequest req', (e as any)?.message ?? e));
+  await deleteDoc(familyIndexDoc(uid, treeId)).catch((e) => console.warn('cancelJoinRequest idx', (e as any)?.message ?? e));
+}
+
+// Requester finalises an approved request: flip own index to active + drop the
+// request doc. Called from FamilyContext when the request reads 'approved'.
+export async function settleApprovedJoin(uid: string, treeId: string) {
+  await setDoc(familyIndexDoc(uid, treeId), { status: 'active' }, { merge: true });
+  await deleteDoc(joinRequestDoc(treeId, uid)).catch(() => {});
+}
