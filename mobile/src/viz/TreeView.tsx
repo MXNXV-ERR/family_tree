@@ -30,8 +30,11 @@ const RnPath = Reanimated.createAnimatedComponent(Path);
 // (width + height ≥ any M…L… path). Reanimated drives the SVG prop so it works
 // on web + native. Restarts when `drawKey` changes; skipped (solid lines) when
 // `animate` is off (motion off / large tree).
-function DrawLines({ lines, color, dash, animate, drawKey }: {
-  lines: { d: string }[]; color: string; dash: number; animate: boolean; drawKey: string;
+function DrawLines({ lines, color, colorFor, dash, animate, drawKey }: {
+  lines: { d: string; ownerId?: string }[]; color: string;
+  // combined view: per-line family tint (falls back to `color`)
+  colorFor?: (ownerId?: string) => string | undefined;
+  dash: number; animate: boolean; drawKey: string;
 }) {
   const p = useSharedValue(animate ? 0 : 1);
   useEffect(() => {
@@ -43,7 +46,7 @@ function DrawLines({ lines, color, dash, animate, drawKey }: {
   return (
     <>
       {lines.map((l, i) => (
-        <RnPath key={i} d={l.d} fill="none" stroke={color} strokeWidth={1.5} opacity={0.5}
+        <RnPath key={i} d={l.d} fill="none" stroke={colorFor?.(l.ownerId) ?? color} strokeWidth={1.5} opacity={0.5}
           strokeLinecap="round" strokeDasharray={dash} animatedProps={animatedProps} />
       ))}
     </>
@@ -134,7 +137,8 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
               </Pattern>
             </Defs>
             <Rect x={0} y={0} width={width} height={height} fill="url(#ft-dots)" />
-            <DrawLines lines={lines} color={c.relParent} dash={dash} animate={animate} drawKey={drawKey} />
+            <DrawLines lines={lines} color={c.relParent} dash={dash} animate={animate} drawKey={drawKey}
+              colorFor={layered && colorOf ? (ownerId) => (ownerId ? colorOf(ownerId) : undefined) : undefined} />
           </Svg>
 
           {couplePills.map((p, i) => (

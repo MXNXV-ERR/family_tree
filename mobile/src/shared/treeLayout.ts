@@ -12,7 +12,9 @@ export const ROW_H = 160;
 
 export type Pos = { x: number; y: number; isInLaw?: boolean };
 export type CouplePill = { x: number; y: number; ids: [string, string]; status: 'current' | 'divorced' };
-export type Line = { d: string; kind: 'parent' };
+// ownerId = the parent-unit anchor the connector belongs to; the combined view
+// tints each family's connectors with that family's colour (ids are namespaced).
+export type Line = { d: string; kind: 'parent'; ownerId?: string };
 export type LayoutResult = {
   positions: Map<string, Pos>;
   couplePills: CouplePill[];
@@ -333,18 +335,28 @@ export function layoutLayered(members: Member[], adjacency: Adjacency): LayoutRe
   }
 
   // Parent → children connectors (couple centre → sib bar → each child).
+  // Sibling bars of DIFFERENT families share the corridor between two rows;
+  // give each overlapping bar its own lane (a few px apart) so two families'
+  // connectors run close and parallel instead of merging into one long line.
+  const lanes: { x1: number; x2: number; lane: number }[][] = Array.from({ length: maxGen + 1 }, () => []);
   for (const a of anchors) {
     const kids = unitChildren(a);
     if (!kids.length) continue;
     const p = positions.get(a)!;
+    const g = genOf(a);
     const coupleCx = p.x + unitWidth(a) / 2;
     const coupleBottom = p.y + NODE_H;
-    const sibBarY = coupleBottom + (ROW_H - NODE_H) / 2;
-    const nextRowY = (genOf(a) + 1) * ROW_H;
+    const nextRowY = (g + 1) * ROW_H;
     const centers = kids.map((k) => (positions.get(k)!.x + unitWidth(k) / 2)).sort((m, n) => m - n);
-    lines.push({ d: `M ${coupleCx} ${coupleBottom} L ${coupleCx} ${sibBarY}`, kind: 'parent' });
-    if (centers.length > 1) lines.push({ d: `M ${Math.min(...centers)} ${sibBarY} L ${Math.max(...centers)} ${sibBarY}`, kind: 'parent' });
-    for (const cx of centers) lines.push({ d: `M ${cx} ${sibBarY} L ${cx} ${nextRowY}`, kind: 'parent' });
+    const x1 = Math.min(coupleCx, ...centers), x2 = Math.max(coupleCx, ...centers);
+    const taken = new Set(lanes[g].filter((b) => b.x1 <= x2 + 10 && b.x2 >= x1 - 10).map((b) => b.lane));
+    let lane = 0;
+    while (taken.has(lane)) lane++;
+    lanes[g].push({ x1, x2, lane });
+    const sibBarY = coupleBottom + (ROW_H - NODE_H) / 2 + Math.min(lane, 8) * 7;
+    lines.push({ d: `M ${coupleCx} ${coupleBottom} L ${coupleCx} ${sibBarY}`, kind: 'parent', ownerId: a });
+    if (centers.length > 1) lines.push({ d: `M ${Math.min(...centers)} ${sibBarY} L ${Math.max(...centers)} ${sibBarY}`, kind: 'parent', ownerId: a });
+    for (const cx of centers) lines.push({ d: `M ${cx} ${sibBarY} L ${cx} ${nextRowY}`, kind: 'parent', ownerId: a });
   }
 
   let maxX = 0, maxY = 0;
