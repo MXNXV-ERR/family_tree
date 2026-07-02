@@ -247,6 +247,7 @@ function MobileHome() {
               <ChatPanel
                 members={members}
                 relationships={relationships}
+                sessionKey={activeTreeId ?? 'default'}
                 onOpenMember={(m: Member) => { setChatOpen(false); router.push({ pathname: '/profile', params: { id: m.id } }); }}
                 onClose={() => setChatOpen(false)}
               />

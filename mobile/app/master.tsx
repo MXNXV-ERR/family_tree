@@ -211,7 +211,7 @@ export default function MasterScreen() {
             ) : panel === 'settings' ? (
               <SettingsPanel onClose={closeOverlays} />
             ) : panel === 'chat' ? (
-              <ChatPanel members={members} relationships={relationships} onOpenMember={openProfile} onClose={closeOverlays} />
+              <ChatPanel members={members} relationships={relationships} sessionKey={`master:${id ?? ''}`} onOpenMember={openProfile} onClose={closeOverlays} />
             ) : panel === 'members' ? (
               <MembersPanel members={members} meId={meId} onOpenProfile={openProfile} onOpenFamilyInfo={openBridges} onClose={closeOverlays} />
             ) : null}
@@ -252,7 +252,7 @@ export default function MasterScreen() {
         <SettingsPanel onClose={() => setPanel(null)} />
       </BottomSheet>
       <BottomSheet visible={panel === 'chat'} onClose={() => setPanel(null)} heightRatio={0.9}>
-        <ChatPanel members={members} relationships={relationships}
+        <ChatPanel members={members} relationships={relationships} sessionKey={`master:${id ?? ''}`}
           onOpenMember={(m) => { setPanel(null); openProfile(m); }} onClose={() => setPanel(null)} />
       </BottomSheet>
       <BottomSheet visible={panel === 'members'} onClose={() => setPanel(null)} heightRatio={0.85}>

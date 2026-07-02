@@ -273,7 +273,7 @@ export function DesktopWorkspace() {
           <FamilyPickerPanel onClose={() => setDrawer(null)} onOpenInfo={() => setDrawer({ type: 'family' })} />
         ) : null}
         {drawer?.type === 'chat' ? (
-          <ChatPanel members={members} relationships={relationships} onOpenMember={(m) => setDrawer({ type: 'profile', id: m.id })} onClose={() => setDrawer(null)} />
+          <ChatPanel members={members} relationships={relationships} sessionKey={activeTreeId ?? 'default'} onOpenMember={(m) => setDrawer({ type: 'profile', id: m.id })} onClose={() => setDrawer(null)} />
         ) : null}
         {drawer?.type === 'members' ? (
           <MembersPanel members={members} meId={meId} onOpenProfile={openProfile} onOpenFamilyInfo={() => setDrawer({ type: 'family' })} onClose={() => setDrawer(null)} />

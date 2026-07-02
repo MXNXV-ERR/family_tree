@@ -15,15 +15,20 @@ import type { Member, Relationship } from '../shared/types';
 
 const SUGGESTIONS = ['Who are the oldest members?', 'How is Jatin related to Diya?', 'List everyone born after 1990', 'Who has the most children?'];
 
-export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
+// Conversations survive the panel being closed and reopened for the rest of the
+// app session (a page reload starts fresh) — keyed per tree / combined view.
+const sessionTurns = new Map<string, ChatTurn[]>();
+
+export function ChatPanel({ members, relationships, onOpenMember, onClose, sessionKey = 'default' }: {
   members: Member[]; relationships: Relationship[];
-  onOpenMember: (m: Member) => void; onClose?: () => void;
+  onOpenMember: (m: Member) => void; onClose?: () => void; sessionKey?: string;
 }) {
   const { c } = useTheme();
   const { user } = useAuth();
   const { lang } = useRelTerms();
   const meName = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.name, [members, user]);
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [turns, setTurnsState] = useState<ChatTurn[]>(() => sessionTurns.get(sessionKey) ?? []);
+  const setTurns = (t: ChatTurn[]) => { sessionTurns.set(sessionKey, t); setTurnsState(t); };
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -52,6 +57,11 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose }: {
           <Icon name="sparkles" size={19} color={c.accent} />
           <Text style={{ color: c.ink, fontSize: 19, fontFamily: font.serifItalic }}>Family assistant</Text>
         </View>
+        {turns.length > 0 ? (
+          <Pressable onPress={() => setTurns([])} hitSlop={8}>
+            <Text style={{ color: c.mute, fontFamily: font.sansSemi, fontSize: 12.5 }}>Clear</Text>
+          </Pressable>
+        ) : null}
         {onClose ? <Pressable onPress={onClose} hitSlop={10}><Text style={{ color: c.mute, fontSize: 22 }}>×</Text></Pressable> : null}
       </View>
 

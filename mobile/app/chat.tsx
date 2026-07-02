@@ -17,6 +17,7 @@ export default function ChatRoute() {
       <ChatPanel
         members={members}
         relationships={relationships}
+        sessionKey={activeTreeId ?? 'default'}
         onOpenMember={(m: Member) => router.push({ pathname: '/profile', params: { id: m.id } })}
         onClose={() => router.back()}
       />

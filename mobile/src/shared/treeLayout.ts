@@ -292,14 +292,26 @@ export function layoutLayered(members: Member[], adjacency: Adjacency): LayoutRe
     if (!nb.length) return x.get(a)!;
     return nb.reduce((s, n) => s + centreOf(n), 0) / nb.length - unitWidth(a) / 2;
   };
-  for (let pass = 0; pass < 14; pass++) {
+  // Pass count scales with graph size (big multi-family unions need more sweeps
+  // to pull the joined ancestries together); overlap resolution alternates
+  // direction so the layout doesn't drift rightward.
+  const passes = Math.min(60, 14 + Math.floor(anchors.length / 2));
+  for (let pass = 0; pass < passes; pass++) {
     for (let g = 0; g <= maxGen; g++) {
       const layer = layerAnchors[g];
       for (const a of layer) x.set(a, desired(a));
-      for (let i = 1; i < layer.length; i++) {
-        const prev = layer[i - 1], cur = layer[i];
-        const minX = x.get(prev)! + unitWidth(prev) + SIB_GAP;
-        if (x.get(cur)! < minX) x.set(cur, minX);
+      if (pass % 2 === 0) {
+        for (let i = 1; i < layer.length; i++) {
+          const prev = layer[i - 1], cur = layer[i];
+          const minX = x.get(prev)! + unitWidth(prev) + SIB_GAP;
+          if (x.get(cur)! < minX) x.set(cur, minX);
+        }
+      } else {
+        for (let i = layer.length - 2; i >= 0; i--) {
+          const cur = layer[i], next = layer[i + 1];
+          const maxX = x.get(next)! - unitWidth(cur) - SIB_GAP;
+          if (x.get(cur)! > maxX) x.set(cur, maxX);
+        }
       }
     }
   }

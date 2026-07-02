@@ -98,6 +98,16 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
         </View>
       </ZoomPanCanvas>
 
+      {/* edge-colour legend — what each line type means */}
+      <View pointerEvents="none" style={{ position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: c.paper, borderWidth: 1, borderColor: c.lineSoft, opacity: 0.92 }}>
+        {([['Parent', c.relParent], ['Partner', c.relPartner], ['Sibling', c.relSibling]] as const).map(([label, col]) => (
+          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ width: 14, height: 2.5, borderRadius: 2, backgroundColor: col }} />
+            <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 10.5 }}>{label}</Text>
+          </View>
+        ))}
+      </View>
+
       {!hideZoomUI && <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(initialScale, 0, 0)} />}
       {sel ? <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId, terms)} /> : null}
     </View>
