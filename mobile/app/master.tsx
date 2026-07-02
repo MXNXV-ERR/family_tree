@@ -121,6 +121,7 @@ export default function MasterScreen() {
   const openPanel = (p: PanelKind) => { setDrawerId(null); setPanel(p); };
   const closeOverlays = () => { setDrawerId(null); setPanel(null); };
   const openBridges = () => router.push({ pathname: '/combine' as never, params: { id: id ?? '' } });
+  const openScan = () => router.push({ pathname: '/facematch', params: { master: id ?? '' } });
   const pickSearch = (m: Member) => {
     setFocusId(m.id);
     setSearchOpen(false);
@@ -180,6 +181,7 @@ export default function MasterScreen() {
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <ToolBtn name="search" tint={CV} onPress={() => setSearchOpen(true)} />
+            <ToolBtn name="scan" tint={CV} onPress={openScan} />
             <ToolBtn name="users" tint={CV} onPress={() => openPanel('members')} />
             <ToolBtn name="sparkles" tint={CV} onPress={() => openPanel('chat')} />
             <ToolBtn name="settings" tint={CV} onPress={() => openPanel('settings')} />
@@ -233,6 +235,7 @@ export default function MasterScreen() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <ToolBtn name="search" tint={CV} size={34} onPress={() => setSearchOpen(true)} />
+          <ToolBtn name="scan" tint={CV} size={34} onPress={openScan} />
           <ToolBtn name="users" tint={CV} size={34} onPress={() => openPanel('members')} />
           <ToolBtn name="sparkles" tint={CV} size={34} onPress={() => openPanel('chat')} />
           <ToolBtn name="settings" tint={CV} size={34} onPress={() => openPanel('settings')} />
