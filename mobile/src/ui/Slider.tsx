@@ -28,7 +28,9 @@ export function Slider({ value, min, max, step = 1, onChange, width = 120 }: {
     onPanResponderMove: (e) => set(e.nativeEvent.locationX),
   })).current;
 
-  const pct = max > min ? (value - min) / (max - min) : 0;
+  // Clamp: callers may hold values outside [min,max] (e.g. timeline fit-zoom
+  // below the slider's manual floor) — the thumb parks at the edge.
+  const pct = max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
   const THUMB = 15;
   return (
     <View

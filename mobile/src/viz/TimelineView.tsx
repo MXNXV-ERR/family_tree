@@ -42,10 +42,11 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
   const [pxPerYear, setPxPerYear] = useState(8);
   const [userZoomed, setUserZoomed] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
+  const [kinDepth, setKinDepth] = useState(1); // highlight radius around the selected person
   const [tip, setTip] = useState<{ text: string } | null>(null);
   const [evTip, setEvTip] = useState<FamilyEvent | null>(null);
   const currentYear = new Date().getFullYear();
-  const zoom = (fn: (p: number) => number) => { setUserZoomed(true); setPxPerYear((p) => Math.max(2, Math.min(60, fn(p)))); };
+  const zoom = (fn: (p: number) => number) => { setUserZoomed(true); setPxPerYear((p) => Math.max(0.5, Math.min(60, fn(p)))); };
 
   const generations = useMemo(() => computeGenerations(members, relationships), [members, relationships]);
 
@@ -63,9 +64,11 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
     return { minY: Math.floor(min / 10) * 10, maxY: Math.ceil(max / 10) * 10 };
   }, [members, currentYear]);
 
-  // Default-fit so the whole span (incl. today + living "fading tails") shows
-  // without scrolling. Only until the user manually zooms.
-  const fitPx = Math.max(2, Math.min(20, (screenW - LABEL_W - 24) / Math.max(1, maxY - minY)));
+  // Default-fit so the whole span (incl. today + living "fading tails") fills
+  // the screen width exactly, until the user manually zooms. No 2..20 clamp:
+  // it capped small families at 20 (half-empty screen) and floored long spans
+  // at 2 (forced horizontal scroll).
+  const fitPx = Math.max(0.5, (screenW - LABEL_W - 24) / Math.max(1, maxY - minY));
   useEffect(() => { if (!userZoomed) setPxPerYear(fitPx); }, [fitPx, userZoomed]);
 
   // Expose zoom so the desktop sub-bar can drive this view.
@@ -81,13 +84,14 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
   const contentW = (maxY - minY) * pxPerYear;
   const xOf = (year: number) => (year - minY) * pxPerYear;
 
-  // Relationship of every neighbour to the SELECTED (focused) person.
+  // Relationship of every neighbour to the SELECTED (focused) person, out to
+  // the kin-depth the toolbar slider chose (1 = immediate family).
   const highlight = useMemo(() => {
     if (!selId) return null;
     const labels = new Map<string, string>();
-    for (const [id, n] of adjacency.neighborhood(selId, 1)) labels.set(id, n.label);
+    for (const [id, n] of adjacency.neighborhood(selId, kinDepth)) labels.set(id, n.label);
     return labels;
-  }, [selId, adjacency]);
+  }, [selId, kinDepth, adjacency]);
 
   // Life events per member: birth, marriage (when the spouse edge carries a
   // marriageDate), children's births, death.
@@ -166,6 +170,12 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
           })}
         </View>
         <View style={{ flex: 1, minWidth: 8 }} />
+        {/* kin depth — how far the selection highlight reaches (like radial's rings) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: radius.md }}>
+          <Icon name="users" size={14} color={c.mute} />
+          <Slider value={kinDepth} min={1} max={5} step={1} width={72} onChange={setKinDepth} />
+          <Text style={{ color: c.inkSoft, fontFamily: font.monoMed, fontSize: 11, width: 38 }}>kin {kinDepth}</Text>
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: radius.md }}>
           <Icon name="calendar" size={14} color={c.mute} />
           <Slider value={pxPerYear} min={2} max={60} step={1} width={108} onChange={(v) => { setUserZoomed(true); setPxPerYear(v); }} />
