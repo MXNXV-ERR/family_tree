@@ -72,8 +72,23 @@ export function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: nu
     ring1Radius = Math.max(ring1Radius, Math.min(560, need));
   }
   ring1Radius += Math.max(0, ring1Count - 7) * 10;
+  const TAU = Math.PI * 2;
+  // Floor ring 1 by its full-circle occupancy too, so relaxRing never has to
+  // overlap cards it physically can't separate within the sector.
+  ring1Radius = Math.max(ring1Radius, (CARD_ARC_1 * ring1Count) / TAU);
   const STEP = 210;
-  const radiusOf = (d: number) => (d <= 0 ? 0 : ring1Radius + (d - 1) * STEP);
+  // Precompute each ring's radius: at least STEP beyond the previous ring, and big
+  // enough that every card on that ring fits around the full circle without overlap.
+  // (The old fixed-step radius let dense outer rings collide — the "overlap" flaw.)
+  const depthCount: number[] = [];
+  for (const [, n] of nodes) if (n.depth >= 1) depthCount[n.depth] = (depthCount[n.depth] || 0) + 1;
+  const radii: number[] = [];
+  radii[1] = ring1Radius;
+  for (let d = 2; d <= maxDepth; d++) {
+    const need = ((depthCount[d] || 0) * CARD_ARC_N) / TAU;
+    radii[d] = Math.max(radii[d - 1] + STEP, need);
+  }
+  const radiusOf = (d: number) => (d <= 0 ? 0 : radii[d] ?? ring1Radius + (d - 1) * STEP);
 
   const pos = new Map<string, RadialPos>();
   pos.set(focusId, { x: 0, y: 0, depth: 0, angle: 0 });

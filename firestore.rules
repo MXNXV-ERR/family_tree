@@ -23,6 +23,20 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Per-user master (combined-family) index — the switcher list. Self only.
+    match /users/{userId}/masters/{masterId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Master families (virtual overlays). Owner-private in v1: only the creator
+    // can read/write. The doc holds constituent treeIds + bridge links only —
+    // the actual member/relationship data stays in the trees the master
+    // references, each still guarded by its own /trees rules above.
+    match /masters/{masterId} {
+      allow read, update, delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+    }
+
     match /trees/{treeId} {
       function signedIn() { return request.auth != null; }
       function uid() { return request.auth.uid; }

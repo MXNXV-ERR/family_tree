@@ -14,9 +14,10 @@ import { buildAdjacency } from '../src/shared/adjacency';
 import { TreeView } from '../src/viz/TreeView';
 import { RadialView } from '../src/viz/RadialView';
 import { TimelineView } from '../src/viz/TimelineView';
+import { NetworkView } from '../src/viz/NetworkView';
 import type { Member } from '../src/shared/types';
 
-type ViewKind = 'tree' | 'radial' | 'timeline';
+type ViewKind = 'tree' | 'radial' | 'timeline' | 'network';
 
 export default function VizScreen() {
   const { c } = useTheme();
@@ -51,15 +52,16 @@ export default function VizScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
         <SegTabs<ViewKind>
           value={view} onChange={setView}
-          options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline']]}
+          options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline'], ['network', 'Network']]}
           activeBg={c.accentSoft} activeColor={c.accent} rad={radius.md} pad={3} gap={3} padV={8} fontSize={13}
           style={{ flex: 1 }} />
       </View>
 
-      <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline'].indexOf(view)} style={{ flex: 1 }}>
+      <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline', 'network'].indexOf(view)} style={{ flex: 1 }}>
         {view === 'tree' ? <TreeView {...shared} />
           : view === 'radial' ? <RadialView {...shared} />
-          : <TimelineView {...shared} events={events} />}
+          : view === 'timeline' ? <TimelineView {...shared} events={events} />
+          : <NetworkView {...shared} />}
       </SlideSwap>
     </View>
   );

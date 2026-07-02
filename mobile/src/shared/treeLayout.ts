@@ -168,6 +168,178 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutRe
   return { positions, couplePills, lines, width: maxX + 40, height: maxY + 40 };
 }
 
+// Generation level per member, RELATIVE and spouse-consistent: signed BFS where
+// a parent is one level up (−1), a child one down (+1), and a spouse/sibling the
+// SAME level (0). Unlike depth-from-root, this guarantees a married couple shares
+// a row even when their two families have different ancestral depths — so the
+// families fuse at the marriage instead of drifting apart. Each disconnected
+// component is levelled on its own, then all are shifted so the minimum is 0.
+function relativeGenerations(members: Member[], adjacency: Adjacency, inSet: Set<string>): Map<string, number> {
+  const level = new Map<string, number>();
+  for (const m of members) {
+    if (level.has(m.id)) continue;
+    level.set(m.id, 0);
+    const queue: string[] = [m.id];
+    while (queue.length) {
+      const id = queue.shift()!;
+      const L = level.get(id)!;
+      const step = (nid: string, dl: number) => { if (inSet.has(nid) && !level.has(nid)) { level.set(nid, L + dl); queue.push(nid); } };
+      for (const p of adjacency.parents(id)) step(p, -1);
+      for (const ch of adjacency.children(id)) step(ch, +1);
+      for (const s of adjacency.currentSpouses(id)) step(s, 0);
+      for (const s of adjacency.exSpouses(id)) step(s, 0);
+      for (const sb of adjacency.siblings(id)) step(sb, 0);
+    }
+  }
+  let min = 0;
+  for (const v of level.values()) min = Math.min(min, v);
+  if (min !== 0) for (const [k, v] of level) level.set(k, v - min);
+  return level;
+}
+
+// Layered (Sugiyama-style) layout: bands the WHOLE connected graph by global
+// generation, keeps married couples together as one unit, and orders/positions
+// by barycenter so parents sit over their children. Unlike layoutPyramid (which
+// packs each ancestral root's subtree side-by-side), a graph connected through a
+// marriage / shared person renders as ONE integrated tree — the two families'
+// ancestries converge on the couple that joins them. Used by the combined view.
+export function layoutLayered(members: Member[], adjacency: Adjacency): LayoutResult {
+  const positions = new Map<string, Pos>();
+  const couplePills: CouplePill[] = [];
+  const lines: Line[] = [];
+  if (!members.length) return { positions, couplePills, lines, width: 40, height: 40 };
+
+  const inSet = new Set(members.map((m) => m.id));
+  const gen = relativeGenerations(members, adjacency, inSet);
+  const genOf = (id: string) => gen.get(id) ?? 0;
+  const maxGen = members.reduce((mx, m) => Math.max(mx, genOf(m.id)), 0);
+  const hasParents = (id: string) => adjacency.parents(id).some((p) => inSet.has(p));
+
+  const spouseSameRow = (id: string): string | undefined => {
+    for (const s of [...adjacency.currentSpouses(id), ...adjacency.exSpouses(id)])
+      if (inSet.has(s) && genOf(s) === genOf(id)) return s;
+    return undefined;
+  };
+
+  // A couple (both on the same row) is one placement unit; the anchor is the
+  // partner with blood parents here (keeps a married-in spouse on the outside).
+  const unitOf = new Map<string, string>();
+  const unitPartner = new Map<string, string | undefined>();
+  for (const m of members) {
+    if (unitOf.has(m.id)) continue;
+    const sp = spouseSameRow(m.id);
+    if (sp && !unitOf.has(sp)) {
+      let anchor = m.id, other = sp;
+      const mMale = adjacency.get(m.id)?.gender === 'male';
+      if (hasParents(sp) && !hasParents(m.id)) { anchor = sp; other = m.id; }
+      else if (hasParents(m.id) === hasParents(sp) && !mMale && adjacency.get(sp)?.gender === 'male') { anchor = sp; other = m.id; }
+      unitOf.set(anchor, anchor); unitOf.set(other, anchor);
+      unitPartner.set(anchor, other);
+    } else {
+      unitOf.set(m.id, m.id);
+      unitPartner.set(m.id, undefined);
+    }
+  }
+  const anchors = members.map((m) => m.id).filter((id) => unitOf.get(id) === id);
+  const unitWidth = (a: string) => (unitPartner.get(a) ? COUPLE_W : NODE_W);
+  const membersOf = (a: string) => [a, unitPartner.get(a)].filter(Boolean) as string[];
+
+  // Parent / child units (blood edges), so a couple's parents include BOTH
+  // spouses' families — that's what pulls the two ancestries onto the couple.
+  const unitParents = (a: string): string[] => {
+    const ps = new Set<string>();
+    for (const id of membersOf(a)) for (const p of adjacency.parents(id)) if (inSet.has(p)) ps.add(unitOf.get(p)!);
+    return [...ps];
+  };
+  const unitChildren = (a: string): string[] => {
+    const cs = new Set<string>();
+    for (const id of membersOf(a)) for (const ch of adjacency.children(id)) if (inSet.has(ch)) cs.add(unitOf.get(ch)!);
+    return [...cs];
+  };
+
+  const layerAnchors: string[][] = Array.from({ length: maxGen + 1 }, () => []);
+  for (const a of anchors) layerAnchors[genOf(a)].push(a);
+
+  // Ordering — each lower layer is ordered by its parent's position FIRST, so all
+  // children of one couple stay contiguous (tight sib bars — interleaving other
+  // families between siblings was what stretched connectors across the canvas),
+  // then by birth year. A unit whose parents span two families sorts under the
+  // earlier parent; x-centering below then pulls it between both.
+  const orderIdx = new Map<string, number>();
+  const setOrder = (layer: string[]) => layer.forEach((a, i) => orderIdx.set(a, i));
+  const byYear = (a: string) => yearOf(adjacency.get(a)?.birthDate) ?? 9999;
+  layerAnchors[0].sort((x, y) => byYear(x) - byYear(y) || x.localeCompare(y));
+  setOrder(layerAnchors[0]);
+  for (let g = 1; g <= maxGen; g++) {
+    const parentKey = (a: string) => {
+      const ps = unitParents(a).filter((p) => orderIdx.has(p)).map((p) => orderIdx.get(p)!);
+      return ps.length ? Math.min(...ps) : Number.MAX_SAFE_INTEGER;
+    };
+    layerAnchors[g].sort((x, y) => parentKey(x) - parentKey(y) || byYear(x) - byYear(y) || x.localeCompare(y));
+    setOrder(layerAnchors[g]);
+  }
+
+  // X coordinates — start packed, then pull each unit toward the mean centre of
+  // its parents + children, resolving overlaps left-to-right. A few passes.
+  const x = new Map<string, number>();
+  for (let g = 0; g <= maxGen; g++) {
+    let cx = 0;
+    for (const a of layerAnchors[g]) { x.set(a, cx); cx += unitWidth(a) + SIB_GAP; }
+  }
+  const centreOf = (a: string) => x.get(a)! + unitWidth(a) / 2;
+  const desired = (a: string) => {
+    const nb = [...unitParents(a), ...unitChildren(a)].filter((n) => x.has(n));
+    if (!nb.length) return x.get(a)!;
+    return nb.reduce((s, n) => s + centreOf(n), 0) / nb.length - unitWidth(a) / 2;
+  };
+  for (let pass = 0; pass < 14; pass++) {
+    for (let g = 0; g <= maxGen; g++) {
+      const layer = layerAnchors[g];
+      for (const a of layer) x.set(a, desired(a));
+      for (let i = 1; i < layer.length; i++) {
+        const prev = layer[i - 1], cur = layer[i];
+        const minX = x.get(prev)! + unitWidth(prev) + SIB_GAP;
+        if (x.get(cur)! < minX) x.set(cur, minX);
+      }
+    }
+  }
+  let minX = Infinity;
+  for (const a of anchors) minX = Math.min(minX, x.get(a)!);
+  const shift = isFinite(minX) ? 20 - minX : 20;
+
+  for (const a of anchors) {
+    const ax = x.get(a)! + shift, y = genOf(a) * ROW_H;
+    const partner = unitPartner.get(a);
+    if (partner) {
+      positions.set(a, { x: ax, y });
+      positions.set(partner, { x: ax + NODE_W + COUPLE_GAP, y, isInLaw: !hasParents(partner) });
+      const div = !adjacency.currentSpouses(a).includes(partner) && adjacency.exSpouses(a).includes(partner);
+      couplePills.push({ x: ax, y, ids: [a, partner], status: div ? 'divorced' : 'current' });
+    } else {
+      positions.set(a, { x: ax, y });
+    }
+  }
+
+  // Parent → children connectors (couple centre → sib bar → each child).
+  for (const a of anchors) {
+    const kids = unitChildren(a);
+    if (!kids.length) continue;
+    const p = positions.get(a)!;
+    const coupleCx = p.x + unitWidth(a) / 2;
+    const coupleBottom = p.y + NODE_H;
+    const sibBarY = coupleBottom + (ROW_H - NODE_H) / 2;
+    const nextRowY = (genOf(a) + 1) * ROW_H;
+    const centers = kids.map((k) => (positions.get(k)!.x + unitWidth(k) / 2)).sort((m, n) => m - n);
+    lines.push({ d: `M ${coupleCx} ${coupleBottom} L ${coupleCx} ${sibBarY}`, kind: 'parent' });
+    if (centers.length > 1) lines.push({ d: `M ${Math.min(...centers)} ${sibBarY} L ${Math.max(...centers)} ${sibBarY}`, kind: 'parent' });
+    for (const cx of centers) lines.push({ d: `M ${cx} ${sibBarY} L ${cx} ${nextRowY}`, kind: 'parent' });
+  }
+
+  let maxX = 0, maxY = 0;
+  positions.forEach((p) => { maxX = Math.max(maxX, p.x + NODE_W); maxY = Math.max(maxY, p.y + NODE_H); });
+  return { positions, couplePills, lines, width: maxX + 40, height: maxY + 40 };
+}
+
 export function layoutInverted(focusId: string, adjacency: Adjacency, maxDepth = 4): LayoutResult {
   const positions = new Map<string, Pos>();
   const lines: Line[] = [];

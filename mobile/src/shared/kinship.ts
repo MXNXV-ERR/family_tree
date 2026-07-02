@@ -87,11 +87,99 @@ export function kinshipOf(adj: Adjacency, meId: string, id: string): Kin | null 
   // child's spouse / sibling's spouse
   for (const c of children) if (adj.currentSpouses(c).includes(id)) return mk(byG('son-in-law', 'daughter-in-law', 'in-law'), byG('Son-in-law', 'Daughter-in-law', 'In-law'));
   for (const s of sibs) if (adj.currentSpouses(s).includes(id)) return mk(byG('brother-in-law', 'sister-in-law', 'in-law'), byG('Brother-in-law', 'Sister-in-law', 'In-law'));
-  // great-grandparent / great-grandchild
-  for (const p of parents) for (const gp of adj.parents(p)) if (adj.parents(gp).includes(id)) return mk('great-grandparent', 'Great-grandparent');
-  for (const c of children) for (const gc of adj.children(c)) if (adj.children(gc).includes(id)) return mk('great-grandchild', 'Great-grandchild');
+  // Every other blood relation (great^n grandparents/children, great-aunts/
+  // uncles, grand-nieces/nephews, Nth cousins M-times removed) is named by the
+  // general lowest-common-ancestor calculator below — so no card ever falls back
+  // to a raw "parent -> parent -> child" path.
+  return descentKinship(adj, meId, id);
+}
 
-  return null;
+// ---- General blood-relationship calculator (lowest common ancestor) ----
+// Names every consanguine relation the hand-rolled close cases above don't, so
+// the caller never has to show a raw path. Side (paternal/maternal) comes from
+// which parent leads toward the shared ancestor.
+const ORD = ['zeroth', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+const ordinal = (n: number) => ORD[n] ?? `${n}th`;
+const removedLabel = (n: number) => (n === 1 ? 'once removed' : n === 2 ? 'twice removed' : `${n} times removed`);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// "great-" repeated n times: 0 → '', 1 → 'great-', 2 → 'great-great-', …
+const greats = (n: number) => (n > 0 ? 'great-'.repeat(n) : '');
+
+// Depth of every ancestor of `id` via parent edges (id itself = 0).
+function ancestorDepths(adj: Adjacency, id: string): Map<string, number> {
+  const depth = new Map<string, number>([[id, 0]]);
+  let frontier = [id];
+  for (let d = 1; d <= 16 && frontier.length; d++) {
+    const next: string[] = [];
+    for (const x of frontier) for (const p of adj.parents(x))
+      if (!depth.has(p)) { depth.set(p, d); next.push(p); }
+    frontier = next;
+  }
+  return depth;
+}
+
+// paternal / maternal from the gender of `fromId`'s parent that reaches `lca`.
+function sideToAncestor(adj: Adjacency, fromId: string, lca: string): Side {
+  if (fromId === lca) return '';
+  for (const p of adj.parents(fromId))
+    if (p === lca || ancestorDepths(adj, p).has(lca)) return sideOf(genderOf(adj, p));
+  return '';
+}
+
+export function descentKinship(adj: Adjacency, meId: string, id: string): Kin | null {
+  if (!meId || !id || meId === id) return null;
+  const A = ancestorDepths(adj, meId);
+  const B = ancestorDepths(adj, id);
+  // lowest common ancestor = the shared ancestor with the smallest a + b.
+  let best: { lca: string; a: number; b: number } | null = null;
+  for (const [anc, a] of A) {
+    const b = B.get(anc);
+    if (b === undefined) continue;
+    if (!best || a + b < best.a + best.b || (a + b === best.a + best.b && Math.max(a, b) < Math.max(best.a, best.b)))
+      best = { lca: anc, a, b };
+  }
+  if (!best) return null;
+  const { a, b, lca } = best;
+  const gid = genderOf(adj, id);
+  const m = gid === 'male', f = gid === 'female';
+  const byG = (male: string, female: string, neutral: string) => (m ? male : f ? female : neutral);
+  const titleGreats = (g: number) => cap(greats(g));
+
+  // id is my ancestor (lca === id, b === 0)
+  if (b === 0) {
+    if (a === 1) return mk(byG('father', 'mother', 'parent'), byG('Father', 'Mother', 'Parent'));
+    if (a === 2) return grandparent(sideToAncestor(adj, meId, lca), m, f);
+    const g = a - 2;
+    return mk(`${greats(g)}grand${byG('father', 'mother', 'parent')}`, `${titleGreats(g)}grand${byG('father', 'mother', 'parent')}`);
+  }
+  // id is my descendant (lca === me, a === 0)
+  if (a === 0) {
+    if (b === 1) return mk(byG('son', 'daughter', 'child'), byG('Son', 'Daughter', 'Child'));
+    if (b === 2) return grandchild(sideToAncestor(adj, id, lca), m, f);
+    const g = b - 2;
+    return mk(`${greats(g)}grand${byG('son', 'daughter', 'child')}`, `${titleGreats(g)}grand${byG('son', 'daughter', 'child')}`);
+  }
+  // siblings
+  if (a === 1 && b === 1) return mk(byG('brother', 'sister', 'sibling'), byG('Brother', 'Sister', 'Sibling'));
+  // id descends from my sibling → niece/nephew line
+  if (a === 1 && b >= 2) {
+    if (b === 2) return mk(byG('nephew', 'niece', 'niece/nephew'), byG('Nephew', 'Niece', 'Niece/Nephew'));
+    const g = b - 3;
+    return mk(`${greats(g)}grand-${byG('nephew', 'niece', 'niece/nephew')}`, `${titleGreats(g)}Grand-${byG('nephew', 'niece', 'niece/nephew')}`);
+  }
+  // id is a sibling of my ancestor → aunt/uncle line
+  if (b === 1 && a >= 2) {
+    if (a === 2) return uncleAunt(sideToAncestor(adj, meId, lca), m, f);
+    const g = a - 2;
+    return mk(`${greats(g)}${byG('uncle', 'aunt', 'uncle/aunt')}`, `${titleGreats(g)}${byG('Uncle', 'Aunt', 'Uncle/Aunt')}`);
+  }
+  // cousins: degree = min(a,b) − 1, removed = |a − b|.
+  const degree = Math.min(a, b) - 1;
+  const removed = Math.abs(a - b);
+  const english = `${cap(ordinal(degree))} cousin${removed ? ` ${removedLabel(removed)}` : ''}`;
+  const key = degree === 1 && removed === 0 ? byG('cousin-brother', 'cousin-sister', 'cousin')
+    : removed > 0 ? 'cousin-once-removed' : 'cousin';
+  return mk(key, english);
 }
 
 // If a specific key isn't in the dictionary, fall back to a coarser one.
@@ -100,6 +188,11 @@ function fallbackKey(key: string): string {
   if (key === 'brother-son' || key === 'sister-son') return 'nephew';
   if (key === 'brother-daughter' || key === 'sister-daughter') return 'niece';
   if (key === 'cousin-brother' || key === 'cousin-sister') return 'cousin';
+  if (key === 'great-uncle') return 'uncle';
+  if (key === 'great-aunt') return 'aunt';
+  if (key === 'grand-nephew') return 'nephew';
+  if (key === 'grand-niece') return 'niece';
+  if (key === 'cousin-once-removed') return 'cousin';
   return key;
 }
 

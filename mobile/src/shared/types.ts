@@ -151,3 +151,44 @@ export interface JoinRequest {
     requestedAt?: number;
     status: 'pending' | 'approved' | 'rejected';
 }
+
+// ---- Master families (virtual overlay combining several trees) ----
+// A master doesn't COPY data; it references constituent treeIds and stores the
+// cross-family "bridge" edges that join them. Ids in the combined view are
+// namespaced `${treeId}:${localMemberId}` so an edit routes back to the origin
+// tree (see firebase/masters.ts splitId). Owner-private in v1.
+//   'spouse' / 'parent' — a real relationship across two families (a=child for
+//                         'parent'); adds a synthetic edge in the union.
+//   'same'              — the two records are the SAME person recorded in both
+//                         trees; the union collapses b into a (visual merge).
+export type BridgeType = 'spouse' | 'parent' | 'same';
+
+export interface BridgeLink {
+    id: string;
+    aTreeId: string;
+    aMemberId: string;      // for 'parent': the CHILD
+    bTreeId: string;
+    bMemberId: string;      // for 'parent': the PARENT
+    type: BridgeType;
+    status?: 'current' | 'divorced'; // spouse bridges only
+}
+
+// masters/{masterId} — the combined-family document.
+export interface MasterFamily {
+    id: string;
+    name: string;
+    ownerUid: string;
+    color?: string;
+    memberTreeIds: string[];
+    links: BridgeLink[];
+    createdAt?: unknown;
+}
+
+// Index entry under users/{uid}/masters/{masterId} that powers the switcher.
+export interface MasterIndex {
+    masterId: string;
+    name: string;
+    color?: string;
+    treeCount?: number;
+    sig?: string;   // sorted treeIds joined — used to block duplicate combos
+}

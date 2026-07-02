@@ -55,6 +55,16 @@ function describeRelationship(path: string[]): string {
     if (p === 'parent-sibling') return 'Uncle/Aunt';
     if (p === 'sibling-child') return 'Niece/Nephew';
     if (p === 'parent-parent-parent') return 'Great-grandparent';
+    if (p === 'child-child-child') return 'Great-grandchild';
     if (p === 'parent-sibling-child') return 'First Cousin';
-    return `Relation path: ${p.replace(/-/g, ' -> ')}`;
+    if (p === 'parent-parent-sibling') return 'Great-uncle/Aunt';
+    if (p === 'sibling-child-child') return 'Grand-niece/Nephew';
+    if (p === 'parent-sibling-child-child') return 'First cousin once removed';
+    if (p === 'parent-parent-sibling-child') return 'First cousin once removed';
+    if (p === 'parent-parent-parent-parent') return 'Great-great-grandparent';
+    // Consanguine relations are named precisely by the LCA calculator in
+    // kinship.ts (which callers try first); this BFS path is only reached for
+    // spouse/in-law chains, so keep a readable label instead of a raw path.
+    if (p.includes('spouse')) return 'Relative by marriage';
+    return 'Distant relative';
 }

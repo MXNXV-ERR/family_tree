@@ -22,6 +22,7 @@ import { Icon } from '../ui/Icon';
 import { TreeView } from '../viz/TreeView';
 import { RadialView } from '../viz/RadialView';
 import { TimelineView } from '../viz/TimelineView';
+import { NetworkView } from '../viz/NetworkView';
 import { SubBarZoom, type ZoomApi } from '../viz/vizChrome';
 import { DesktopDrawer } from './DesktopDrawer';
 import { DesktopProfile } from './DesktopProfile';
@@ -39,7 +40,7 @@ import { LinkForm } from '../components/LinkForm';
 import { canEditMember, canDeleteMember, canEditRelationship, canImport, canManageData } from '../shared/permissions';
 import type { Member, Relationship } from '../shared/types';
 
-type ViewKind = 'tree' | 'radial' | 'timeline' | 'master';
+type ViewKind = 'tree' | 'radial' | 'timeline' | 'network' | 'master';
 type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
@@ -200,6 +201,7 @@ export function DesktopWorkspace() {
         <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase' }}>
           {view === 'radial' ? `Radial — kinship around ${adjacency.get(focusId)?.name ?? ''}`
             : view === 'timeline' ? 'Timeline — lifespans across the decades'
+            : view === 'network' ? 'Network — force-directed relationship graph'
             : 'Tree — pyramid · ancestors · hourglass'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
@@ -222,9 +224,10 @@ export function DesktopWorkspace() {
         ) : !focusId ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>
         ) : (
-          <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree'].indexOf(view)} style={{ flex: 1 }}>
+          <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree', 'network'].indexOf(view)} style={{ flex: 1 }}>
             {view === 'tree' ? <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />
               : view === 'radial' ? <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />
+              : view === 'network' ? <NetworkView {...shared} onZoomReady={setZoomApi} hideZoomUI />
               : <TimelineView {...shared} events={events} onZoomReady={setZoomApi} hideZoomUI />}
           </SlideSwap>
         )}
@@ -320,8 +323,8 @@ function ViewSwitcher({ value, onChange }: { value: ViewKind; onChange: (v: View
   return (
     <SegTabs<ViewKind>
       value={value} onChange={onChange}
-      options={[['radial', 'Radial'], ['timeline', 'Timeline'], ['tree', 'Tree']]}
-      icons={{ radial: 'radial', timeline: 'timeline', tree: 'tree' }}
+      options={[['radial', 'Radial'], ['timeline', 'Timeline'], ['tree', 'Tree'], ['network', 'Network']]}
+      icons={{ radial: 'radial', timeline: 'timeline', tree: 'tree', network: 'link' }}
       fill={false} fontSize={14} />
   );
 }

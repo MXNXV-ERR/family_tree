@@ -17,11 +17,13 @@ import {
   subscribeMyFamilies, ensurePrimaryFamily, hasPrimaryTree,
   subscribeJoinRequest, settleApprovedJoin, cancelJoinRequest,
 } from './families';
-import type { FamilyTree, Membership } from '../shared/types';
+import { subscribeMyMasters } from './masters';
+import type { FamilyTree, Membership, MasterIndex } from '../shared/types';
 
 interface FamilyCtx {
   families: FamilyTree[];
   memberships: Membership[];
+  masters: MasterIndex[];
   activeTreeId: string | null;
   activeFamily: FamilyTree | null;
   setActiveTreeId: (id: string) => void;
@@ -30,7 +32,7 @@ interface FamilyCtx {
 }
 
 const Ctx = createContext<FamilyCtx>({
-  families: [], memberships: [], activeTreeId: null, activeFamily: null,
+  families: [], memberships: [], masters: [], activeTreeId: null, activeFamily: null,
   setActiveTreeId: () => {}, loadingFamilies: true, needsOnboarding: false,
 });
 
@@ -43,6 +45,7 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   const uid = user?.uid ?? null;
   const [families, setFamilies] = useState<FamilyTree[]>([]);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [masters, setMasters] = useState<MasterIndex[]>([]);
   const [activeTreeId, setActiveState] = useState<string | null>(null);
   const [loadingFamilies, setLoading] = useState(true);
   // True only after a SUCCESSFUL families snapshot — gates onboarding so an
@@ -85,6 +88,13 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
       });
     })();
     return () => { cancelled = true; unsub(); };
+  }, [uid]);
+
+  // Subscribe to the user's master (combined) families for the switcher.
+  useEffect(() => {
+    if (!uid) { setMasters([]); return; }
+    const unsub = subscribeMyMasters(uid, setMasters);
+    return () => unsub();
   }, [uid]);
 
   // Refresh the auth token + nudge reconnect when the tab returns to focus or the
@@ -170,7 +180,7 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
   const needsOnboarding = !!uid && !loadingFamilies && hydrated && familiesLoaded && hasLegacy === false && activeCount === 0;
 
   return (
-    <Ctx.Provider value={{ families, memberships, activeTreeId, activeFamily, setActiveTreeId, loadingFamilies, needsOnboarding }}>
+    <Ctx.Provider value={{ families, memberships, masters, activeTreeId, activeFamily, setActiveTreeId, loadingFamilies, needsOnboarding }}>
       {children}
     </Ctx.Provider>
   );

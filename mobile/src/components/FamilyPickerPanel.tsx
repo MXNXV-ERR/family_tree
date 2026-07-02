@@ -4,6 +4,7 @@
 // header sheet and the desktop switcher dropdown.
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme, font, radius } from '../theme/theme';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
@@ -22,8 +23,9 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
   const { c } = useTheme();
   const { user } = useAuth();
   const profile = useUserProfile();
-  const { families, activeTreeId, setActiveTreeId } = useFamily();
+  const { families, masters, activeTreeId, setActiveTreeId } = useFamily();
   const { members, treeMetadata } = useFamilyTree(activeTreeId);
+  const router = useRouter();
 
   // The membership index can be empty (e.g. multi-family rules not deployed yet)
   // even though the user clearly has an active tree. Always surface at least the
@@ -142,9 +144,35 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
               );
             })}
 
+            {masters.length > 0 ? (
+              <>
+                <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 8, marginBottom: 2 }}>Combined</Text>
+                {masters.map((m) => (
+                  <Pressable key={m.masterId} onPress={() => { onClose(); router.push({ pathname: '/master' as never, params: { id: m.masterId } }); }} style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', gap: 13, padding: 13, borderRadius: radius.lg,
+                    backgroundColor: c.paper, borderWidth: 1.5, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }],
+                  })}>
+                    <View style={{ width: 50, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: c.paper2, borderWidth: 1.5, borderColor: m.color ?? c.accent }}>
+                      <Icon name="users" size={22} color={m.color ?? c.accent} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansBold, fontSize: 16 }}>{m.name}</Text>
+                      <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11, marginTop: 2 }}>{m.treeCount ?? 0} families</Text>
+                    </View>
+                    <Icon name="chevR" size={18} color={c.faint} />
+                  </Pressable>
+                ))}
+              </>
+            ) : null}
+
             <Pressable onPress={onOpenInfo} style={({ pressed }) => actionStyle(c, pressed)}>
               <Icon name="info" size={18} color={c.inkSoft} /><Text style={actionText(c)}>View family info</Text>
             </Pressable>
+            {families.length >= 2 ? (
+              <Pressable onPress={() => { onClose(); router.push('/combine' as never); }} style={({ pressed }) => actionStyle(c, pressed)}>
+                <Icon name="users" size={18} color={c.accent} /><Text style={[actionText(c), { color: c.accent }]}>Combine families</Text>
+              </Pressable>
+            ) : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable onPress={() => { setMode('new'); setErr(null); }} style={({ pressed }) => [actionStyle(c, pressed), { flex: 1 }]}>
                 <Icon name="plus" size={18} stroke={2.1} color={c.accent} /><Text style={[actionText(c), { color: c.accent }]}>New family</Text>

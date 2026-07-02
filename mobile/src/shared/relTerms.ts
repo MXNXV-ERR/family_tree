@@ -41,6 +41,14 @@ export const RELATION_HINTS: Record<string, string> = {
   'sister-in-law': "spouse's sister or brother's wife",
   'son-in-law': "daughter's husband", 'daughter-in-law': "son's wife",
   'in-law': "in-law",
+  // great-grandparents / -children (gendered)
+  'great-grandfather': "great-grandfather", 'great-grandmother': "great-grandmother",
+  'great-grandson': "great-grandson", 'great-granddaughter': "great-granddaughter",
+  // great-aunts / -uncles + grand-nieces / -nephews
+  'great-uncle': "grandparent's brother", 'great-aunt': "grandparent's sister",
+  'grand-nephew': "nephew's son / grand-nephew", 'grand-niece': "niece's daughter / grand-niece",
+  // removed cousins
+  'cousin-once-removed': "cousin once removed (parent's cousin or cousin's child)",
   // distant + generic fallbacks
   'great-grandparent': "great-grandparent", 'great-grandchild': "great-grandchild",
   parent: "parent", child: "child", sibling: "sibling",
