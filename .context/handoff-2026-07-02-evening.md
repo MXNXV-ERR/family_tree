@@ -17,8 +17,9 @@ Dev server: `cd mobile && npx expo start --web --port 8082` (shot scripts expect
 10. **Face match**: `/facematch?master=<id>` matches across combined members (Scan button in master toolbar); upload flow now picks raw + manual `CropSheet` (`src/components/CropSheet.tsx` — fixed square, drag + zoom buttons, cross-platform).
 
 ## Task board (persisted harness tasks)
-Done: #1 combined lines, #2 FM master, #3 FM crop, #4 family-info grid.
-Open: **#5 notifications (expo-notifications approved to install — re-add react-native-worklets@0.8.1 after!), #6 GEDCOM, #7 activity log + polish, #9 Seetharam data nudges (dates missing/junk 2000-01-01+2001-01-01; "You" node = Seetharam not Jatin), #8 export FULL redesign LAST** (user picked; current: static dark SVGs, radial locked depth 1 at ExportPanel.tsx:38, no network export, PDF weak — see flaws/exported pdf.pdf).
+Done: #1 combined lines, #2 FM master, #3 FM crop, #4 family-info grid, #5 notifications (expo-notifications installed, worklets re-pinned 0.8.1; toggle in Settings; sync effect in home; NATIVE FIRING NEEDS EAS DEV BUILD), #6 GEDCOM (shared/gedcom.ts round-trip-tested; ExportPanel tile + .ged import), #7 activity trail (firebase/activity.ts + choke-point logging in firestore.ts + FamilyInfoPanel section + home skeleton/nudge — **USER MUST RUN `firebase deploy --only firestore:rules`** for the new activity rules).
+Late adds also done: network legend chips toggle edge kinds (siblings inferred, off default), edges anchor avatar circles, kinship english "Mother's/Father's cousin".
+Open: **#9 Seetharam data nudges (USER: birth dates missing/junk 2000-01-01+2001-01-01; "You" node = Seetharam not Jatin), #8 export FULL redesign LAST** (user picked; current: static dark SVGs, radial locked depth 1 at ExportPanel.tsx:38, no network export, PDF weak — spec first).
 B-hardening stays OFF (do not touch Google sign-in).
 
 ## Test data
