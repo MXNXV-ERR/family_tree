@@ -1,5 +1,11 @@
 # Handoff — 2026-07-02 evening (supersedes handoff-2026-07-02.md)
 
+## Late-night batch (after this handoff was first written)
+1. **Network focus carry-over fix**: NetworkView node TAP now also `setFocusId` (was select-only; long-press unchanged) — person picked in Network stays focused in Tree/Radial/Timeline. Verified via sub-bar "kinship around <name>".
+2. **First-name viz labels**: `shared/displayName.ts displayLabels()` — first name only; duplicate firsts get "Ravi K."; if that still collides → full name. Setting `firstNames` (SettingsContext, DEFAULT ON) + "First names in visuals" toggle. Applied in Tree/Radial/Timeline/Network node labels only (FocusBar/tooltips/profiles keep full names).
+3. **Family calendar** (`components/CalendarPanel.tsx` + pure `shared/occasions.ts`): month grid (dots: birthday teal / anniversary rose / event amber), occasion list w/ turns-N & Nth-anniversary, per-item "+ Google" template link (RRULE:FREQ=YEARLY for annual), "Export all as .ics" via saveText (import into Google/Apple/Outlook). Entry points: desktop toolbar calendar IconBtn + drawer type 'calendar'; SettingsPanel "Family calendar" row (prop `onOpenCalendar`); web reminders toggle now opens the calendar instead of the dead-end message; mobile home quick-tool "Calendar" + BottomSheet. IconBtn got accessibilityLabel=name (aria for scripts).
+4. Verify scripts: `scripts/shot-calendar.mjs` (desktop, asserts focus-carry + ics download + settings rows), `shot-calendar-mobile.mjs`. All green, zero console errors, tsc clean.
+
 Branch `fable_react`, all work committed, `npx tsc --noEmit` clean.
 Dev server: `cd mobile && npx expo start --web --port 8082` (shot scripts expect 8082; user's own often on 8081).
 

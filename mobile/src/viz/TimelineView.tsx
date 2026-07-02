@@ -16,6 +16,7 @@ import { Slider } from '../ui/Slider';
 import { Icon, type IconName } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
 import { yearOf, computeGenerations } from '../shared/adjacency';
+import { displayLabels } from '../shared/displayName';
 import { relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
@@ -34,8 +35,9 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { years } = useSettings();
+  const { years, firstNames } = useSettings();
   const { width: screenW } = useWindowDimensions();
+  const nameLabels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
   const [mode, setMode] = useState<Mode>('bar');
   const [pxPerYear, setPxPerYear] = useState(8);
   const [userZoomed, setUserZoomed] = useState(false);
@@ -248,7 +250,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                       <Avatar m={m} size={26} ring={isSel ? c.accent : undefined} />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text numberOfLines={1} style={{ color: isSel ? c.accent : c.ink, fontFamily: font.sansSemi, fontSize: 11.5, flexShrink: 1 }}>{m.name}</Text>
+                          <Text numberOfLines={1} style={{ color: isSel ? c.accent : c.ink, fontFamily: font.sansSemi, fontSize: 11.5, flexShrink: 1 }}>{nameLabels.get(m.id) ?? m.name}</Text>
                           {isMe ? (
                             <View style={{ backgroundColor: c.accent, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 }}>
                               <Text style={{ color: c.accentInk, fontFamily: font.sansHeavy, fontSize: 7 }}>YOU</Text>

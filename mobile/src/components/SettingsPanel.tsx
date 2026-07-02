@@ -17,7 +17,7 @@ import { SheetHead, Toggle } from './panelChrome';
 import { UserProfilePanel } from './UserProfilePanel';
 import { remindersSupported, requestReminderPermission, clearReminders } from '../notifications/reminders';
 
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void; onOpenCalendar?: () => void }) {
   const { c, mode, setMode } = useTheme();
   const s = useSettings();
   const { signOut, user } = useAuth();
@@ -72,6 +72,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   type BoolKey = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings];
   const rows: [BoolKey, string, IconName][] = [
     ['years', 'Show birth years', 'cake'],
+    ['firstNames', 'First names in visuals', 'users'],
     ['glass', 'Glass surfaces', 'grid'],
     ['motion', 'Motion & animation', 'sparkles'],
   ];
@@ -86,7 +87,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       await clearReminders();
       return;
     }
-    if (!remindersSupported) { setRemMsg('Reminders fire from the mobile app — not available on web.'); return; }
+    if (!remindersSupported) {
+      // Web can't schedule notifications — the Family calendar is the answer
+      // there; open it right away when the host screen wired it up.
+      setRemMsg('Notifications fire from the phone app — on web, use the Family calendar below.');
+      onOpenCalendar?.();
+      return;
+    }
     const ok = await requestReminderPermission();
     if (!ok) { setRemMsg('Notification permission was denied.'); return; }
     s.setOption('reminders', true);
@@ -167,7 +174,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   <Toggle on={s[k]} onPress={() => s.setOption(k, !s[k])} />
                 </View>
               ))}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderBottomWidth: onOpenCalendar ? 1 : 0, borderColor: c.lineSoft }}>
                 <Icon name="calendar" size={18} color={c.mute} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: c.ink, fontFamily: font.sansMed, fontSize: 14.5 }}>Birthday & anniversary reminders</Text>
@@ -175,6 +182,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 </View>
                 <Toggle on={s.reminders} onPress={toggleReminders} />
               </View>
+              {onOpenCalendar ? (
+                <Pressable onPress={onOpenCalendar} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, opacity: pressed ? 0.6 : 1 })}>
+                  <Icon name="heart" size={18} color={c.mute} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: c.ink, fontFamily: font.sansMed, fontSize: 14.5 }}>Family calendar</Text>
+                    <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, marginTop: 2 }}>Birthdays, anniversaries & events · add to Google Calendar</Text>
+                  </View>
+                  <Icon name="chevR" size={17} color={c.faint} />
+                </Pressable>
+              ) : null}
             </View>
           </GlassSurface>
         </View>

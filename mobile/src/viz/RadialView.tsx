@@ -14,6 +14,7 @@ import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
 import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { layoutRadial, type RadialPos } from '../shared/radialLayout';
 import { initials, lifespan } from '../shared/adjacency';
+import { displayLabels } from '../shared/displayName';
 import { relToMe, relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
@@ -27,7 +28,9 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
+  const { firstNames } = useSettings();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const labels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
   const [depth, setDepth] = useState(1);
   // Furthest ring that actually has someone on it — lets the slider reach the
   // whole family (capped for sanity) instead of a fixed 3, so distant kin appear.
@@ -147,7 +150,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
             const dim = !!highlight && !highlight.has(id);
             const showPill = !isFocus && (!highlight || (highlight && highlight.has(id)));
             return (
-              <RadialCard key={id} m={m} c={c} cx={p.x + C} cy={p.y + C} pos={p}
+              <RadialCard key={id} m={m} c={c} label={labels.get(id) ?? m.name} cx={p.x + C} cy={p.y + C} pos={p}
                 isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id} tint={colorOf?.(id)}
                 relLabel={showPill ? relationLabel(members, relationships, id, focusId, terms) : undefined}
                 relColor={relColor(node?.viaRel)}
@@ -198,8 +201,8 @@ function RelationLegend({ c }: { c: Palette }) {
   );
 }
 
-function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel, relColor, tint, onPress, onFocus }: {
-  m: Member; c: Palette; cx: number; cy: number; pos: RadialPos; isFocus: boolean; isMe: boolean;
+function RadialCard({ m, c, label, cx, cy, pos, isFocus, isMe, dim, selected, relLabel, relColor, tint, onPress, onFocus }: {
+  m: Member; c: Palette; label: string; cx: number; cy: number; pos: RadialPos; isFocus: boolean; isMe: boolean;
   dim: boolean; selected: boolean; relLabel?: string; relColor: string; tint?: string; onPress: () => void; onFocus: () => void;
 }) {
   const { years } = useSettings();
@@ -224,7 +227,7 @@ function RadialCard({ m, c, cx, cy, pos, isFocus, isMe, dim, selected, relLabel,
                   : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
               </View>
               <View style={{ flex: w > 130 ? 1 : undefined, alignItems: w > 130 ? 'flex-start' : 'center' }}>
-                <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{m.name}</Text>
+                <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{label}</Text>
                 {years ? <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text> : null}
                 {isMe ? <Text style={{ color: c.accent, fontSize: 9, fontWeight: '800' }}>YOU</Text> : null}
               </View>
