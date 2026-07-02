@@ -13,6 +13,7 @@ export interface Settings {
   years: boolean;     // show birth/death year labels
   glass: boolean;     // translucent glass surfaces vs. solid
   motion: boolean;    // entrance/count-up animations
+  reminders: boolean; // birthday/anniversary local notifications (native)
   textSize: TextSize; // global text/UI scale
 }
 
@@ -20,7 +21,7 @@ export interface SettingsCtx extends Settings {
   setOption: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
 }
 
-const DEFAULTS: Settings = { years: true, glass: true, motion: true, textSize: 'md' };
+const DEFAULTS: Settings = { years: true, glass: true, motion: true, reminders: false, textSize: 'md' };
 const KEY = 'ft.settings';
 
 const Ctx = createContext<SettingsCtx>({ ...DEFAULTS, setOption: () => {} });

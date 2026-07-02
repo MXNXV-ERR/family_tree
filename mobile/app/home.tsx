@@ -23,6 +23,7 @@ import { Avatar, IconBtn, SectionLabel, Counter, ThemeToggle, Rise } from '../sr
 import { useResponsive } from '../src/ui/useResponsive';
 import { DesktopWorkspace } from '../src/desktop/DesktopWorkspace';
 import { lifespan, computeGenerations, countCouples } from '../src/shared/adjacency';
+import { remindersSupported, syncReminders } from '../src/notifications/reminders';
 import type { Member } from '../src/shared/types';
 
 // On wide web viewports the home route becomes the desktop workspace; phones and
@@ -38,7 +39,7 @@ export default function Home() {
 function MobileHome() {
   const { c } = useTheme();
   const { user, loading: authLoading } = useAuth();
-  const { years } = useSettings();
+  const { years, reminders } = useSettings();
   const { activeTreeId, activeFamily, families } = useFamily();
   const { members, relationships, treeMetadata, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
@@ -82,6 +83,15 @@ function MobileHome() {
       reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
     }
   }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
+
+  // Re-schedule birthday/anniversary reminders whenever the tree data changes
+  // (native only; a no-op on web / when the toggle is off). Debounced a little
+  // so a burst of snapshot updates doesn't thrash the scheduler.
+  useEffect(() => {
+    if (!reminders || !remindersSupported || loading || !members.length) return;
+    const t = setTimeout(() => { syncReminders(members, relationships); }, 1500);
+    return () => clearTimeout(t);
+  }, [reminders, members, relationships, loading]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
