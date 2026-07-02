@@ -5,13 +5,15 @@
 // recentre. Renders with react-native-svg inside the shared zoom/pan canvas, so
 // it works on web and native (no DOM-only graph lib).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import Svg, { Line as SvgLine } from 'react-native-svg';
 import { useTheme, font } from '../theme/theme';
+import { useSettings } from '../theme/SettingsContext';
 import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
 import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { layoutNetwork } from '../shared/networkLayout';
 import { initials } from '../shared/adjacency';
+import { displayLabels } from '../shared/displayName';
 import { relToMe } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
@@ -25,9 +27,11 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
+  const { firstNames } = useSettings();
   const canvasRef = useRef<CanvasHandle>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const lastPress = useRef(0);
+  const labels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
 
   const positions = useMemo(() => layoutNetwork(members, relationships), [members, relationships]);
 
@@ -116,13 +120,18 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
             const tint = colorOf?.(m.id);
             const nodeBorder = isMe || isFocus ? c.accent : tint ?? c.line;
             return (
-              <Pressable key={m.id} onPress={() => { lastPress.current = Date.now(); setSelId(m.id); }}
+              <Pressable key={m.id}
+                // Tap selects AND sets the shared focus — so the person picked
+                // here stays focused when switching to Tree/Radial/Timeline.
+                onPress={() => { lastPress.current = Date.now(); setSelId(m.id); setFocusId(m.id); }}
                 onLongPress={() => setFocusId(m.id)}
                 style={{ position: 'absolute', left: p.x - 60, top: p.y - 16, width: 120, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: dim ? 0.22 : 1 }}>
-                <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: av, borderWidth: isMe || isFocus || tint ? 2 : 1, borderColor: nodeBorder, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: c.inkSoft, fontFamily: font.sansBold, fontSize: 10 }}>{initials(m.name)}</Text>
+                <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: av, borderWidth: isMe || isFocus || tint ? 2 : 1, borderColor: nodeBorder, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {m.photoUrl
+                    ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
+                    : <Text style={{ color: c.inkSoft, fontFamily: font.sansBold, fontSize: 10 }}>{initials(m.name)}</Text>}
                 </View>
-                <Text numberOfLines={1} style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 11 }}>{m.name}</Text>
+                <Text numberOfLines={1} style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 11 }}>{labels.get(m.id) ?? m.name}</Text>
               </Pressable>
             );
           })}

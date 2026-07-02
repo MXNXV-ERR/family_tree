@@ -31,6 +31,7 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import { FamilyInfoPanel } from '../components/FamilyInfoPanel';
 import { FamilyPhotoFlow } from '../components/FamilyPhotoFlow';
 import { EventsPanel } from '../components/EventsPanel';
+import { CalendarPanel } from '../components/CalendarPanel';
 import { MasterEditGrid } from '../components/MasterEditGrid';
 import { FamilyPickerPanel } from '../components/FamilyPickerPanel';
 import { ChatPanel } from '../components/ChatPanel';
@@ -41,7 +42,7 @@ import { canEditMember, canDeleteMember, canEditRelationship, canImport, canMana
 import type { Member, Relationship } from '../shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline' | 'network' | 'master';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -72,7 +73,12 @@ export function DesktopWorkspace() {
       reconcileFamilyIndex(user.uid, activeTreeId, { name: treeMetadata.name, color: activeFamily.color });
     }
   }, [treeMetadata?.name, activeFamily?.name, activeFamily?.color, activeTreeId, user]);
-  useEffect(() => { setZoomApi(null); }, [view]); // active view re-registers its zoom
+  // Don't blanket-reset zoomApi on view change: child effects run BEFORE parent
+  // effects, so the incoming view registers its api first and a reset here would
+  // null it right back — leaving the sub-bar zoom permanently disabled. Only the
+  // master edit grid (no canvas) clears it; a swapped-out view's stale closures
+  // are safe no-ops (`canvasRef.current?.`) until the next view re-registers.
+  useEffect(() => { if (view === 'master') setZoomApi(null); }, [view]);
 
   const matches = query.trim() ? members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6) : [];
 
@@ -182,6 +188,7 @@ export function DesktopWorkspace() {
           </View>
           <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
           <IconBtn name="users" tone="ghost" onPress={() => setDrawer({ type: 'members' })} />
+          <IconBtn name="calendar" tone="ghost" onPress={() => setDrawer({ type: 'calendar' })} />
           <IconBtn name="download" tone="ghost" onPress={() => setDrawer({ type: 'export' })} />
           <IconBtn name="settings" tone="ghost" onPress={() => setDrawer({ type: 'settings' })} />
           <ThemeToggle />
@@ -256,7 +263,11 @@ export function DesktopWorkspace() {
             onSubmit={(data) => saveMember(data, drawer.id)} onCancel={() => setDrawer(null)}
             onDelete={drawer.id && canDeleteMember(role) ? () => removeMember(drawer.id!) : undefined} />
         ) : null}
-        {drawer?.type === 'settings' ? <SettingsPanel onClose={() => setDrawer(null)} /> : null}
+        {drawer?.type === 'settings' ? <SettingsPanel onClose={() => setDrawer(null)} onOpenCalendar={() => setDrawer({ type: 'calendar' })} /> : null}
+        {drawer?.type === 'calendar' ? (
+          <CalendarPanel members={members} relationships={relationships} events={events}
+            treeName={activeFamily?.name ?? treeMetadata?.name} onClose={() => setDrawer(null)} />
+        ) : null}
         {drawer?.type === 'family' && activeTreeId ? (
           <FamilyInfoPanel treeId={activeTreeId} family={activeFamily} members={members} relationships={relationships}
             onClose={() => setDrawer(null)} onSwitchFamily={() => setDrawer({ type: 'familyPicker' })}

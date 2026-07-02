@@ -111,7 +111,9 @@ export default function MasterScreen() {
 
   useEffect(() => { setFocusId(''); setDrawerId(null); setPanel(null); setSearchOpen(false); }, [id]);
   useEffect(() => { if (!focusId && members.length) setFocusId(meId ?? members[0].id); }, [members, meId, focusId]);
-  useEffect(() => { setZoomApi(null); }, [view]);
+  // No zoomApi reset on view change — the incoming view registers its api in a
+  // child effect BEFORE this parent effect would run, so a reset here nulls the
+  // fresh api and the sub-bar zoom stays disabled forever.
 
   // Desktop opens the profile in the right drawer; mobile navigates full-screen.
   const openProfile = (m: Member) => {

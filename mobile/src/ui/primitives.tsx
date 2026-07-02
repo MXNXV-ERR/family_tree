@@ -41,7 +41,8 @@ export function IconBtn({ name, onPress, size = 42, icon = 20, tone = 'ghost', s
   } as const;
   const t = tones[tone];
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={name}
+      style={({ pressed }) => [{
       width: size, height: size, borderRadius: 13,
       alignItems: 'center', justifyContent: 'center',
       backgroundColor: t.bg, borderWidth: 1, borderColor: t.brd,

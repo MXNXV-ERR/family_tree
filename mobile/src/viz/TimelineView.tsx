@@ -16,6 +16,7 @@ import { Slider } from '../ui/Slider';
 import { Icon, type IconName } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
 import { yearOf, computeGenerations } from '../shared/adjacency';
+import { displayLabels } from '../shared/displayName';
 import { relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
 import type { Adjacency } from '../shared/adjacency';
@@ -34,16 +35,18 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { years } = useSettings();
+  const { years, firstNames } = useSettings();
   const { width: screenW } = useWindowDimensions();
+  const nameLabels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
   const [mode, setMode] = useState<Mode>('bar');
   const [pxPerYear, setPxPerYear] = useState(8);
   const [userZoomed, setUserZoomed] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
+  const [kinDepth, setKinDepth] = useState(1); // highlight radius around the selected person
   const [tip, setTip] = useState<{ text: string } | null>(null);
   const [evTip, setEvTip] = useState<FamilyEvent | null>(null);
   const currentYear = new Date().getFullYear();
-  const zoom = (fn: (p: number) => number) => { setUserZoomed(true); setPxPerYear((p) => Math.max(2, Math.min(60, fn(p)))); };
+  const zoom = (fn: (p: number) => number) => { setUserZoomed(true); setPxPerYear((p) => Math.max(0.5, Math.min(60, fn(p)))); };
 
   const generations = useMemo(() => computeGenerations(members, relationships), [members, relationships]);
 
@@ -61,9 +64,11 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
     return { minY: Math.floor(min / 10) * 10, maxY: Math.ceil(max / 10) * 10 };
   }, [members, currentYear]);
 
-  // Default-fit so the whole span (incl. today + living "fading tails") shows
-  // without scrolling. Only until the user manually zooms.
-  const fitPx = Math.max(2, Math.min(20, (screenW - LABEL_W - 24) / Math.max(1, maxY - minY)));
+  // Default-fit so the whole span (incl. today + living "fading tails") fills
+  // the screen width exactly, until the user manually zooms. No 2..20 clamp:
+  // it capped small families at 20 (half-empty screen) and floored long spans
+  // at 2 (forced horizontal scroll).
+  const fitPx = Math.max(0.5, (screenW - LABEL_W - 24) / Math.max(1, maxY - minY));
   useEffect(() => { if (!userZoomed) setPxPerYear(fitPx); }, [fitPx, userZoomed]);
 
   // Expose zoom so the desktop sub-bar can drive this view.
@@ -79,13 +84,14 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
   const contentW = (maxY - minY) * pxPerYear;
   const xOf = (year: number) => (year - minY) * pxPerYear;
 
-  // Relationship of every neighbour to the SELECTED (focused) person.
+  // Relationship of every neighbour to the SELECTED (focused) person, out to
+  // the kin-depth the toolbar slider chose (1 = immediate family).
   const highlight = useMemo(() => {
     if (!selId) return null;
     const labels = new Map<string, string>();
-    for (const [id, n] of adjacency.neighborhood(selId, 1)) labels.set(id, n.label);
+    for (const [id, n] of adjacency.neighborhood(selId, kinDepth)) labels.set(id, n.label);
     return labels;
-  }, [selId, adjacency]);
+  }, [selId, kinDepth, adjacency]);
 
   // Life events per member: birth, marriage (when the spouse edge carries a
   // marriageDate), children's births, death.
@@ -164,6 +170,12 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
           })}
         </View>
         <View style={{ flex: 1, minWidth: 8 }} />
+        {/* kin depth — how far the selection highlight reaches (like radial's rings) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: radius.md }}>
+          <Icon name="users" size={14} color={c.mute} />
+          <Slider value={kinDepth} min={1} max={5} step={1} width={72} onChange={setKinDepth} />
+          <Text style={{ color: c.inkSoft, fontFamily: font.monoMed, fontSize: 11, width: 38 }}>kin {kinDepth}</Text>
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: radius.md }}>
           <Icon name="calendar" size={14} color={c.mute} />
           <Slider value={pxPerYear} min={2} max={60} step={1} width={108} onChange={(v) => { setUserZoomed(true); setPxPerYear(v); }} />
@@ -171,8 +183,8 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
         </View>
         {!hideZoomUI && (
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {([['minus', () => zoom((p) => p / 1.3)], ['plus', () => zoom((p) => p * 1.3)], ['target', () => { setUserZoomed(false); setPxPerYear(fitPx); }]] as [IconName, () => void][]).map(([n, fn]) => (
-              <Pressable key={n} onPress={fn} style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.92 : 1 }] })}>
+            {([['minus', 'zoom out', () => zoom((p) => p / 1.3)], ['plus', 'zoom in', () => zoom((p) => p * 1.3)], ['target', 'zoom fit', () => { setUserZoomed(false); setPxPerYear(fitPx); }]] as [IconName, string, () => void][]).map(([n, label, fn]) => (
+              <Pressable key={n} onPress={fn} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.92 : 1 }] })}>
                 <Icon name={n} size={16} color={c.inkSoft} />
               </Pressable>
             ))}
@@ -248,7 +260,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                       <Avatar m={m} size={26} ring={isSel ? c.accent : undefined} />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text numberOfLines={1} style={{ color: isSel ? c.accent : c.ink, fontFamily: font.sansSemi, fontSize: 11.5, flexShrink: 1 }}>{m.name}</Text>
+                          <Text numberOfLines={1} style={{ color: isSel ? c.accent : c.ink, fontFamily: font.sansSemi, fontSize: 11.5, flexShrink: 1 }}>{nameLabels.get(m.id) ?? m.name}</Text>
                           {isMe ? (
                             <View style={{ backgroundColor: c.accent, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 }}>
                               <Text style={{ color: c.accentInk, fontFamily: font.sansHeavy, fontSize: 7 }}>YOU</Text>

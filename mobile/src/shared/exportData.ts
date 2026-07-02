@@ -1,11 +1,16 @@
 // Pure export builders (no platform IO). Produce strings/base64 for each format;
-// the platform exporter writes + shares them. Tree SVG is generated from the
-// layout math (clean vector, no foreignObject).
+// the platform exporter writes + shares them. View SVGs are generated from the
+// layout math (clean vectors, no foreignObject) in a light "paper" or dark
+// palette, with member photos embedded when they're inline data URIs (remote
+// URLs fall back to initials — external refs don't load inside svg-as-img and
+// would taint the PNG canvas).
 import * as XLSX from 'xlsx';
 import type { Member, Relationship } from './types';
 import { buildAdjacency, lifespan, initials, computeGenerations, yearOf } from './adjacency';
 import { layoutPyramid, NODE_W, NODE_H } from './treeLayout';
 import { layoutRadial } from './radialLayout';
+import { layoutNetwork } from './networkLayout';
+import { displayLabels } from './displayName';
 
 export interface TreeExport {
   version: 1;
@@ -49,119 +54,238 @@ export function buildXLSXBase64(members: Member[], relationships: Relationship[]
   return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
 }
 
-const DARK = { bg: '#0d0d14', paper: '#15151f', ink: '#ece6d6', mute: '#847d6c', line: '#2a2a36', accent: '#8b8bff', m: '#1a1f2e', f: '#28181d' };
-const xmlEsc = (s: string) => s.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]!));
+// ---------------------------------------------------------------------------
+// View SVGs — themed, photo-aware
+// ---------------------------------------------------------------------------
 
-// Standalone SVG of the pyramid tree.
-export function buildTreeSVG(members: Member[], relationships: Relationship[]): string {
-  const adj = buildAdjacency(members, relationships);
-  const { positions, lines, width, height } = layoutPyramid(members, adj);
-  const linePaths = lines.map((l) => `<path d="${l.d}" fill="none" stroke="${DARK.accent}" stroke-width="1.5" opacity="0.5"/>`).join('');
-  const nodes = [...positions.entries()].map(([id, p]) => {
-    const m = adj.get(id); if (!m) return '';
-    const fill = m.gender === 'female' ? DARK.f : DARK.m;
-    return `<g transform="translate(${p.x},${p.y})">`
-      + `<rect width="${NODE_W}" height="${NODE_H}" rx="12" fill="${fill}" stroke="${DARK.line}"/>`
-      + `<text x="10" y="30" fill="${DARK.ink}" font-family="sans-serif" font-size="13" font-weight="700">${xmlEsc(m.name.slice(0, 16))}</text>`
-      + `<text x="10" y="50" fill="${DARK.mute}" font-family="sans-serif" font-size="11">${xmlEsc(lifespan(m))}</text>`
-      + `</g>`;
-  }).join('');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`
-    + `<rect width="${width}" height="${height}" fill="${DARK.bg}"/>${linePaths}${nodes}</svg>`;
+export type ExportTheme = 'light' | 'dark';
+export type ExportView = 'tree' | 'radial' | 'timeline' | 'network';
+
+export interface ViewSVGOpts {
+  focusId?: string;   // radial centre
+  depth?: number;     // radial ring depth (1–5)
+  theme?: ExportTheme;
 }
 
-const emptySVG = () =>
-  `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="420" height="200" viewBox="0 0 420 200">`
-  + `<rect width="420" height="200" fill="${DARK.bg}"/><text x="210" y="104" text-anchor="middle" fill="${DARK.mute}" font-family="sans-serif" font-size="14">Nothing to export yet</text></svg>`;
+interface Pal {
+  bg: string; card: string; ink: string; mute: string; line: string; accent: string;
+  m: string; f: string; mB: string; fB: string;          // gender fills + borders
+  parent: string; partner: string; sibling: string;      // edge kinds
+}
 
-// Standalone SVG of the radial view (focus person centred, relatives on rings).
-export function buildRadialSVG(members: Member[], relationships: Relationship[], focusId?: string, depth = 1): string {
+const PALS: Record<ExportTheme, Pal> = {
+  dark: {
+    bg: '#0d0d14', card: '#15151f', ink: '#ece6d6', mute: '#847d6c', line: '#2a2a36', accent: '#8f8bff',
+    m: '#1a1f2e', f: '#28181d', mB: '#33406b', fB: '#6b3346',
+    parent: '#8f8bff', partner: '#ff8caf', sibling: '#6fb1ff',
+  },
+  light: {
+    bg: '#faf7ef', card: '#fffdf8', ink: '#2b2620', mute: '#8c8475', line: '#e3ddcf', accent: '#5a4ce0',
+    m: '#eef1fa', f: '#faeef2', mB: '#b9c4e6', fB: '#e6b9c8',
+    parent: '#5a4ce0', partner: '#c8456f', sibling: '#3f72c8',
+  },
+};
+
+const SANS = 'system-ui,Segoe UI,Helvetica,Arial,sans-serif';
+const xmlEsc = (s: string) => s.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]!));
+const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+// Only inline data URIs render inside svg-as-img and rasterise without tainting
+// the canvas; anything else (https, file) falls back to the initials avatar.
+const embeddablePhoto = (m: Member) => (m.photoUrl && m.photoUrl.startsWith('data:') ? m.photoUrl : null);
+
+// Circular avatar: photo (clipped) when embeddable, else initials on a gender
+// tint. Appends its clipPath to `defs`; `idc` keeps ids unique per document.
+function avatarSVG(m: Member, cx: number, cy: number, r: number, P: Pal, defs: string[], idc: { n: number }, ringColor?: string, ringW = 1.5): string {
+  const fill = m.gender === 'female' ? P.f : m.gender === 'male' ? P.m : P.card;
+  const ring = ringColor ?? (m.gender === 'female' ? P.fB : m.gender === 'male' ? P.mB : P.line);
+  const photo = embeddablePhoto(m);
+  let inner: string;
+  if (photo) {
+    const id = `av${idc.n++}`;
+    defs.push(`<clipPath id="${id}"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>`);
+    inner = `<image x="${cx - r}" y="${cy - r}" width="${r * 2}" height="${r * 2}" href="${photo}" xlink:href="${photo}" clip-path="url(#${id})" preserveAspectRatio="xMidYMid slice"/>`;
+  } else {
+    inner = `<text x="${cx}" y="${cy + r * 0.32}" text-anchor="middle" fill="${P.ink}" font-family="${SANS}" font-size="${Math.round(r * 0.78)}" font-weight="700">${xmlEsc(initials(m.name))}</text>`;
+  }
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>${inner}<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ring}" stroke-width="${ringW}"/>`;
+}
+
+const svgDoc = (W: number, H: number, P: Pal, defs: string[], body: string) =>
+  `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+  + (defs.length ? `<defs>${defs.join('')}</defs>` : '')
+  + `<rect width="${W}" height="${H}" fill="${P.bg}"/>${body}</svg>`;
+
+const emptySVG = (P: Pal) =>
+  svgDoc(420, 200, P, [], `<text x="210" y="104" text-anchor="middle" fill="${P.mute}" font-family="${SANS}" font-size="14">Nothing to export yet</text>`);
+
+// Pyramid tree: connector lines + node cards (avatar · name · years).
+export function buildTreeSVG(members: Member[], relationships: Relationship[], theme: ExportTheme = 'light'): string {
+  const P = PALS[theme];
+  if (!members.length) return emptySVG(P);
+  const adj = buildAdjacency(members, relationships);
+  const { positions, lines, width, height } = layoutPyramid(members, adj);
+  const defs: string[] = [];
+  const idc = { n: 0 };
+  const linePaths = lines.map((l) => `<path d="${l.d}" fill="none" stroke="${P.parent}" stroke-width="1.5" opacity="0.55"/>`).join('');
+  const nodes = [...positions.entries()].map(([id, p]) => {
+    const m = adj.get(id); if (!m) return '';
+    const border = m.gender === 'female' ? P.fB : m.gender === 'male' ? P.mB : P.line;
+    const fill = m.gender === 'female' ? P.f : m.gender === 'male' ? P.m : P.card;
+    return `<g transform="translate(${p.x},${p.y})">`
+      + `<rect width="${NODE_W}" height="${NODE_H}" rx="12" fill="${fill}" stroke="${border}"/>`
+      + avatarSVG(m, 26, NODE_H / 2, 16, P, defs, idc)
+      + `<text x="48" y="${NODE_H / 2 - 3}" fill="${P.ink}" font-family="${SANS}" font-size="12.5" font-weight="700">${xmlEsc(clip(m.name, 14))}</text>`
+      + `<text x="48" y="${NODE_H / 2 + 13}" fill="${P.mute}" font-family="${SANS}" font-size="10.5">${xmlEsc(lifespan(m))}</text>`
+      + `</g>`;
+  }).join('');
+  return svgDoc(width, height, P, defs, linePaths + nodes);
+}
+
+// Radial rings around a chosen centre person, unlockable depth 1–5.
+export function buildRadialSVG(members: Member[], relationships: Relationship[], focusId?: string, depth = 2, theme: ExportTheme = 'light'): string {
+  const P = PALS[theme];
   const adj = buildAdjacency(members, relationships);
   const focus = focusId && adj.get(focusId) ? focusId : (members[0]?.id ?? '');
-  if (!focus) return emptySVG();
-  const { positions, ringRadii, nodes } = layoutRadial(adj, focus, Math.max(1, Math.min(3, Math.round(depth))));
-  const PAD = 110;
+  if (!focus) return emptySVG(P);
+  const { positions, ringRadii, nodes } = layoutRadial(adj, focus, Math.max(1, Math.min(5, Math.round(depth))));
+  const PAD = 120;
   let minX = 0, minY = 0, maxX = 0, maxY = 0;
   positions.forEach((p) => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
   const W = Math.round(maxX - minX + PAD * 2);
   const H = Math.round(maxY - minY + PAD * 2);
   const ox = -minX + PAD, oy = -minY + PAD;
-  const rings = ringRadii.map((r) => `<circle cx="${ox}" cy="${oy}" r="${r}" fill="none" stroke="${DARK.accent}" stroke-width="1.5" opacity="0.28"/>`).join('');
+  const defs: string[] = [];
+  const idc = { n: 0 };
+  const rings = ringRadii.map((r) => `<circle cx="${ox}" cy="${oy}" r="${r}" fill="none" stroke="${P.accent}" stroke-width="1.5" opacity="0.25"/>`).join('');
   const edges = [...nodes.entries()].map(([id, n]) => {
     if (n.depth === 0) return '';
     const from = (n.viaId ? positions.get(n.viaId) : positions.get(focus)) ?? positions.get(focus)!;
     const to = positions.get(id); if (!to) return '';
-    return `<line x1="${(from.x + ox).toFixed(1)}" y1="${(from.y + oy).toFixed(1)}" x2="${(to.x + ox).toFixed(1)}" y2="${(to.y + oy).toFixed(1)}" stroke="${DARK.accent}" stroke-width="1.4" opacity="0.4"/>`;
+    return `<line x1="${(from.x + ox).toFixed(1)}" y1="${(from.y + oy).toFixed(1)}" x2="${(to.x + ox).toFixed(1)}" y2="${(to.y + oy).toFixed(1)}" stroke="${P.accent}" stroke-width="1.3" opacity="0.4"/>`;
   }).join('');
   const cards = [...positions.entries()].map(([id, p]) => {
     const m = adj.get(id); if (!m) return '';
     const isFocus = id === focus;
     const r = isFocus ? 30 : 22;
-    const fill = m.gender === 'female' ? DARK.f : m.gender === 'male' ? DARK.m : DARK.paper;
-    return `<g transform="translate(${(p.x + ox).toFixed(1)},${(p.y + oy).toFixed(1)})">`
-      + `<circle r="${r}" fill="${fill}" stroke="${isFocus ? DARK.accent : DARK.line}" stroke-width="${isFocus ? 2.5 : 1.5}"/>`
-      + `<text y="4" text-anchor="middle" fill="${DARK.ink}" font-family="sans-serif" font-size="${isFocus ? 13 : 11}" font-weight="700">${xmlEsc(initials(m.name))}</text>`
-      + `<text y="${r + 16}" text-anchor="middle" fill="${DARK.ink}" font-family="sans-serif" font-size="11" font-weight="600">${xmlEsc(m.name.slice(0, 18))}</text>`
+    const cx = p.x + ox, cy = p.y + oy;
+    return `<g>`
+      + avatarSVG(m, cx, cy, r, P, defs, idc, isFocus ? P.accent : undefined, isFocus ? 2.5 : 1.5)
+      + `<text x="${cx}" y="${cy + r + 15}" text-anchor="middle" fill="${P.ink}" font-family="${SANS}" font-size="11" font-weight="600">${xmlEsc(clip(m.name, 18))}</text>`
       + `</g>`;
   }).join('');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-    + `<rect width="${W}" height="${H}" fill="${DARK.bg}"/>${rings}${edges}${cards}</svg>`;
+  return svgDoc(W, H, P, defs, rings + edges + cards);
 }
 
-// Standalone SVG of the timeline view (one lifespan bar per member, year axis).
-export function buildTimelineSVG(members: Member[], _relationships: Relationship[]): string {
+// Timeline: one lifespan bar per member on a shared year axis.
+export function buildTimelineSVG(members: Member[], _relationships: Relationship[], theme: ExportTheme = 'light'): string {
+  const P = PALS[theme];
   const rows = members
     .map((m) => ({ m, b: yearOf(m.birthDate), d: yearOf(m.deathDate) }))
     .filter((x): x is { m: Member; b: number; d: number | undefined } => !!x.b)
     .sort((a, b) => a.b - b.b);
-  if (!rows.length) return emptySVG();
+  if (!rows.length) return emptySVG(P);
   const nowY = new Date().getFullYear();
   const minYear = Math.min(...rows.map((x) => x.b));
   const maxYear = Math.max(nowY, ...rows.map((x) => x.d ?? nowY));
-  const leftPad = 175, rightPad = 40, topPad = 56, rowH = 30, axisH = 34, plotW = 760;
+  const leftPad = 190, rightPad = 40, topPad = 56, rowH = 32, axisH = 34, plotW = 760;
   const W = leftPad + plotW + rightPad;
   const H = topPad + rows.length * rowH + axisH;
   const span = Math.max(1, maxYear - minYear);
   const xFor = (y: number) => leftPad + ((y - minYear) / span) * plotW;
+  const defs: string[] = [];
+  const idc = { n: 0 };
   const grid: string[] = [];
   for (let y = Math.ceil(minYear / 10) * 10; y <= maxYear; y += 10) {
     const x = xFor(y).toFixed(1);
-    grid.push(`<line x1="${x}" y1="${topPad - 10}" x2="${x}" y2="${H - axisH}" stroke="${DARK.line}" stroke-width="1" opacity="0.5"/>`);
-    grid.push(`<text x="${x}" y="${H - axisH + 20}" text-anchor="middle" fill="${DARK.mute}" font-family="sans-serif" font-size="11">${y}</text>`);
+    grid.push(`<line x1="${x}" y1="${topPad - 10}" x2="${x}" y2="${H - axisH}" stroke="${P.line}" stroke-width="1" opacity="0.6"/>`);
+    grid.push(`<text x="${x}" y="${H - axisH + 20}" text-anchor="middle" fill="${P.mute}" font-family="${SANS}" font-size="11">${y}</text>`);
   }
   const bars = rows.map((x, i) => {
     const y = topPad + i * rowH;
     const x1 = xFor(x.b), x2 = xFor(x.d ?? nowY);
-    const fill = x.m.gender === 'female' ? DARK.f : x.m.gender === 'male' ? DARK.m : DARK.paper;
+    const fill = x.m.gender === 'female' ? P.f : x.m.gender === 'male' ? P.m : P.card;
+    const stroke = x.m.gender === 'female' ? P.fB : x.m.gender === 'male' ? P.mB : P.line;
     return `<g transform="translate(0,${y})">`
-      + `<text x="${leftPad - 12}" y="4" text-anchor="end" fill="${DARK.ink}" font-family="sans-serif" font-size="12" font-weight="600">${xmlEsc(x.m.name.slice(0, 24))}</text>`
-      + `<rect x="${x1.toFixed(1)}" y="-7" width="${Math.max(3, x2 - x1).toFixed(1)}" height="14" rx="7" fill="${fill}" stroke="${DARK.accent}" stroke-width="1.2"/>`
-      + `<circle cx="${x1.toFixed(1)}" cy="0" r="4" fill="${DARK.accent}"/>`
-      + (x.d ? `<circle cx="${x2.toFixed(1)}" cy="0" r="3" fill="${DARK.mute}"/>` : '')
+      + avatarSVG(x.m, 24, 0, 11, P, defs, idc)
+      + `<text x="42" y="4" fill="${P.ink}" font-family="${SANS}" font-size="12" font-weight="600">${xmlEsc(clip(x.m.name, 19))}</text>`
+      + `<rect x="${x1.toFixed(1)}" y="-7" width="${Math.max(3, x2 - x1).toFixed(1)}" height="14" rx="7" fill="${fill}" stroke="${stroke}" stroke-width="1.2"/>`
+      + `<circle cx="${x1.toFixed(1)}" cy="0" r="4" fill="${P.accent}"/>`
+      + (x.d ? `<circle cx="${x2.toFixed(1)}" cy="0" r="3" fill="${P.mute}"/>` : '')
       + `</g>`;
   }).join('');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-    + `<rect width="${W}" height="${H}" fill="${DARK.bg}"/>`
-    + `<text x="${leftPad}" y="32" fill="${DARK.ink}" font-family="sans-serif" font-size="15" font-weight="700">Timeline · ${minYear}–present</text>`
-    + `${grid.join('')}${bars}</svg>`;
+  return svgDoc(W, H, P, defs,
+    `<text x="${leftPad}" y="32" fill="${P.ink}" font-family="${SANS}" font-size="15" font-weight="700">Timeline · ${minYear}–present</text>`
+    + grid.join('') + bars);
 }
 
-export type ExportView = 'tree' | 'radial' | 'timeline';
+// Network: the spring-graph layout with kin-coloured edges + legend.
+export function buildNetworkSVG(members: Member[], relationships: Relationship[], theme: ExportTheme = 'light'): string {
+  const P = PALS[theme];
+  if (!members.length) return emptySVG(P);
+  const positions = layoutNetwork(members, relationships);
+  const PAD = 130;
+  let minX = 0, minY = 0, maxX = 0, maxY = 0;
+  positions.forEach((p) => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+  const W = Math.round(maxX - minX + PAD * 2);
+  const H = Math.round(maxY - minY + PAD * 2);
+  const ox = -minX + PAD, oy = -minY + PAD;
+  const defs: string[] = [];
+  const idc = { n: 0 };
+  const edgeColor = (t: Relationship['type']) => (t === 'parent' ? P.parent : t === 'spouse' ? P.partner : P.sibling);
+  const edges = relationships
+    .filter((r) => positions.has(r.fromId) && positions.has(r.toId))
+    .map((r) => {
+      const a = positions.get(r.fromId)!, b = positions.get(r.toId)!;
+      const dash = r.type === 'spouse' && r.status === 'divorced' ? ' stroke-dasharray="5,4"' : '';
+      return `<line x1="${(a.x + ox).toFixed(1)}" y1="${(a.y + oy).toFixed(1)}" x2="${(b.x + ox).toFixed(1)}" y2="${(b.y + oy).toFixed(1)}" stroke="${edgeColor(r.type)}" stroke-width="1.3" opacity="0.5"${dash}/>`;
+    }).join('');
+  const labels = displayLabels(members, true); // dense graph → first names (dupes keep an initial)
+  const nodes = members.filter((m) => positions.has(m.id)).map((m) => {
+    const p = positions.get(m.id)!;
+    const cx = p.x + ox, cy = p.y + oy;
+    return `<g>`
+      + avatarSVG(m, cx, cy, 15, P, defs, idc)
+      + `<text x="${cx + 20}" y="${cy + 4}" fill="${P.ink}" font-family="${SANS}" font-size="11" font-weight="600">${xmlEsc(clip(labels.get(m.id) ?? m.name, 14))}</text>`
+      + `</g>`;
+  }).join('');
+  const legend = `<g transform="translate(14,14)">`
+    + `<rect width="118" height="72" rx="10" fill="${P.card}" stroke="${P.line}"/>`
+    + ([['Parent', P.parent], ['Partner', P.partner], ['Sibling', P.sibling]] as const).map(([lb, col], i) =>
+      `<line x1="12" y1="${20 + i * 19}" x2="30" y2="${20 + i * 19}" stroke="${col}" stroke-width="2.5"/>`
+      + `<text x="38" y="${24 + i * 19}" fill="${P.ink}" font-family="${SANS}" font-size="11">${lb}</text>`).join('')
+    + `</g>`;
+  return svgDoc(W, H, P, defs, edges + nodes + legend);
+}
 
 // Dispatch: build the standalone SVG for whichever view the user chose.
-export function buildViewSVG(view: ExportView, members: Member[], relationships: Relationship[], focusId?: string, depth = 1): string {
-  if (view === 'radial') return buildRadialSVG(members, relationships, focusId, depth);
-  if (view === 'timeline') return buildTimelineSVG(members, relationships);
-  return buildTreeSVG(members, relationships);
+export function buildViewSVG(view: ExportView, members: Member[], relationships: Relationship[], opts: ViewSVGOpts = {}): string {
+  const theme = opts.theme ?? 'light';
+  if (view === 'radial') return buildRadialSVG(members, relationships, opts.focusId, opts.depth ?? 2, theme);
+  if (view === 'timeline') return buildTimelineSVG(members, relationships, theme);
+  if (view === 'network') return buildNetworkSVG(members, relationships, theme);
+  return buildTreeSVG(members, relationships, theme);
 }
 
-// Full PDF summary document: cover with stats, tree snapshot, then a
-// generation-by-generation directory with contact, story and relationships.
-export function buildDirectoryHTML(
+// ---------------------------------------------------------------------------
+// PDF booklet
+// ---------------------------------------------------------------------------
+
+const htmlEsc = xmlEsc;
+// SVG pages embed as data URIs — print WebViews render them as crisp vectors,
+// no rasterisation step needed on either platform.
+const svgSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+export interface BookletSection { label: string; desc: string; svg: string }
+
+// Designed PDF booklet: cover with monogram + stats, one page per view
+// snapshot, then a generation-by-generation directory with photos, contact,
+// relationships and stories.
+export function buildBookletHTML(
   members: Member[],
   relationships: Relationship[],
-  treeImgDataUri?: string,
   treeName = 'Family Tree',
+  sections: BookletSection[] = [],
 ): string {
   const adj = buildAdjacency(members, relationships);
   const gens = computeGenerations(members, relationships);
@@ -170,8 +294,8 @@ export function buildDirectoryHTML(
   const years = members.flatMap((m) => [yearOf(m.birthDate), yearOf(m.deathDate)]).filter((y): y is number => !!y);
   const span = years.length ? `${Math.min(...years)} – present` : '—';
   const living = members.filter((m) => !m.deathDate).length;
+  const mono = (treeName.trim()[0] ?? 'F').toUpperCase();
 
-  // marriage year lookup for "Partner (m. 1994)"
   const marriage = new Map<string, string>();
   relationships.forEach((r) => {
     if (r.type === 'spouse' && r.marriageDate) marriage.set(`${r.fromId}|${r.toId}`, r.marriageDate.slice(0, 4));
@@ -184,73 +308,94 @@ export function buildDirectoryHTML(
     byGen.get(g)!.push(m);
   });
 
+  // Directory avatars are plain <img>, so any URL scheme works here.
+  const avatar = (m: Member) => (m.photoUrl
+    ? `<img class="pav" src="${htmlEsc(m.photoUrl)}"/>`
+    : `<span class="avatar">${htmlEsc(initials(m.name))}</span>`);
+
   const card = (m: Member) => {
-    const ps = adj.parents(m.id).map((id) => adj.get(id)?.name).filter(Boolean);
+    const ps = adj.parents(m.id).map((id) => adj.get(id)?.name).filter(Boolean) as string[];
     const sp = [...adj.currentSpouses(m.id), ...adj.exSpouses(m.id)].map((id) => {
       const p = adj.get(id);
       if (!p) return null;
       const yr = marriage.get(`${m.id}|${id}`);
       const ex = adj.exSpouses(m.id).includes(id);
-      return `${p.name}${yr ? ` (m. ${yr})` : ''}${ex ? ' (former)' : ''}`;
-    }).filter(Boolean);
-    const ch = adj.children(m.id).map((id) => adj.get(id)?.name).filter(Boolean);
-    const sib = adj.siblings(m.id).map((id) => adj.get(id)?.name).filter(Boolean);
-    const contact = [m.phone, m.email, m.address || m.location].filter(Boolean).map((x) => xmlEsc(String(x))).join(' · ');
+      return `${htmlEsc(p.name)}${yr ? ` (m. ${yr})` : ''}${ex ? ' (former)' : ''}`;
+    }).filter(Boolean) as string[];
+    const ch = adj.children(m.id).map((id) => adj.get(id)?.name).filter(Boolean) as string[];
+    const sib = adj.siblings(m.id).map((id) => adj.get(id)?.name).filter(Boolean) as string[];
+    const contact = [m.phone, m.email, m.address || m.location].filter(Boolean).map((x) => htmlEsc(String(x))).join(' · ');
     const facts = [
-      m.occupation && `<span class="fact">💼 ${xmlEsc(m.occupation)}</span>`,
-      m.placeOfBirth && `<span class="fact">⌂ born in ${xmlEsc(m.placeOfBirth)}</span>`,
-      m.maidenName && `<span class="fact">née ${xmlEsc(m.maidenName)}</span>`,
+      m.occupation && `<span class="fact">⚒ ${htmlEsc(m.occupation)}</span>`,
+      m.placeOfBirth && `<span class="fact">⌂ born in ${htmlEsc(m.placeOfBirth)}</span>`,
+      m.maidenName && `<span class="fact">née ${htmlEsc(m.maidenName)}</span>`,
     ].filter(Boolean).join('');
     const rels = [
-      ps.length ? `<div><b>Parents</b> ${ps.map(xmlEsc as any).join(', ')}</div>` : '',
+      ps.length ? `<div><b>Parents</b> ${ps.map(htmlEsc).join(', ')}</div>` : '',
       sp.length ? `<div><b>Partner</b> ${sp.join(', ')}</div>` : '',
-      ch.length ? `<div><b>Children</b> ${ch.map(xmlEsc as any).join(', ')}</div>` : '',
-      sib.length ? `<div><b>Siblings</b> ${sib.map(xmlEsc as any).join(', ')}</div>` : '',
+      ch.length ? `<div><b>Children</b> ${ch.map(htmlEsc).join(', ')}</div>` : '',
+      sib.length ? `<div><b>Siblings</b> ${sib.map(htmlEsc).join(', ')}</div>` : '',
     ].join('');
     return `<div class="card">
       <div class="row1">
-        <span class="avatar">${xmlEsc(initials(m.name))}</span>
+        ${avatar(m)}
         <div>
-          <div class="name">${xmlEsc(m.name)}${m.deathDate ? ' ✝' : ''}</div>
-          <div class="years">${xmlEsc(lifespan(m))}${m.gender ? ` · ${m.gender}` : ''}</div>
+          <div class="name">${htmlEsc(m.name)}${m.deathDate ? ' ✝' : ''}</div>
+          <div class="years">${htmlEsc(lifespan(m))}${m.gender ? ` · ${m.gender}` : ''}</div>
         </div>
       </div>
       ${facts ? `<div class="facts">${facts}</div>` : ''}
       ${contact ? `<div class="contact">${contact}</div>` : ''}
       ${rels ? `<div class="rels">${rels}</div>` : ''}
-      ${m.favoriteQuote ? `<div class="quote">“${xmlEsc(m.favoriteQuote)}”</div>` : ''}
-      ${m.about ? `<div class="about">${xmlEsc(m.about)}</div>` : ''}
+      ${m.favoriteQuote ? `<div class="quote">“${htmlEsc(m.favoriteQuote)}”</div>` : ''}
+      ${m.about ? `<div class="about">${htmlEsc(m.about)}</div>` : ''}
     </div>`;
   };
 
-  const sections = [...byGen.keys()].sort((a, b) => a - b).map((g) => {
+  const genSections = [...byGen.keys()].sort((a, b) => a - b).map((g) => {
     const list = byGen.get(g)!.slice().sort((a, b) => (yearOf(a.birthDate) ?? 9999) - (yearOf(b.birthDate) ?? 9999));
     return `<section class="gen">
       <h2><span class="genline"></span>Generation ${g + 1}<span class="genline"></span></h2>
-      <div class="cards">${list.map(card).join('')}</div>
+      ${list.map(card).join('')}
     </section>`;
   }).join('');
 
+  const viewPages = sections.map((s) => `
+    <section class="vp">
+      <div class="vphead">
+        <h2 class="vptitle">${htmlEsc(s.label)}</h2>
+        <p class="vpdesc">${htmlEsc(s.desc)}</p>
+      </div>
+      <img class="vpimg" src="${svgSrc(s.svg)}"/>
+    </section>`).join('');
+
   return `<!doctype html><html><head><meta charset="utf-8"><style>
-    @page { margin: 18mm 14mm; }
-    body{font-family:Georgia,'Times New Roman',serif;color:#2b2620;margin:0;padding:28px}
-    .cover{text-align:center;padding:22px 0 8px}
-    .cover .eyebrow{font:600 10px/-1 ui-monospace,monospace;letter-spacing:.22em;text-transform:uppercase;color:#8c8475}
-    .cover h1{font-size:40px;font-style:italic;font-weight:600;margin:8px 0 4px;letter-spacing:-.01em}
-    .cover .date{color:#8c8475;font-size:12px}
-    .stats{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:18px 0 6px}
-    .stat{border:1px solid #e3ddcf;border-radius:12px;padding:10px 18px;text-align:center;background:#fffdf8}
-    .stat b{display:block;font-size:22px}
+    @page { margin: 16mm 13mm; }
+    body{font-family:Georgia,'Times New Roman',serif;color:#2b2620;margin:0;padding:24px;background:#fff}
+    .cover{text-align:center;padding:46px 0 20px;page-break-after:always}
+    .mono{width:84px;height:84px;border:1.5px solid #cfc7b4;border-radius:26px;display:inline-flex;align-items:center;justify-content:center;font-style:italic;font-size:44px;color:#5a4ce0;background:#fffdf8;margin-bottom:20px}
+    .eyebrow{font:600 10px ui-monospace,monospace;letter-spacing:.26em;text-transform:uppercase;color:#8c8475}
+    .cover h1{font-size:46px;font-style:italic;font-weight:600;margin:10px 0 6px;letter-spacing:-.01em}
+    .cover .date{color:#8c8475;font-size:12.5px}
+    .rule{width:64px;height:1px;background:#cfc7b4;margin:26px auto}
+    .stats{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:8px 0 6px}
+    .stat{border:1px solid #e3ddcf;border-radius:12px;padding:12px 20px;text-align:center;background:#fffdf8}
+    .stat b{display:block;font-size:24px}
     .stat span{font:500 9.5px ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8c8475}
-    .treewrap{margin:18px 0 6px;text-align:center}
-    .treewrap img{max-width:100%;border:1px solid #e3ddcf;border-radius:12px}
-    .gen{page-break-before:auto;margin-top:22px}
-    h2{display:flex;align-items:center;gap:12px;font-style:italic;font-weight:600;font-size:19px;color:#2b2620}
+    .contents{margin-top:30px;color:#564e42;font-size:12.5px;line-height:2}
+    .contents b{font:600 10px ui-monospace,monospace;letter-spacing:.2em;text-transform:uppercase;color:#8c8475;display:block;margin-bottom:6px}
+    .vp{page-break-before:always;padding-top:8px}
+    .vphead{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid #e3ddcf;padding-bottom:8px;margin-bottom:14px}
+    .vptitle{font-style:italic;font-weight:600;font-size:24px;margin:0}
+    .vpdesc{color:#8c8475;font-size:11.5px;margin:0}
+    .vpimg{width:100%;border:1px solid #e3ddcf;border-radius:14px;background:#fffdf8}
+    .gen{page-break-before:always;margin-top:6px}
+    h2{display:flex;align-items:center;gap:12px;font-style:italic;font-weight:600;font-size:20px;color:#2b2620}
     .genline{flex:1;height:1px;background:#e3ddcf}
-    .cards{display:block}
     .card{border:1px solid #e3ddcf;border-radius:12px;padding:12px 14px;margin-bottom:10px;page-break-inside:avoid;background:#fffdf8}
-    .row1{display:flex;align-items:center;gap:10px}
-    .avatar{width:34px;height:34px;border-radius:99px;background:#efeadd;border:1px solid #e3ddcf;display:inline-flex;align-items:center;justify-content:center;font:700 12px system-ui;color:#564e42;flex-shrink:0}
+    .row1{display:flex;align-items:center;gap:11px}
+    .avatar{width:40px;height:40px;border-radius:99px;background:#efeadd;border:1px solid #e3ddcf;display:inline-flex;align-items:center;justify-content:center;font:700 13px system-ui;color:#564e42;flex-shrink:0}
+    .pav{width:40px;height:40px;border-radius:99px;object-fit:cover;border:1px solid #e3ddcf;flex-shrink:0}
     .name{font-weight:700;font-size:15.5px}
     .years{font:500 11px ui-monospace,monospace;color:#8c8475;margin-top:1px}
     .facts{margin-top:7px;font-size:11.5px;color:#564e42}
@@ -263,19 +408,22 @@ export function buildDirectoryHTML(
     .foot{margin-top:26px;text-align:center;font:500 10px ui-monospace,monospace;color:#b3aa98}
   </style></head><body>
     <div class="cover">
+      <div class="mono">${htmlEsc(mono)}</div>
       <div class="eyebrow">Family record</div>
-      <h1>${xmlEsc(treeName)}</h1>
-      <div class="date">Exported ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      <h1>${htmlEsc(treeName)}</h1>
+      <div class="date">Compiled ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      <div class="rule"></div>
       <div class="stats">
         <div class="stat"><b>${members.length}</b><span>Members</span></div>
         <div class="stat"><b>${living}</b><span>Living</span></div>
         <div class="stat"><b>${couples}</b><span>Couples</span></div>
         <div class="stat"><b>${genCount}</b><span>Generations</span></div>
-        <div class="stat"><b>${xmlEsc(span)}</b><span>Span</span></div>
+        <div class="stat"><b>${htmlEsc(span)}</b><span>Span</span></div>
       </div>
+      <div class="contents"><b>In this booklet</b>${sections.map((s) => htmlEsc(s.label)).join(' · ')}${sections.length ? ' · ' : ''}Family directory</div>
     </div>
-    ${treeImgDataUri ? `<div class="treewrap"><img src="${treeImgDataUri}"/></div>` : ''}
-    ${sections}
+    ${viewPages}
+    ${genSections}
     <div class="foot">Generated by Family Tree · ${members.length} people · ${relationships.length} links</div>
   </body></html>`;
 }

@@ -16,6 +16,7 @@ import { useSettings } from '../src/theme/SettingsContext';
 import { ChatPanel } from '../src/components/ChatPanel';
 import { BottomSheet } from '../src/components/BottomSheet';
 import { SettingsPanel } from '../src/components/SettingsPanel';
+import { CalendarPanel } from '../src/components/CalendarPanel';
 import { FamilyPickerPanel } from '../src/components/FamilyPickerPanel';
 import { FamilyInfoPanel } from '../src/components/FamilyInfoPanel';
 import { Icon, type IconName } from '../src/ui/Icon';
@@ -41,13 +42,14 @@ function MobileHome() {
   const { user, loading: authLoading } = useAuth();
   const { years, reminders } = useSettings();
   const { activeTreeId, activeFamily, families } = useFamily();
-  const { members, relationships, treeMetadata, loading } = useFamilyTree(activeTreeId);
+  const { members, relationships, events, treeMetadata, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
   const [familyInfoOpen, setFamilyInfoOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const openChat = () => { if (Platform.OS === 'web') setChatOpen(true); else router.push('/chat'); };
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
@@ -157,6 +159,7 @@ function MobileHome() {
             {([
               ['scan', 'Face match', () => router.push('/facematch')],
               ['sparkles', 'Family AI', openChat],
+              ['calendar', 'Calendar', () => setCalendarOpen(true)],
               ['plus', 'Add member', () => router.push('/member')],
               ['link', 'Add link', () => router.push('/link')],
               ['share', 'Export', () => router.push('/export')],
@@ -263,7 +266,13 @@ function MobileHome() {
 
       {/* settings */}
       <BottomSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} heightRatio={0.74}>
-        <SettingsPanel onClose={() => setSettingsOpen(false)} />
+        <SettingsPanel onClose={() => setSettingsOpen(false)} onOpenCalendar={() => { setSettingsOpen(false); setCalendarOpen(true); }} />
+      </BottomSheet>
+
+      {/* family calendar */}
+      <BottomSheet visible={calendarOpen} onClose={() => setCalendarOpen(false)} heightRatio={0.88}>
+        <CalendarPanel members={members} relationships={relationships} events={events}
+          treeName={treeMetadata?.name ?? activeFamily?.name} onClose={() => setCalendarOpen(false)} />
       </BottomSheet>
 
       {/* family switcher */}

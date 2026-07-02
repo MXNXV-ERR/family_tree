@@ -16,6 +16,7 @@ import {
   NODE_W, NODE_H, COUPLE_W, type LayoutResult,
 } from '../shared/treeLayout';
 import { initials, lifespan } from '../shared/adjacency';
+import { displayLabels } from '../shared/displayName';
 import type { Adjacency } from '../shared/adjacency';
 import { relToMe } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
@@ -65,11 +66,12 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { motion } = useSettings();
+  const { motion, firstNames } = useSettings();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [layout, setLayout] = useState<TreeLayout>('pyramid');
   const [selId, setSelId] = useState<string | null>(null);
   const canvasRef = useRef<CanvasHandle>(null);
+  const labels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
 
   const res = useMemo<LayoutResult>(() => {
     if (layout === 'pyramid') return layered ? layoutLayered(members, adjacency) : layoutPyramid(members, adjacency);
@@ -159,7 +161,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
             const hl = !!highlight && highlight.has(id) && !isFocus;
             return (
               <NodePop key={id} i={idx} disabled={!animate} style={{ position: 'absolute', left: pos.x, top: pos.y }}>
-                <NodeCard m={m} c={c}
+                <NodeCard m={m} c={c} label={labels.get(id) ?? m.name}
                   isFocus={isFocus} isMe={isMe} dim={dim} hl={hl} tint={colorOf?.(id)}
                   onPress={() => { setSelId(id); setFocusId(id); }} />
               </NodePop>
@@ -174,8 +176,8 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   );
 }
 
-function NodeCard({ m, c, isFocus, isMe, dim, hl, tint, onPress }: {
-  m: Member; c: Palette; isFocus: boolean; isMe: boolean; dim: boolean; hl: boolean; tint?: string; onPress: () => void;
+function NodeCard({ m, c, label, isFocus, isMe, dim, hl, tint, onPress }: {
+  m: Member; c: Palette; label: string; isFocus: boolean; isMe: boolean; dim: boolean; hl: boolean; tint?: string; onPress: () => void;
 }) {
   const { years } = useSettings();
   const bg = m.gender === 'female' ? c.cardF : m.gender === 'male' ? c.cardM : c.paper;
@@ -200,7 +202,7 @@ function NodeCard({ m, c, isFocus, isMe, dim, hl, tint, onPress }: {
           : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: 13 }}>{initials(m.name)}</Text>}
       </View>
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '700', fontSize: 12 }}>{m.name}</Text>
+        <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '700', fontSize: 12 }}>{label}</Text>
         {years ? <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text> : null}
         {isMe ? <Text style={{ color: c.accent, fontSize: 9, fontWeight: '700' }}>YOU</Text> : null}
       </View>

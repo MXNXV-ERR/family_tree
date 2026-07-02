@@ -10,18 +10,19 @@ export type TextSize = 'sm' | 'md' | 'lg' | 'xl';
 export const TEXT_SCALE: Record<TextSize, number> = { sm: 0.9, md: 1, lg: 1.15, xl: 1.3 };
 
 export interface Settings {
-  years: boolean;     // show birth/death year labels
-  glass: boolean;     // translucent glass surfaces vs. solid
-  motion: boolean;    // entrance/count-up animations
-  reminders: boolean; // birthday/anniversary local notifications (native)
-  textSize: TextSize; // global text/UI scale
+  years: boolean;      // show birth/death year labels
+  glass: boolean;      // translucent glass surfaces vs. solid
+  motion: boolean;     // entrance/count-up animations
+  reminders: boolean;  // birthday/anniversary local notifications (native)
+  firstNames: boolean; // visualizations label nodes "Ravi" (dupes get "Ravi K.")
+  textSize: TextSize;  // global text/UI scale
 }
 
 export interface SettingsCtx extends Settings {
   setOption: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
 }
 
-const DEFAULTS: Settings = { years: true, glass: true, motion: true, reminders: false, textSize: 'md' };
+const DEFAULTS: Settings = { years: true, glass: true, motion: true, reminders: false, firstNames: true, textSize: 'md' };
 const KEY = 'ft.settings';
 
 const Ctx = createContext<SettingsCtx>({ ...DEFAULTS, setOption: () => {} });
