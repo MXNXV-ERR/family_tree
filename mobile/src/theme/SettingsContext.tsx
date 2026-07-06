@@ -16,13 +16,17 @@ export interface Settings {
   reminders: boolean;  // birthday/anniversary local notifications (native)
   firstNames: boolean; // visualizations label nodes "Ravi" (dupes get "Ravi K.")
   textSize: TextSize;  // global text/UI scale
+  stars: number;       // ambient constellation density (0–320, dark mode only)
+  glow: number;        // ambient aurora intensity (0–100%)
+  aurora: string;      // aurora colour preset key (theme.AURORA_PRESETS)
+  revealSpeed: number; // node/generation entrance speed multiplier (0.5–2.5×)
 }
 
 export interface SettingsCtx extends Settings {
   setOption: <K extends keyof Settings>(k: K, v: Settings[K]) => void;
 }
 
-const DEFAULTS: Settings = { years: true, glass: true, motion: true, reminders: false, firstNames: true, textSize: 'md' };
+const DEFAULTS: Settings = { years: true, glass: true, motion: true, reminders: false, firstNames: true, textSize: 'md', stars: 140, glow: 80, aurora: 'violet', revealSpeed: 1 };
 const KEY = 'ft.settings';
 
 const Ctx = createContext<SettingsCtx>({ ...DEFAULTS, setOption: () => {} });

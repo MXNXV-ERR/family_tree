@@ -19,6 +19,7 @@ import { useTheme, font, radius, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar, IconBtn, ThemeToggle, SegTabs, SlideSwap } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
+import { useAmbientMotion } from '../ui/AmbientMotion';
 import { TreeView } from '../viz/TreeView';
 import { RadialView } from '../viz/RadialView';
 import { TimelineView } from '../viz/TimelineView';
@@ -58,6 +59,12 @@ export function DesktopWorkspace() {
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [zoomApi, setZoomApi] = useState<ZoomApi | null>(null);
+  const am = useAmbientMotion();
+  // Pan the constellation filmstrip to this view's absolute slot (mount + change).
+  useEffect(() => {
+    const idx = ['tree', 'radial', 'timeline', 'network'].indexOf(view);
+    if (idx >= 0) am?.setViewIndex(idx);
+  }, [view, am]);
 
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
@@ -149,14 +156,14 @@ export function DesktopWorkspace() {
   // Active family still resolving — brief spinner, never a blank canvas.
   if (!activeTreeId) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={c.accent} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {/* TOP TOOLBAR */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderColor: c.lineSoft, zIndex: 30 }}>
         <FamilySwitcher c={c} onPick={() => setDrawer({ type: 'family' })} family={activeFamily} fallbackName={treeMetadata?.name} />
@@ -186,10 +193,10 @@ export function DesktopWorkspace() {
               </GlassSurface>
             )}
           </View>
-          <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
           <IconBtn name="users" tone="ghost" onPress={() => setDrawer({ type: 'members' })} />
           <IconBtn name="calendar" tone="ghost" onPress={() => setDrawer({ type: 'calendar' })} />
           <IconBtn name="download" tone="ghost" onPress={() => setDrawer({ type: 'export' })} />
+          <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
           <IconBtn name="settings" tone="ghost" onPress={() => setDrawer({ type: 'settings' })} />
           <ThemeToggle />
           <Pressable onPress={() => setDrawer({ type: 'chat' })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, height: 42, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
@@ -231,7 +238,7 @@ export function DesktopWorkspace() {
         ) : !focusId ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>
         ) : (
-          <SlideSwap activeKey={view} index={['radial', 'timeline', 'tree', 'network'].indexOf(view)} style={{ flex: 1 }}>
+          <SlideSwap activeKey={view} index={['tree', 'radial', 'timeline', 'network'].indexOf(view)} style={{ flex: 1 }}>
             {view === 'tree' ? <TreeView {...shared} onZoomReady={setZoomApi} hideZoomUI />
               : view === 'radial' ? <RadialView {...shared} onZoomReady={setZoomApi} hideZoomUI />
               : view === 'network' ? <NetworkView {...shared} onZoomReady={setZoomApi} hideZoomUI />
@@ -334,8 +341,8 @@ function ViewSwitcher({ value, onChange }: { value: ViewKind; onChange: (v: View
   return (
     <SegTabs<ViewKind>
       value={value} onChange={onChange}
-      options={[['radial', 'Radial'], ['timeline', 'Timeline'], ['tree', 'Tree'], ['network', 'Network']]}
-      icons={{ radial: 'radial', timeline: 'timeline', tree: 'tree', network: 'link' }}
+      options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline'], ['network', 'Network']]}
+      icons={{ tree: 'tree', radial: 'radial', timeline: 'timeline', network: 'link' }}
       fill={false} fontSize={14} />
   );
 }

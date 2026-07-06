@@ -56,11 +56,11 @@ export default function JoinScreen() {
   };
 
   if (loading) {
-    return <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>;
+    return <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>;
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <GlassSurface rounded={radius.xl} style={{ width: '100%', maxWidth: 440 }}>
         <View style={{ padding: 28, alignItems: 'center', gap: 14 }}>
           <View style={{ width: 62, height: 62, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft }}>

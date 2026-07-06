@@ -164,7 +164,7 @@ export default function Login() {
 
   if (isDesktop) {
     return (
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: c.bg }}>
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: 'transparent' }}>
         <LoginHero c={c} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48 }}>{card}</View>
       </View>
@@ -174,7 +174,7 @@ export default function Login() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.root, { backgroundColor: c.bg }]}
+      style={[styles.root, { backgroundColor: 'transparent' }]}
     >
       <AmbientGlow c={c} />
       <Rise i={0} style={{ width: '100%', alignItems: 'center' }}>{card}</Rise>

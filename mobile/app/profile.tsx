@@ -96,7 +96,7 @@ export default function Profile() {
   const av = m.gender === 'female' ? c.cardF : m.gender === 'other' ? c.paper : c.cardM;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Pressable onPress={() => router.back()} style={{ marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -292,7 +292,7 @@ function StoryTab({ m, c }: { m: Member; c: Palette }) {
 }
 
 const Center = ({ c, children }: { c: Palette; children: React.ReactNode }) => (
-  <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+  <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>{children}</View>
 );
 const Empty = ({ c, text }: { c: Palette; text: string }) => (
   <GlassSurface><Text style={{ color: c.mute, textAlign: 'center', padding: 28 }}>{text}</Text></GlassSurface>

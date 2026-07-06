@@ -2,15 +2,34 @@
 // Fixes from the brief: relationship label is a pill ABOVE the card (never
 // overlaps the name); cards are translucent glass; a "Focus" affordance recentres
 // on a node. Tap a card to highlight its neighbours and reveal relationship pills.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Image, useWindowDimensions } from 'react-native';
-import Svg, { Line as SvgLine, Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { View, Text, Pressable, StyleSheet, Image, useWindowDimensions, Animated, Easing } from 'react-native';
+import Svg, { Circle, Defs, G, RadialGradient, Stop } from 'react-native-svg';
 import { useTheme, radius, font, type Palette } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Slider } from '../ui/Slider';
 import { Icon } from '../ui/Icon';
+import { MorphNode } from '../ui/primitives';
+
+// Accent ring that GROWS in when a new depth ring appears (radius eases from a
+// smaller value to its target). SVG props can't use the native driver, so this
+// runs on the JS driver — cheap for the handful of rings.
+// RN-Animated injects `collapsable: false` into animated props; svg Circle
+// forwards unknown props to the DOM element on web (React non-boolean-attribute
+// warning), so strip it before it reaches Circle.
+const CircleSansCollapsable = ({ collapsable: _c, ...p }: ComponentProps<typeof Circle> & { collapsable?: boolean }) => <Circle {...p} />;
+const ACircle = Animated.createAnimatedComponent(CircleSansCollapsable);
+function Ring({ cx, cy, r, color }: { cx: number; cy: number; r: number; color: string }) {
+  const { motion } = useSettings();
+  const rv = useRef(new Animated.Value(motion ? r * 0.55 : r)).current;
+  useEffect(() => {
+    Animated.timing(rv, { toValue: r, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [r, rv]);
+  return <ACircle cx={cx} cy={cy} r={rv} fill="none" stroke={color} strokeWidth={1.5} opacity={0.3} />;
+}
 import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
+import { DrawLines, FadeOutLines, type DrawLine } from './DrawLines';
 import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { layoutRadial, type RadialPos } from '../shared/radialLayout';
 import { initials, lifespan } from '../shared/adjacency';
@@ -28,7 +47,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { firstNames } = useSettings();
+  const { firstNames, motion } = useSettings();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const labels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
   const [depth, setDepth] = useState(1);
@@ -60,14 +79,17 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   const stageSize = maxR * 2;
   const fit = Math.max(0.25, Math.min(1, (screenW - 40) / stageSize, (screenH - 220) / stageSize));
 
-  // Glide to centre on the focus member instead of hard-remounting the canvas.
-  // The radial layout always places the focus at the stage centre, so recentring
-  // is reset(fit, 0, 0). Skip the first run — initialScale already fits on mount.
+  // Glide to centre when the FOCUS changes (new person takes the middle).
+  // Depth changes deliberately do NOT touch the canvas: the focus node is the
+  // anchor — wherever the user has panned/zoomed it, it stays put and only the
+  // surrounding rings appear/disappear around it (everything renders relative
+  // to the stage centre, so the stage resizing is invisible).
   const firstFit = useRef(true);
   useEffect(() => {
     if (firstFit.current) { firstFit.current = false; return; }
     canvasRef.current?.reset(fit, 0, 0);
-  }, [focusId, depth, fit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
 
   const highlight = useMemo(() => {
     if (!selId) return null;
@@ -87,6 +109,62 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
 
   const sel = selId ? adjacency.get(selId) : undefined;
 
+  // Spokes as draw-in paths (same entrance language as the tree view).
+  // Coordinates are CENTRE-RELATIVE (no +C): the focus sits at 0,0 no matter
+  // what depth the stage was solved for, so a stage resize never moves anything
+  // on screen — the whole spoke layer just rides a <G> anchored at the centre.
+  // Highlight only changes per-line opacity — no redraw.
+  const spokes = useMemo<DrawLine[]>(() => {
+    const out: DrawLine[] = [];
+    for (const [id, n] of nodes.entries()) {
+      if (n.depth === 0) continue;
+      const from = n.viaId ? positions.get(n.viaId) : positions.get(focusId);
+      const to = positions.get(id);
+      if (!from || !to) continue;
+      const rel = n.viaRel;
+      const color = rel === 'parent' ? c.relParent : rel === 'child' ? c.relChild
+        : rel === 'partner' ? c.relPartner : rel === 'ex-partner' ? c.relEx
+        : rel === 'sibling' ? c.relSibling : c.relOther;
+      const isHl = highlight && highlight.has(id);
+      out.push({
+        d: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+        color, dashed: rel === 'ex-partner',
+        opacity: highlight ? (isHl ? 1 : 0.15) : 0.5,
+      });
+    }
+    return out;
+  }, [nodes, positions, highlight, focusId, c]);
+  // Entrance animations only on small graphs (same guard as the tree view) and
+  // a dash longer than any spoke (stage diagonal).
+  const animate = motion && positions.size <= 60;
+  const dash = Math.ceil(stageSize * 1.5);
+  const drawKey = `${focusId}-${depth}`;
+  // Cards enter ring-by-ring: order by depth, keep within-ring layout order.
+  const ordered = useMemo(
+    () => [...positions.entries()].sort((a, b) => (nodes.get(a[0])?.depth ?? 0) - (nodes.get(b[0])?.depth ?? 0)),
+    [positions, nodes],
+  );
+
+  // Relayout choreography: snapshot the OLD spokes and fade them out while the
+  // nodes glide to their new spots; the NEW spokes draw in only after the glide
+  // (delay). First mount draws immediately alongside the card entrance.
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; }, []);
+  const prevSpokes = useRef<{ key: string; lines: DrawLine[] }>({ key: drawKey, lines: [] });
+  const [fading, setFading] = useState<DrawLine[] | null>(null);
+  useEffect(() => {
+    if (prevSpokes.current.key !== drawKey) {
+      if (animate && prevSpokes.current.lines.length) {
+        setFading(prevSpokes.current.lines);
+        const t = setTimeout(() => setFading(null), 460);
+        prevSpokes.current = { key: drawKey, lines: spokes };
+        return () => clearTimeout(t);
+      }
+      setFading(null);
+    }
+    prevSpokes.current = { key: drawKey, lines: spokes };
+  }, [drawKey, spokes, animate]);
+
   // Expose zoom so the desktop sub-bar can drive this view.
   const fitRef = useRef(fit); fitRef.current = fit;
   useEffect(() => {
@@ -99,16 +177,6 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Depth control — slider (design's ft-range) */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line }}>
-          <Icon name="tune" size={14} color={c.mute} />
-          <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>Depth</Text>
-          <Slider value={depth} min={1} max={reach} step={1} width={92} onChange={(v) => { setDepth(v); setSelId(null); }} />
-          <Text style={{ color: c.inkSoft, fontFamily: font.monoMed, fontSize: 12, width: 10 }}>{depth}</Text>
-        </View>
-      </View>
-
       <ZoomPanCanvas ref={canvasRef} initialScale={fit} minScale={0.2} maxScale={2.5} onTapEmpty={() => { if (Date.now() - lastCardPress.current > 350) setSelId(null); }}>
         <View style={{ width: stageSize, height: stageSize }}>
           <Svg width={stageSize} height={stageSize} style={StyleSheet.absoluteFill}>
@@ -124,24 +192,21 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
               <Circle cx={C} cy={C} r={ringRadii[ringRadii.length - 1]} fill="url(#ringGlow)" />
             ) : null}
             {ringRadii.map((r, i) => (
-              <Circle key={i} cx={C} cy={C} r={r} fill="none" stroke={c.accent} strokeWidth={1.5} opacity={0.3} />
+              <Ring key={i} cx={C} cy={C} r={r} color={c.accent} />
             ))}
-            {[...nodes.entries()].map(([id, n]) => {
-              if (n.depth === 0) return null;
-              const from = n.viaId ? positions.get(n.viaId) : positions.get(focusId);
-              const to = positions.get(id);
-              if (!from || !to) return null;
-              const isHl = highlight && highlight.has(id);
-              return (
-                <SvgLine key={id} x1={from.x + C} y1={from.y + C} x2={to.x + C} y2={to.y + C}
-                  stroke={relColor(n.viaRel)} strokeWidth={1.6}
-                  strokeDasharray={n.viaRel === 'ex-partner' ? '5,4' : undefined}
-                  opacity={highlight ? (isHl ? 1 : 0.15) : 0.5} />
-              );
-            })}
+            {/* spokes ride a centre-anchored group; old set fades while nodes
+                glide, new set draws in after (delay ≈ MorphNode glide time) */}
+            <G x={C} y={C}>
+              {fading ? <FadeOutLines key={`fade-${drawKey}`} lines={fading} color={c.relOther} strokeWidth={1.6} /> : null}
+              <DrawLines lines={spokes} color={c.relOther} dash={dash} animate={animate} drawKey={drawKey} strokeWidth={1.6}
+                delay={mounted.current ? 620 : 0} />
+            </G>
           </Svg>
 
-          {[...positions.entries()].map(([id, p]) => {
+          {/* zero-size anchor at the stage centre — cards position relative to
+              it, so the stage resizing on depth change moves nothing on screen */}
+          <View style={{ position: 'absolute', left: C, top: C, width: 0, height: 0 }}>
+          {ordered.map(([id, p], idx) => {
             const m = adjacency.get(id);
             if (!m) return null;
             const node = nodes.get(id);
@@ -150,16 +215,27 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
             const dim = !!highlight && !highlight.has(id);
             const showPill = !isFocus && (!highlight || (highlight && highlight.has(id)));
             return (
-              <RadialCard key={id} m={m} c={c} label={labels.get(id) ?? m.name} cx={p.x + C} cy={p.y + C} pos={p}
-                isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id} tint={colorOf?.(id)}
-                relLabel={showPill ? relationLabel(members, relationships, id, focusId, terms) : undefined}
-                relColor={relColor(node?.viaRel)}
-                onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
-                onFocus={() => { setFocusId(id); setSelId(null); }} />
+              <MorphNode key={id} x={p.x} y={p.y} i={idx}>
+                <RadialCard m={m} c={c} label={labels.get(id) ?? m.name} pos={p}
+                  isFocus={isFocus} isMe={isMe} dim={dim} selected={selId === id} tint={colorOf?.(id)}
+                  relLabel={showPill ? relationLabel(members, relationships, id, focusId, terms) : undefined}
+                  relColor={relColor(node?.viaRel)}
+                  onPress={() => { lastCardPress.current = Date.now(); setSelId(id); }}
+                  onFocus={() => { setFocusId(id); setSelId(null); }} />
+              </MorphNode>
             );
           })}
+          </View>
         </View>
       </ZoomPanCanvas>
+
+      {/* Depth — floating overlay so the radial keeps the full canvas height */}
+      <View style={{ position: 'absolute', top: 10, left: 12, zIndex: 6, flexDirection: 'row', alignItems: 'center', gap: 8, height: 38, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line }}>
+        <Icon name="tune" size={14} color={c.mute} />
+        <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>Depth</Text>
+        <Slider value={depth} min={1} max={reach} step={1} width={92} onChange={(v) => { setDepth(v); setSelId(null); }} />
+        <Text style={{ color: c.inkSoft, fontFamily: font.monoMed, fontSize: 12, width: 10 }}>{depth}</Text>
+      </View>
 
       {!hideZoomUI && <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(fit, 0, 0)} />}
 
@@ -201,20 +277,21 @@ function RelationLegend({ c }: { c: Palette }) {
   );
 }
 
-function RadialCard({ m, c, label, cx, cy, pos, isFocus, isMe, dim, selected, relLabel, relColor, tint, onPress, onFocus }: {
-  m: Member; c: Palette; label: string; cx: number; cy: number; pos: RadialPos; isFocus: boolean; isMe: boolean;
+function RadialCard({ m, c, label, pos, isFocus, isMe, dim, selected, relLabel, relColor, tint, onPress, onFocus }: {
+  m: Member; c: Palette; label: string; pos: RadialPos; isFocus: boolean; isMe: boolean;
   dim: boolean; selected: boolean; relLabel?: string; relColor: string; tint?: string; onPress: () => void; onFocus: () => void;
 }) {
   const { years } = useSettings();
   const w = isFocus ? 168 : pos.depth === 1 ? 150 : 116;
   const bg = m.gender === 'female' ? c.cardF : m.gender === 'male' ? c.cardM : c.paper;
   const cardBorder = isFocus ? c.accent : selected ? c.relChild : tint ?? c.line;
+  // MorphNode positions the centre; offset by half-width / -34 to centre the card.
   return (
-    <View style={{ position: 'absolute', left: cx - w / 2, top: cy - 34, width: w, opacity: dim ? 0.3 : 1, alignItems: 'center' }}>
+    <View style={{ width: w, marginLeft: -w / 2, marginTop: -34, opacity: dim ? 0.3 : 1, alignItems: 'center' }}>
       {/* Relationship pill — sits ABOVE the card so it never overlaps the name */}
       {relLabel ? (
         <View style={{ marginBottom: 4, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 2, backgroundColor: c.bg, borderWidth: 1, borderColor: relColor }}>
-          <Text style={{ color: relColor, fontSize: 10, fontWeight: '800' }}>{relLabel}</Text>
+          <Text style={{ color: relColor, fontSize: 10, fontFamily: font.sansHeavy }}>{relLabel}</Text>
         </View>
       ) : null}
       <View style={{ width: '100%' }}>
@@ -224,12 +301,12 @@ function RadialCard({ m, c, label, cx, cy, pos, isFocus, isMe, dim, selected, re
               <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {m.photoUrl
                   ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
-                  : <Text style={{ color: c.inkSoft, fontWeight: '800', fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
+                  : <Text style={{ color: m.gender === 'female' ? c.cardFInk : m.gender === 'male' ? c.cardMInk : c.cardOInk, fontFamily: font.sansBold, fontSize: isFocus ? 16 : 13 }}>{initials(m.name)}</Text>}
               </View>
               <View style={{ flex: w > 130 ? 1 : undefined, alignItems: w > 130 ? 'flex-start' : 'center' }}>
-                <Text numberOfLines={1} style={{ color: c.ink, fontWeight: '800', fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{label}</Text>
-                {years ? <Text style={{ color: c.mute, fontSize: 10 }}>{lifespan(m)}</Text> : null}
-                {isMe ? <Text style={{ color: c.accent, fontSize: 9, fontWeight: '800' }}>YOU</Text> : null}
+                <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansSemi, fontSize: isFocus ? 15 : 12, textAlign: 'center' }}>{label}</Text>
+                {years ? <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 10 }}>{lifespan(m)}</Text> : null}
+                {isMe ? <Text style={{ color: c.accent, fontFamily: font.sansHeavy, fontSize: 9 }}>YOU</Text> : null}
               </View>
             </View>
           </GlassSurface>

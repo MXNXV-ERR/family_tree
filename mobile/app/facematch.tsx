@@ -132,7 +132,7 @@ export default function FaceMatch() {
   }, [mode]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <View style={{ flex: 1, width: '100%', maxWidth: isDesktop ? 760 : undefined, alignSelf: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingTop: isDesktop ? 24 : 16, paddingBottom: 6 }}>
           <Pressable onPress={() => { stopScan(); router.back(); }} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>

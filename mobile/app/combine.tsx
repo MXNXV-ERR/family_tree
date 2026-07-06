@@ -3,7 +3,7 @@
 // add cross-family marriages/parent links by hand, then save. Editing an
 // existing master (?id=) prefills its families + bridges.
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Modal, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Modal, Platform, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
@@ -128,8 +128,12 @@ export default function CombineScreen() {
   async function doDelete() {
     if (!user || !editingId) return;
     const go = async () => { await deleteMaster(user.uid, editingId); router.replace('/home'); };
-    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm('Delete this combined family? The individual families are not affected.')) go(); }
-    else go();
+    const msg = 'Delete this combined family? The individual families are not affected.';
+    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) void go(); }
+    else Alert.alert('Delete combined view', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void go() },
+    ]);
   }
 
   // Modal person picker: pick from a specific tree's members.
@@ -147,7 +151,7 @@ export default function CombineScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SheetHead icon="users" title={editingId ? 'Manage combined family' : 'Combine families'}
         sub="Merge families you belong to into one view" onClose={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}>

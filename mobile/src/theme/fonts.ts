@@ -1,20 +1,21 @@
-// Loads the design type system: Newsreader (serif display), Plus Jakarta Sans
-// (body), Spline Sans Mono (meta). Works on native and web (expo-font injects
-// @font-face on web).
+// Loads the "Aurora × Constellation" type system: Spectral (UPRIGHT serif
+// display — no italics loaded, per the design brief), Hanken Grotesk (body),
+// Spline Sans Mono (meta). Works on native and web (expo-font injects @font-face
+// on web). Family names are referenced from src/theme/theme.ts `font.*`.
 import { useFonts } from 'expo-font';
 import {
-  Newsreader_500Medium,
-  Newsreader_600SemiBold,
-  Newsreader_500Medium_Italic,
-  Newsreader_600SemiBold_Italic,
-} from '@expo-google-fonts/newsreader';
+  Spectral_400Regular,
+  Spectral_500Medium,
+  Spectral_600SemiBold,
+  Spectral_700Bold,
+} from '@expo-google-fonts/spectral';
 import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
+  HankenGrotesk_400Regular,
+  HankenGrotesk_500Medium,
+  HankenGrotesk_600SemiBold,
+  HankenGrotesk_700Bold,
+  HankenGrotesk_800ExtraBold,
+} from '@expo-google-fonts/hanken-grotesk';
 import {
   SplineSansMono_400Regular,
   SplineSansMono_500Medium,
@@ -23,15 +24,15 @@ import {
 
 export function useAppFonts(): boolean {
   const [loaded, error] = useFonts({
-    Newsreader_500Medium,
-    Newsreader_600SemiBold,
-    Newsreader_500Medium_Italic,
-    Newsreader_600SemiBold_Italic,
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_500Medium,
-    PlusJakartaSans_600SemiBold,
-    PlusJakartaSans_700Bold,
-    PlusJakartaSans_800ExtraBold,
+    Spectral_400Regular,
+    Spectral_500Medium,
+    Spectral_600SemiBold,
+    Spectral_700Bold,
+    HankenGrotesk_400Regular,
+    HankenGrotesk_500Medium,
+    HankenGrotesk_600SemiBold,
+    HankenGrotesk_700Bold,
+    HankenGrotesk_800ExtraBold,
     SplineSansMono_400Regular,
     SplineSansMono_500Medium,
     SplineSansMono_600SemiBold,

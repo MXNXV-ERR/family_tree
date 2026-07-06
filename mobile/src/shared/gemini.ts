@@ -144,27 +144,13 @@ export async function chat(
 
     const systemInstruction = `You are a warm, concise family-tree assistant. Use ONLY the family data below to answer questions about who's who, how people are related, dates, counts, and ancestry. If asked "how is A related to B", reason over the parent/spouse links and give the everyday term (e.g. uncle, grandmother, cousin). Refer to people by their exact names as written. If the data doesn't contain the answer, say so briefly. Keep replies short and friendly. Do not invent members or relationships.${meLine}${langLine}\n\n${buildTreePrompt(members, relationships)}`;
 
-    const last = history[history.length - 1];
-    const priorTurns = history.slice(0, -1);
-
-    const run = async (model: string) => {
-        const m = genAI.getGenerativeModel({ model, systemInstruction });
-        const chatSession = m.startChat({
-            history: priorTurns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] })),
-        });
-        const res = await chatSession.sendMessage(last.content);
-        return res.response.text();
-    };
-
+    // Route through runModel (proxy-aware) with a Flash→Pro fallback, so chat works
+    // identically whether the app uses a direct API key or the server-side Gemini
+    // proxy — the earlier direct-SDK path silently failed under a proxy setup.
     try {
-        return await run('gemini-2.5-flash');
+        return await withFallback(systemInstruction, history);
     } catch (e) {
-        console.warn('Flash chat failed, trying Pro:', e instanceof Error ? e.message : String(e));
-        try {
-            return await run('gemini-2.5-pro');
-        } catch (e2) {
-            console.error('Pro chat failed:', e2 instanceof Error ? e2.message : String(e2));
-            throw new Error('AI generation failed. Please check your API key and usage.');
-        }
+        console.error('Chat failed:', e instanceof Error ? e.message : String(e));
+        throw new Error('AI generation failed. Please check your API key and usage.');
     }
 }

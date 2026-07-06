@@ -13,7 +13,7 @@ export default function FamilyPhotoRoute() {
   const { activeTreeId } = useFamily();
   const { members } = useFamilyTree(activeTreeId);
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {activeTreeId ? (
         <FamilyPhotoFlow treeId={activeTreeId} members={members} onClose={() => router.back()} />
       ) : null}

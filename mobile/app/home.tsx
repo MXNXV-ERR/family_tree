@@ -45,12 +45,14 @@ function MobileHome() {
   const { members, relationships, events, treeMetadata, loading } = useFamilyTree(activeTreeId);
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
   const [familyInfoOpen, setFamilyInfoOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const openChat = () => { if (Platform.OS === 'web') setChatOpen(true); else router.push('/chat'); };
+  // Mobile (web + native): open the full-screen /chat route — same clean, filled
+  // surface as the desktop drawer. The old web-only floating Modal sat half-height
+  // with the home showing through, which read as broken next to desktop.
+  const openChat = () => router.push('/chat');
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
   const couples = useMemo(() => countCouples(members, relationships), [members, relationships]);
@@ -96,7 +98,7 @@ function MobileHome() {
   }, [reminders, members, relationships, loading]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}>
         {/* header */}
         <View style={{ paddingTop: Platform.OS === 'web' ? 18 : 12, paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -292,23 +294,6 @@ function MobileHome() {
         ) : null}
       </BottomSheet>
 
-      {/* Web: floating glass chat sheet. Native uses the /chat route. */}
-      <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={() => setChatOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setChatOpen(false)} />
-        <View style={styles.sheetWrap} pointerEvents="box-none">
-          <GlassSurface rounded={radius.xl} intensity={70} style={{ flex: 1, overflow: 'hidden', borderColor: c.line }}>
-            <View style={{ flex: 1, backgroundColor: c.mode === 'dark' ? '#13131d' : '#fbf8f1' }}>
-              <ChatPanel
-                members={members}
-                relationships={relationships}
-                sessionKey={activeTreeId ?? 'default'}
-                onOpenMember={(m: Member) => { setChatOpen(false); router.push({ pathname: '/profile', params: { id: m.id } }); }}
-                onClose={() => setChatOpen(false)}
-              />
-            </View>
-          </GlassSurface>
-        </View>
-      </Modal>
     </View>
   );
 }

@@ -1,10 +1,13 @@
 // Reusable pan + pinch-zoom canvas for the visualizations. Pan & pinch drive
 // reanimated shared values; children render inside a transformed View. A tap on
 // empty canvas calls onTapEmpty (used to dismiss the timeline/radial tooltip).
+// Every zoom input (buttons via zoomBy, pinch, scroll-wheel) also nudges the
+// ambient starfield a little in the same direction — reset/fit eases it home.
 import { type ReactNode, useImperativeHandle, forwardRef, useRef, useEffect } from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
+import { useAmbientMotion } from '../ui/AmbientMotion';
 
 // Eased pan/zoom — replaces the default linear 300ms so recenter & zoom glide.
 const EASE = { duration: 420, easing: Easing.out(Easing.cubic) };
@@ -22,6 +25,7 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
   onTapEmpty?: () => void;
   style?: any;
 }>(function ZoomPanCanvas({ children, minScale = 0.2, maxScale = 3, initialScale = 1, onTapEmpty, style }, ref) {
+  const am = useAmbientMotion();
   const scale = useSharedValue(initialScale);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -34,9 +38,11 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
       scale.value = withTiming(s, EASE);
       tx.value = withTiming(x, EASE);
       ty.value = withTiming(y, EASE);
+      am?.resetZoom();
     },
     zoomBy(factor: number) {
       scale.value = withTiming(Math.max(minScale, Math.min(maxScale, scale.value * factor)), EASE);
+      am?.nudgeZoom(factor > 1 ? 1 : -1);
     },
   }));
 
@@ -45,9 +51,11 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
     .onStart(() => { startX.value = tx.value; startY.value = ty.value; })
     .onUpdate((e) => { tx.value = startX.value + e.translationX; ty.value = startY.value + e.translationY; });
 
+  const nudgeStars = (dir: number, mag?: number) => am?.nudgeZoom(dir, mag);
   const pinch = Gesture.Pinch()
     .onStart(() => { startScale.value = scale.value; })
-    .onUpdate((e) => { scale.value = Math.max(minScale, Math.min(maxScale, startScale.value * e.scale)); });
+    .onUpdate((e) => { scale.value = Math.max(minScale, Math.min(maxScale, startScale.value * e.scale)); })
+    .onEnd((e) => { if (Math.abs(e.scale - 1) > 0.05) runOnJS(nudgeStars)(e.scale > 1 ? 1 : -1); });
 
   const tap = Gesture.Tap().maxDuration(250).onEnd(() => { if (onTapEmpty) runOnJS(onTapEmpty)(); });
 
@@ -64,10 +72,12 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.1 : 0.9;
       scale.value = Math.max(minScale, Math.min(maxScale, scale.value * factor));
+      // Small per-tick magnitude — a wheel fires many events per scroll.
+      am?.nudgeZoom(e.deltaY < 0 ? 1 : -1, 0.4);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [minScale, maxScale]);
+  }, [minScale, maxScale, am]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }],

@@ -85,7 +85,7 @@ export default function Onboard() {
   );
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.root, { backgroundColor: c.bg }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.root, { backgroundColor: 'transparent' }]}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
         <GlassSurface style={styles.card} rounded={radius.xl}>
           <View style={{ padding: space(7), gap: space(3) }}>

@@ -13,7 +13,7 @@ export default function ChatRoute() {
   const { members, relationships } = useFamilyTree(activeTreeId);
   const router = useRouter();
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ChatPanel
         members={members}
         relationships={relationships}

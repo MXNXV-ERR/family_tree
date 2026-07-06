@@ -5,12 +5,14 @@
 // recentre. Renders with react-native-svg inside the shared zoom/pan canvas, so
 // it works on web and native (no DOM-only graph lib).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
-import Svg, { Line as SvgLine } from 'react-native-svg';
+import { View, Text, Pressable, StyleSheet, Image, useWindowDimensions } from 'react-native';
+import Svg from 'react-native-svg';
 import { useTheme, font } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
+import { DrawLines, type DrawLine } from './DrawLines';
 import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
+import { MorphNode } from '../ui/primitives';
 import { layoutNetwork } from '../shared/networkLayout';
 import { initials } from '../shared/adjacency';
 import { displayLabels } from '../shared/displayName';
@@ -27,7 +29,8 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { firstNames } = useSettings();
+  const { firstNames, motion } = useSettings();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const canvasRef = useRef<CanvasHandle>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const lastPress = useRef(0);
@@ -46,9 +49,6 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
   // Edges anchor on the avatar circle (the node row is avatar + name; lines
   // through the name text looked like they connected to the label).
   const AV = (id: string) => { const p = P(id); return { x: p.x - 45, y: p.y }; };
-
-  const relColor = (rel: Relationship['type']) =>
-    rel === 'parent' ? c.relParent : rel === 'spouse' ? c.relPartner : rel === 'sibling' ? c.relSibling : c.relOther;
 
   // Which edge kinds are drawn — the legend chips toggle these. Siblings are
   // inferred from shared parents (there are usually no explicit sibling docs),
@@ -79,40 +79,68 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
   // Always enter with a node selected (focus bar over bare canvas).
   useEffect(() => { if (focusId) setSelId((s) => s ?? focusId); }, [focusId]);
 
-  const initialScale = 0.5;
+  // Fit the whole graph to the screen, then centre on the focus node — same
+  // glide as the tree view (content is centred in the canvas, so a content
+  // point (nx,ny) reaches centre at tx = scale*(W/2 - nx)).
+  const fit = Math.max(0.15, Math.min(1, (screenW - 40) / size.w, (screenH - 220) / size.h));
+  const fitRef = useRef(fit); fitRef.current = fit;
+  useEffect(() => {
+    const p = positions.get(focusId);
+    if (!p) return;
+    const nx = p.x + off.x, ny = p.y + off.y;
+    canvasRef.current?.reset(fit, fit * (size.w / 2 - nx), fit * (size.h / 2 - ny));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, fit]);
+
   useEffect(() => {
     onZoomReady?.({
       in: () => canvasRef.current?.zoomBy(1.25),
       out: () => canvasRef.current?.zoomBy(0.8),
-      fit: () => canvasRef.current?.reset(initialScale, 0, 0),
+      fit: () => canvasRef.current?.reset(fitRef.current, 0, 0),
     });
   }, [onZoomReady]);
+
+  // Edges as draw-in paths (entrance like the tree view). Highlight changes
+  // only per-line opacity — the shared progress stays settled, no redraw.
+  const relColorOf = (t: Relationship['type']) =>
+    t === 'parent' ? c.relParent : t === 'spouse' ? c.relPartner : t === 'sibling' ? c.relSibling : c.relOther;
+  const edgeLines = useMemo<DrawLine[]>(() => {
+    return relationships
+      .filter((r) => positions.has(r.fromId) && positions.has(r.toId))
+      .filter((r) => (r.type === 'parent' ? show.parent : r.type === 'spouse' ? show.spouse : r.type === 'sibling' ? show.sibling : true))
+      .map((r) => {
+        const a = AV(r.fromId), b = AV(r.toId);
+        const on = !highlight || (highlight.has(r.fromId) && highlight.has(r.toId));
+        return { d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, color: relColorOf(r.type), opacity: highlight ? (on ? 0.9 : 0.07) : 0.4 };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relationships, positions, off, show, highlight, c]);
+  const sibLines = useMemo<DrawLine[]>(() => {
+    return siblingEdges
+      .filter((r) => positions.has(r.fromId) && positions.has(r.toId))
+      .map((r) => {
+        const a = AV(r.fromId), b = AV(r.toId);
+        const on = !highlight || (highlight.has(r.fromId) && highlight.has(r.toId));
+        return { d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, color: c.relSibling, opacity: highlight ? (on ? 0.8 : 0.06) : 0.3 };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siblingEdges, positions, off, highlight, c]);
+  const animate = motion && members.length <= 60;
+  const dash = Math.ceil(size.w + size.h);
+  const drawKey = `net-${members.length}`;
 
   const sel = selId ? adjacency.get(selId) : undefined;
 
   return (
     <View style={{ flex: 1 }}>
-      <ZoomPanCanvas ref={canvasRef} initialScale={initialScale} minScale={0.15} maxScale={2.5}
+      <ZoomPanCanvas ref={canvasRef} initialScale={fit} minScale={0.15} maxScale={2.5}
         onTapEmpty={() => { if (Date.now() - lastPress.current > 350) setSelId(null); }}>
         <View style={{ width: size.w, height: size.h }}>
           <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
-            {relationships
-              .filter((r) => positions.has(r.fromId) && positions.has(r.toId))
-              .filter((r) => (r.type === 'parent' ? show.parent : r.type === 'spouse' ? show.spouse : r.type === 'sibling' ? show.sibling : true))
-              .map((r) => {
-                const a = AV(r.fromId), b = AV(r.toId);
-                const on = !highlight || (highlight.has(r.fromId) && highlight.has(r.toId));
-                return <SvgLine key={r.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={relColor(r.type)}
-                  strokeWidth={1.4} opacity={highlight ? (on ? 0.9 : 0.07) : 0.4} />;
-              })}
-            {siblingEdges.filter((r) => positions.has(r.fromId) && positions.has(r.toId)).map((r) => {
-              const a = AV(r.fromId), b = AV(r.toId);
-              const on = !highlight || (highlight.has(r.fromId) && highlight.has(r.toId));
-              return <SvgLine key={r.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={c.relSibling}
-                strokeWidth={1.2} opacity={highlight ? (on ? 0.8 : 0.06) : 0.3} />;
-            })}
+            <DrawLines lines={edgeLines} color={c.relOther} dash={dash} animate={animate} drawKey={drawKey} strokeWidth={1.4} />
+            <DrawLines lines={sibLines} color={c.relSibling} dash={dash} animate={animate} drawKey={drawKey} strokeWidth={1.2} />
           </Svg>
-          {members.filter((m) => positions.has(m.id)).map((m) => {
+          {members.filter((m) => positions.has(m.id)).map((m, idx) => {
             const p = P(m.id);
             const isMe = m.id === meId, isFocus = m.id === focusId;
             const dim = !!highlight && !highlight.has(m.id);
@@ -120,19 +148,21 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
             const tint = colorOf?.(m.id);
             const nodeBorder = isMe || isFocus ? c.accent : tint ?? c.line;
             return (
-              <Pressable key={m.id}
-                // Tap selects AND sets the shared focus — so the person picked
-                // here stays focused when switching to Tree/Radial/Timeline.
-                onPress={() => { lastPress.current = Date.now(); setSelId(m.id); setFocusId(m.id); }}
-                onLongPress={() => setFocusId(m.id)}
-                style={{ position: 'absolute', left: p.x - 60, top: p.y - 16, width: 120, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: dim ? 0.22 : 1 }}>
-                <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: av, borderWidth: isMe || isFocus || tint ? 2 : 1, borderColor: nodeBorder, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  {m.photoUrl
-                    ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
-                    : <Text style={{ color: c.inkSoft, fontFamily: font.sansBold, fontSize: 10 }}>{initials(m.name)}</Text>}
-                </View>
-                <Text numberOfLines={1} style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 11 }}>{labels.get(m.id) ?? m.name}</Text>
-              </Pressable>
+              <MorphNode key={m.id} x={p.x - 60} y={p.y - 16} i={idx}>
+                <Pressable
+                  // Tap selects AND sets the shared focus — so the person picked
+                  // here stays focused when switching to Tree/Radial/Timeline.
+                  onPress={() => { lastPress.current = Date.now(); setSelId(m.id); setFocusId(m.id); }}
+                  onLongPress={() => setFocusId(m.id)}
+                  style={{ width: 120, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: dim ? 0.22 : 1 }}>
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: av, borderWidth: isMe || isFocus || tint ? 2 : 1, borderColor: nodeBorder, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {m.photoUrl
+                      ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
+                      : <Text style={{ color: c.inkSoft, fontFamily: font.sansBold, fontSize: 10 }}>{initials(m.name)}</Text>}
+                  </View>
+                  <Text numberOfLines={1} style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 11 }}>{labels.get(m.id) ?? m.name}</Text>
+                </Pressable>
+              </MorphNode>
             );
           })}
         </View>
@@ -152,7 +182,7 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
         })}
       </View>
 
-      {!hideZoomUI && <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(initialScale, 0, 0)} />}
+      {!hideZoomUI && <ZoomButtons onIn={() => canvasRef.current?.zoomBy(1.25)} onOut={() => canvasRef.current?.zoomBy(0.8)} onFit={() => canvasRef.current?.reset(fit, 0, 0)} />}
       {sel ? <FocusBar member={sel} onOpen={() => onOpenProfile(sel)} onClose={() => setSelId(null)} extra={relToMe(members, relationships, sel.id, meId, terms)} /> : null}
     </View>
   );

@@ -30,7 +30,7 @@ export default function LinkRoute() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={c.accent} />
       </View>
     );

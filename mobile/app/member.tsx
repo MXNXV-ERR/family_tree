@@ -32,7 +32,7 @@ export default function MemberRoute() {
 
   if (loading && memberId) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={c.accent} />
       </View>
     );
@@ -40,7 +40,7 @@ export default function MemberRoute() {
 
   if (memberId && !initial) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: c.mute }}>Member not found.</Text>
       </View>
     );
@@ -48,7 +48,7 @@ export default function MemberRoute() {
 
   if (!allowed) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <Text style={{ color: c.ink, fontSize: 16, fontWeight: '700', marginBottom: 6 }}>Not allowed</Text>
         <Text style={{ color: c.mute, textAlign: 'center' }}>You can only edit your own profile. Ask an admin to change this person’s details.</Text>
         <Text onPress={() => router.back()} style={{ color: c.accent, fontWeight: '700', marginTop: 18 }}>Go back</Text>

@@ -14,7 +14,7 @@ export default function EventsRoute() {
   const { activeTreeId, activeFamily } = useFamily();
   const { members, events } = useFamilyTree(activeTreeId);
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {activeTreeId ? (
         <EventsPanel treeId={activeTreeId} members={members} events={events} canManage={canManageData(activeFamily?.role)} onClose={() => router.back()} />
       ) : null}
