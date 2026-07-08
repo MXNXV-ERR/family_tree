@@ -10,6 +10,7 @@ import { useFamilyTree } from '../src/firebase/useFamilyTree';
 import { useTheme, radius } from '../src/theme/theme';
 import { Icon } from '../src/ui/Icon';
 import { SegTabs, SlideSwap } from '../src/ui/primitives';
+import { useAmbientMotion } from '../src/ui/AmbientMotion';
 import { SearchOverlay } from '../src/components/SearchOverlay';
 import { buildAdjacency } from '../src/shared/adjacency';
 import { TreeView } from '../src/viz/TreeView';
@@ -19,6 +20,7 @@ import { NetworkView } from '../src/viz/NetworkView';
 import type { Member } from '../src/shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline' | 'network';
+const VIEW_ORDER: ViewKind[] = ['tree', 'radial', 'timeline', 'network'];
 
 export default function VizScreen() {
   const { c } = useTheme();
@@ -29,6 +31,9 @@ export default function VizScreen() {
   const [view, setView] = useState<ViewKind>('tree');
   const [focusId, setFocusId] = useState<string>('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const am = useAmbientMotion();
+  // Pan the constellation filmstrip to this view's absolute slot (mount + change).
+  useEffect(() => { am?.setViewIndex(VIEW_ORDER.indexOf(view)); }, [view, am]);
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
@@ -43,13 +48,13 @@ export default function VizScreen() {
   const openProfile = (m: Member) => router.push({ pathname: '/profile', params: { id: m.id } });
 
   if (loading || !focusId) {
-    return <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>;
+    return <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>;
   }
 
   const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 8 }}>
         <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
         <SegTabs<ViewKind>

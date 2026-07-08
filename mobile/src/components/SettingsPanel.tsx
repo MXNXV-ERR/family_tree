@@ -4,8 +4,9 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme, font, radius } from '../theme/theme';
+import { useTheme, font, radius, ACCENT_SWATCHES, AURORA_PRESETS, AURORA_KEYS } from '../theme/theme';
 import { useSettings, type Settings, type TextSize } from '../theme/SettingsContext';
+import { Slider } from '../ui/Slider';
 import { useAuth } from '../firebase/AuthContext';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { updateUserProfile, setRelLanguage } from '../firebase/userProfile';
@@ -18,7 +19,7 @@ import { UserProfilePanel } from './UserProfilePanel';
 import { remindersSupported, requestReminderPermission, clearReminders } from '../notifications/reminders';
 
 export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void; onOpenCalendar?: () => void }) {
-  const { c, mode, setMode } = useTheme();
+  const { c, mode, setMode, accent, setAccent } = useTheme();
   const s = useSettings();
   const { signOut, user } = useAuth();
   const profile = useUserProfile();
@@ -141,6 +142,65 @@ export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void
           </View>
         </View>
 
+        {/* Ambience — persistent aurora + constellation backdrop */}
+        <View>
+          <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Ambience</Text>
+          <GlassSurface rounded={radius.lg}>
+            <View style={{ padding: 16, gap: 14 }}>
+              {/* Stars */}
+              <View style={{ gap: 9 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Icon name="sparkles" size={17} color={c.gold} />
+                  <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>Stars</Text>
+                  <Text style={{ color: c.gold, fontFamily: font.monoMed, fontSize: 11.5 }}>{s.stars}</Text>
+                </View>
+                <FullSlider value={s.stars} min={0} max={320} step={10} onChange={(v) => s.setOption('stars', v)} />
+                {mode === 'light' ? <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11 }}>Stars appear in dark mode.</Text> : null}
+              </View>
+              {/* Background glow */}
+              <View style={{ gap: 9 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Icon name="sun" size={17} color={c.accent2} />
+                  <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>Background glow</Text>
+                  <Text style={{ color: c.accent, fontFamily: font.monoMed, fontSize: 11.5 }}>{s.glow}%</Text>
+                </View>
+                <FullSlider value={s.glow} min={0} max={100} step={5} onChange={(v) => s.setOption('glow', v)} />
+              </View>
+              {/* Glow colour — tints the aurora blobs behind everything */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Icon name="image" size={17} color={c.accent2} />
+                <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>Glow colour</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {AURORA_KEYS.map((k) => (
+                    <Pressable key={k} accessibilityRole="button" accessibilityLabel={`glow ${k}`}
+                      onPress={() => s.setOption('aurora', k)}
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: AURORA_PRESETS[k][0], borderWidth: s.aurora === k ? 2.5 : 0, borderColor: c.ink }} />
+                  ))}
+                </View>
+              </View>
+              {/* Reveal speed — how fast nodes / new generations animate in */}
+              <View style={{ gap: 9 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Icon name="tune" size={17} color={c.teal} />
+                  <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>Reveal speed</Text>
+                  <Text style={{ color: c.teal, fontFamily: font.monoMed, fontSize: 11.5 }}>{s.revealSpeed.toFixed(1)}×</Text>
+                </View>
+                <FullSlider value={s.revealSpeed} min={0.5} max={2.5} step={0.1} onChange={(v) => s.setOption('revealSpeed', v)} />
+              </View>
+              {/* Accent */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 2 }}>
+                <Icon name="sparkles" size={17} color={c.accent} />
+                <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>Accent</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {ACCENT_SWATCHES.map((sw) => (
+                    <Pressable key={sw.key} onPress={() => setAccent(sw.key)} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: sw.dot, borderWidth: accent === sw.key ? 2.5 : 0, borderColor: c.ink }} />
+                  ))}
+                </View>
+              </View>
+            </View>
+          </GlassSurface>
+        </View>
+
         {/* Text size */}
         <View>
           <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Text size</Text>
@@ -240,6 +300,19 @@ export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void
           <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Sign out</Text>
         </Pressable>
       </ScrollView>
+    </View>
+  );
+}
+
+// Slider that fills its row — measures its own width so the thumb math is exact
+// on both the mobile sheet and the (wider) desktop drawer.
+function FullSlider({ value, min, max, step, onChange }: {
+  value: number; min: number; max: number; step: number; onChange: (v: number) => void;
+}) {
+  const [w, setW] = useState(0);
+  return (
+    <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ width: '100%' }}>
+      {w > 0 ? <Slider value={value} min={min} max={max} step={step} onChange={onChange} width={w} /> : null}
     </View>
   );
 }

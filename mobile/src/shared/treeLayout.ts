@@ -5,9 +5,12 @@ import type { Member } from './types';
 import type { Adjacency } from './adjacency';
 import { yearOf } from './adjacency';
 
-export const NODE_W = 122, NODE_H = 76, COUPLE_GAP = 18;
+// Node cards are the design's horizontal avatar-left shape (wide + short).
+// SIB_GAP is the horizontal gap between siblings — halved from 28 per user
+// feedback that siblings sat too far apart (the design mock was wider still).
+export const NODE_W = 126, NODE_H = 60, COUPLE_GAP = 14;
 export const COUPLE_W = NODE_W * 2 + COUPLE_GAP;
-export const SIB_GAP = 28;
+export const SIB_GAP = 12;
 export const ROW_H = 160;
 
 export type Pos = { x: number; y: number; isInLaw?: boolean };
@@ -49,7 +52,9 @@ function makeGetPrimary(adjacency: Adjacency) {
   };
 }
 
-export function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutResult {
+// `sibGap` overrides the sibling spacing — small trees (1–2 generations) pass a
+// wider gap so a single row of siblings doesn't sit cramped.
+export function layoutPyramid(members: Member[], adjacency: Adjacency, sibGap: number = SIB_GAP): LayoutResult {
   const getPrimary = makeGetPrimary(adjacency);
   const kidsOf = makeKidsOf(adjacency);
   const roots = members.filter((m) => adjacency.parents(m.id).length === 0);
@@ -86,7 +91,7 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutRe
     const selfW = partner ? COUPLE_W : NODE_W;
     const kids = kidsOf(id).filter((c) => getPrimary(c) === id && !positions.has(c));
     if (kids.length === 0) { widths.set(id, selfW); return selfW; }
-    const childW = kids.map(computeWidth).reduce((a, b) => a + b, 0) + SIB_GAP * (kids.length - 1);
+    const childW = kids.map(computeWidth).reduce((a, b) => a + b, 0) + sibGap * (kids.length - 1);
     const w = Math.max(selfW, childW);
     widths.set(id, w);
     return w;
@@ -112,14 +117,14 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutRe
     const kids = kidsOf(id).filter((c) => getPrimary(c) === id && !positions.has(c));
     if (kids.length === 0) return;
 
-    const childW = kids.map((k) => widths.get(k)!).reduce((a, b) => a + b, 0) + SIB_GAP * (kids.length - 1);
+    const childW = kids.map((k) => widths.get(k)!).reduce((a, b) => a + b, 0) + sibGap * (kids.length - 1);
     let cursor = leftX + (w - childW) / 2;
     const childCenters: number[] = [];
     kids.forEach((k) => {
       place(k, depth + 1, cursor);
       const kw = widths.get(k)!;
       childCenters.push(cursor + kw / 2);
-      cursor += kw + SIB_GAP;
+      cursor += kw + sibGap;
     });
 
     const coupleCx = meX + selfW / 2;
@@ -146,7 +151,7 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutRe
     const w = computeWidth(rc.id);
     if (w === 0) return;
     place(rc.id, 0, cursor);
-    cursor += w + SIB_GAP * 3;
+    cursor += w + sibGap * 3;
   });
 
   let maxX = 0, maxY = 0;
@@ -161,9 +166,9 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency): LayoutRe
     let x = 0;
     leftovers.forEach((m) => {
       positions.set(m.id, { x, y });
-      x += NODE_W + SIB_GAP;
+      x += NODE_W + sibGap;
     });
-    maxX = Math.max(maxX, x - SIB_GAP);
+    maxX = Math.max(maxX, x - sibGap);
     maxY = y + NODE_H;
   }
 
@@ -205,7 +210,7 @@ function relativeGenerations(members: Member[], adjacency: Adjacency, inSet: Set
 // packs each ancestral root's subtree side-by-side), a graph connected through a
 // marriage / shared person renders as ONE integrated tree — the two families'
 // ancestries converge on the couple that joins them. Used by the combined view.
-export function layoutLayered(members: Member[], adjacency: Adjacency): LayoutResult {
+export function layoutLayered(members: Member[], adjacency: Adjacency, sibGap: number = SIB_GAP): LayoutResult {
   const positions = new Map<string, Pos>();
   const couplePills: CouplePill[] = [];
   const lines: Line[] = [];
@@ -286,7 +291,7 @@ export function layoutLayered(members: Member[], adjacency: Adjacency): LayoutRe
   const x = new Map<string, number>();
   for (let g = 0; g <= maxGen; g++) {
     let cx = 0;
-    for (const a of layerAnchors[g]) { x.set(a, cx); cx += unitWidth(a) + SIB_GAP; }
+    for (const a of layerAnchors[g]) { x.set(a, cx); cx += unitWidth(a) + sibGap; }
   }
   const centreOf = (a: string) => x.get(a)! + unitWidth(a) / 2;
   const desired = (a: string) => {
@@ -305,13 +310,13 @@ export function layoutLayered(members: Member[], adjacency: Adjacency): LayoutRe
       if (pass % 2 === 0) {
         for (let i = 1; i < layer.length; i++) {
           const prev = layer[i - 1], cur = layer[i];
-          const minX = x.get(prev)! + unitWidth(prev) + SIB_GAP;
+          const minX = x.get(prev)! + unitWidth(prev) + sibGap;
           if (x.get(cur)! < minX) x.set(cur, minX);
         }
       } else {
         for (let i = layer.length - 2; i >= 0; i--) {
           const cur = layer[i], next = layer[i + 1];
-          const maxX = x.get(next)! - unitWidth(cur) - SIB_GAP;
+          const maxX = x.get(next)! - unitWidth(cur) - sibGap;
           if (x.get(cur)! > maxX) x.set(cur, maxX);
         }
       }

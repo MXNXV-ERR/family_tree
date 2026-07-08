@@ -137,16 +137,47 @@ export function Fade({ children, trigger, dur = 400, style }: { children: ReactN
 // Node entrance for the tree/radial — scale-pop in (design's .node-enter /
 // ft-nodepop). Scale-only + fade so cards stay visible. Staggered by index.
 export function NodePop({ children, i = 0, disabled, style }: { children: ReactNode; i?: number; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
-  const { motion } = useSettings();
+  const { motion, revealSpeed } = useSettings();
   const on = motion && !disabled; // big trees pass disabled to render instantly (no stutter)
   const v = useRef(new Animated.Value(on ? 0 : 1)).current;
   useEffect(() => {
     if (!on) { v.setValue(1); return; }
+    const sp = revealSpeed || 1; // user-tunable entrance speed (generation reveal)
     v.setValue(0);
-    Animated.timing(v, { toValue: 1, duration: 420, delay: Math.min(i * 22, 500), easing: Easing.bezier(0.34, 1.56, 0.64, 1), useNativeDriver: true }).start();
+    Animated.timing(v, { toValue: 1, duration: Math.round(420 / sp), delay: Math.min(i * 22, 500) / sp, easing: Easing.bezier(0.34, 1.56, 0.64, 1), useNativeDriver: true }).start();
   }, [on]);
   return (
     <Animated.View style={[{ opacity: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }, style]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// Morphing node — GLIDES to its target {x,y} when the layout re-solves (tree
+// generations slider / radial depth slider) instead of jumping, and simply FADES
+// in on mount (a newly-revealed node). No scale/pop — existing nodes just slide to
+// their new spots. Position is transform-translate from the origin (native driver),
+// so the parent renders it at (0,0) — no left/top.
+export function MorphNode({ x, y, i = 0, style, children }: { x: number; y: number; i?: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const { motion, revealSpeed } = useSettings();
+  const sp = revealSpeed || 1;
+  const pos = useRef(new Animated.ValueXY({ x, y })).current;
+  const enter = useRef(new Animated.Value(motion ? 0 : 1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (!motion) { enter.setValue(1); return; }
+    enter.setValue(0);
+    Animated.timing(enter, { toValue: 1, duration: 460 / sp, delay: Math.min(i * 18, 340) / sp, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (first.current) { first.current = false; pos.setValue({ x, y }); return; }
+    if (!motion) { pos.setValue({ x, y }); return; }
+    Animated.timing(pos, { toValue: { x, y }, duration: 540 / sp, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, y]);
+  return (
+    <Animated.View style={[{ position: 'absolute', left: 0, top: 0, opacity: enter, transform: [{ translateX: pos.x }, { translateY: pos.y }] }, style]}>
       {children}
     </Animated.View>
   );

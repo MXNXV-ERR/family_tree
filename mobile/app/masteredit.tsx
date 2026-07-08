@@ -14,7 +14,7 @@ export default function MasterEditRoute() {
   const { activeTreeId, activeFamily } = useFamily();
   const { members } = useFamilyTree(activeTreeId);
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {activeTreeId ? (
         <MasterEditGrid treeId={activeTreeId} members={members} canManage={canManageData(activeFamily?.role)} onClose={() => router.back()} />
       ) : null}

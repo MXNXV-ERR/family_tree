@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { LogBox, View, ActivityIndicator } from 'react-native';
+import { LogBox, View, ActivityIndicator, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, ThemeProvider as NavThemeProvider, DarkTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from '../src/theme/ThemeProvider';
@@ -13,10 +13,18 @@ import { UserProfileProvider } from '../src/firebase/UserProfileContext';
 import { RelTermsProvider } from '../src/theme/RelTermsContext';
 import { useTheme } from '../src/theme/theme';
 import { useAppFonts } from '../src/theme/fonts';
+import { AmbientBackground } from '../src/ui/AmbientBackground';
+import { AmbientMotionProvider } from '../src/ui/AmbientMotion';
 
 // react-native-svg spreads RN responder props onto the web <svg> element, which
 // React warns about. Harmless and web-only — silence it so it doesn't spam dev.
 LogBox.ignoreLogs(['Unknown event handler property']);
+
+// expo-router themes its navigation scene container from the system colour scheme;
+// the light DefaultTheme paints an opaque rgb(242,242,242) that would cover the
+// AmbientBackground. A transparent nav theme lets the fixed sky show through every
+// screen (this is what makes the persistent background actually visible on web).
+const navTheme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: 'transparent', card: 'transparent' } };
 
 // Hold the native splash on screen until the fonts are ready, so there's no
 // flash of unstyled / fallback text on cold start.
@@ -31,8 +39,8 @@ export default function RootLayout() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0c0c12', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#8f8bff" />
+      <View style={{ flex: 1, backgroundColor: '#080611', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#a78bff" />
       </View>
     );
   }
@@ -69,21 +77,33 @@ function NavShell() {
   // user out on every refresh.
   const { loading } = useAuth();
   return (
-    <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: c.bg }}>
-      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
-          <ActivityIndicator color={c.accent} />
-        </View>
-      ) : (
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: c.bg },
-            animation: 'fade',
-          }}
-        />
-      )}
-    </SafeAreaView>
+    // Root paints the themed bg edge-to-edge; AmbientBackground draws the fixed
+    // aurora + stars behind everything; the SafeAreaView + Stack are transparent
+    // so screens fade/slide OVER the constant sky (no black flash on navigation).
+    // minHeight:100vh (web) guarantees the base fills the viewport even on short
+    // screens (login/loading) now that screens no longer paint their own bg.
+    <AmbientMotionProvider>
+      <View style={[{ flex: 1, backgroundColor: c.bg }, Platform.OS === 'web' ? ({ minHeight: '100vh' } as any) : null]}>
+        <AmbientBackground />
+        <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: 'transparent' }}>
+          <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+          {loading ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator color={c.accent} />
+            </View>
+          ) : (
+            <NavThemeProvider value={navTheme}>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: 'transparent' },
+                  animation: 'fade',
+                }}
+              />
+            </NavThemeProvider>
+          )}
+        </SafeAreaView>
+      </View>
+    </AmbientMotionProvider>
   );
 }

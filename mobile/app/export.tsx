@@ -16,7 +16,7 @@ export default function ExportScreen() {
   const router = useRouter();
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ExportPanel
         treeId={activeTreeId}
         members={members}

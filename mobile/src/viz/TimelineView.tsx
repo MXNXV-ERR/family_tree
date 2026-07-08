@@ -14,7 +14,8 @@ import { GlassSurface } from '../theme/GlassSurface';
 import { type ZoomApi } from './vizChrome';
 import { Slider } from '../ui/Slider';
 import { Icon, type IconName } from '../ui/Icon';
-import { Avatar } from '../ui/primitives';
+import { Avatar, Rise } from '../ui/primitives';
+import { useAmbientMotion } from '../ui/AmbientMotion';
 import { yearOf, computeGenerations } from '../shared/adjacency';
 import { displayLabels } from '../shared/displayName';
 import { relationLabel } from '../shared/relationTo';
@@ -46,7 +47,10 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
   const [tip, setTip] = useState<{ text: string } | null>(null);
   const [evTip, setEvTip] = useState<FamilyEvent | null>(null);
   const currentYear = new Date().getFullYear();
-  const zoom = (fn: (p: number) => number) => { setUserZoomed(true); setPxPerYear((p) => Math.max(0.5, Math.min(60, fn(p)))); };
+  const am = useAmbientMotion();
+  // Zooming the year axis also nudges the starfield a little (dir = in/out);
+  // fit eases it back home — same coupling as the canvas views.
+  const zoom = (fn: (p: number) => number, dir = 0) => { setUserZoomed(true); setPxPerYear((p) => Math.max(0.5, Math.min(60, fn(p)))); if (dir) am?.nudgeZoom(dir); };
 
   const generations = useMemo(() => computeGenerations(members, relationships), [members, relationships]);
 
@@ -75,10 +79,11 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
   const fitPxRef = useRef(fitPx); fitPxRef.current = fitPx;
   useEffect(() => {
     onZoomReady?.({
-      in: () => zoom((p) => p * 1.3),
-      out: () => zoom((p) => p / 1.3),
-      fit: () => { setUserZoomed(false); setPxPerYear(fitPxRef.current); },
+      in: () => zoom((p) => p * 1.3, 1),
+      out: () => zoom((p) => p / 1.3, -1),
+      fit: () => { setUserZoomed(false); setPxPerYear(fitPxRef.current); am?.resetZoom(); },
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onZoomReady]);
 
   const contentW = (maxY - minY) * pxPerYear;
@@ -183,7 +188,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
         </View>
         {!hideZoomUI && (
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {([['minus', 'zoom out', () => zoom((p) => p / 1.3)], ['plus', 'zoom in', () => zoom((p) => p * 1.3)], ['target', 'zoom fit', () => { setUserZoomed(false); setPxPerYear(fitPx); }]] as [IconName, string, () => void][]).map(([n, label, fn]) => (
+            {([['minus', 'zoom out', () => zoom((p) => p / 1.3, -1)], ['plus', 'zoom in', () => zoom((p) => p * 1.3, 1)], ['target', 'zoom fit', () => { setUserZoomed(false); setPxPerYear(fitPx); am?.resetZoom(); }]] as [IconName, string, () => void][]).map(([n, label, fn]) => (
               <Pressable key={n} onPress={fn} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => ({ width: 36, height: 36, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.92 : 1 }] })}>
                 <Icon name={n} size={16} color={c.inkSoft} />
               </Pressable>
@@ -216,7 +221,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
 
             {/* Events lane — all family events on their own row */}
             {mode === 'events' && eventLane.length ? (
-              <View style={{ flexDirection: 'row', height: ROW_H, marginBottom: 2 }}>
+              <Rise i={0} style={{ flexDirection: 'row', height: ROW_H, marginBottom: 2 }}>
                 <View style={{ width: LABEL_W, justifyContent: 'center', paddingLeft: 6 }}>
                   <Text style={{ color: c.accent, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.4 }}>EVENTS</Text>
                 </View>
@@ -228,7 +233,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                     </Pressable>
                   ))}
                 </View>
-              </View>
+              </Rise>
             ) : null}
             {/* Rows */}
             {rows.map((row, idx) => {
@@ -247,7 +252,9 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
               const barColor = isMe ? c.accent : t.ink;
               const events = eventsOf.get(m.id) ?? [];
               return (
-                <View key={m.id}>
+                // Staggered rise-in per row (Rise caps the stagger at i=16 and is
+                // motion-gated) — the timeline's entrance.
+                <Rise key={m.id} i={idx}>
                   {newGen ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
                       <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.6, width: LABEL_W, paddingLeft: 6 }}>GEN {row.gen + 1}</Text>
@@ -316,7 +323,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                       )) : null}
                     </View>
                   </View>
-                </View>
+                </Rise>
               );
             })}
           </View>

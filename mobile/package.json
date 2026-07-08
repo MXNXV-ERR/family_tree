@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/hanken-grotesk": "^0.4.3",
     "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
+    "@expo-google-fonts/spectral": "^0.4.1",
     "@expo-google-fonts/spline-sans-mono": "^0.4.2",
     "@expo/metro-runtime": "~56.0.16",
     "@google/generative-ai": "^0.24.1",

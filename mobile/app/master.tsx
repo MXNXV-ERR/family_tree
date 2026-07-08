@@ -11,12 +11,12 @@
 // right drawer hosting profile/settings/chat/members); native / narrow web keep
 // the mobile stack with panels in bottom sheets. Search is a shared overlay.
 import { useMemo, useState, useEffect } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useMasterTree } from '../src/firebase/useMasterTree';
-import { splitId } from '../src/firebase/masters';
+import { splitId, deleteMaster } from '../src/firebase/masters';
 import { useResponsive } from '../src/ui/useResponsive';
 import { useTheme, radius, font } from '../src/theme/theme';
 import { Icon, type IconName } from '../src/ui/Icon';
@@ -124,6 +124,21 @@ export default function MasterScreen() {
   const closeOverlays = () => { setDrawerId(null); setPanel(null); };
   const openBridges = () => router.push({ pathname: '/combine' as never, params: { id: id ?? '' } });
   const openScan = () => router.push({ pathname: '/facematch', params: { master: id ?? '' } });
+  // Deletes ONLY the combined view (master doc + switcher index) — the
+  // constituent family trees are untouched. Confirmed on every platform.
+  const confirmDelete = () => {
+    if (!user || !id) return;
+    const go = async () => {
+      try { await deleteMaster(user.uid, id); router.replace('/home'); }
+      catch (e) { console.warn('delete master', e); }
+    };
+    const msg = 'Delete this combined view? The individual families are not affected.';
+    if (Platform.OS === 'web') { if (typeof window !== 'undefined' && window.confirm(msg)) void go(); }
+    else Alert.alert('Delete combined view', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void go() },
+    ]);
+  };
   const pickSearch = (m: Member) => {
     setFocusId(m.id);
     setSearchOpen(false);
@@ -131,7 +146,7 @@ export default function MasterScreen() {
   };
 
   if (loading) {
-    return <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={CV} /></View>;
+    return <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={CV} /></View>;
   }
 
   const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
@@ -170,7 +185,7 @@ export default function MasterScreen() {
   // ---- Desktop chrome ----
   if (isDesktop) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderColor: c.lineSoft }}>
           <IconBtn name="back" tone="ghost" onPress={() => router.back()} />
           <View style={{ minWidth: 200 }}>
@@ -187,6 +202,7 @@ export default function MasterScreen() {
             <ToolBtn name="users" tint={CV} onPress={() => openPanel('members')} />
             <ToolBtn name="sparkles" tint={CV} onPress={() => openPanel('chat')} />
             <ToolBtn name="settings" tint={CV} onPress={() => openPanel('settings')} />
+            <ToolBtn name="trash" tint={c.danger} onPress={confirmDelete} />
             <ThemeToggle />
             <Pressable onPress={openBridges} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, height: 42, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
               <Icon name="link" size={17} color={CV} />
@@ -228,7 +244,7 @@ export default function MasterScreen() {
 
   // ---- Mobile chrome ----
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 8 }}>
         <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={CV} /></Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -242,6 +258,7 @@ export default function MasterScreen() {
           <ToolBtn name="sparkles" tint={CV} size={34} onPress={() => openPanel('chat')} />
           <ToolBtn name="settings" tint={CV} size={34} onPress={() => openPanel('settings')} />
           <ToolBtn name="link" tint={CV} size={34} onPress={openBridges} />
+          <ToolBtn name="trash" tint={c.danger} size={34} onPress={confirmDelete} />
         </View>
       </View>
       <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>

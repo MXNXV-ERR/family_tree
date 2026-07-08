@@ -19,7 +19,7 @@ export default function Index() {
 
   if (loading || (user && pendingJoin === undefined)) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
         <ActivityIndicator color={c.accent} />
       </View>
     );
