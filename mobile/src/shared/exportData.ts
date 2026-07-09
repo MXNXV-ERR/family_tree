@@ -6,7 +6,7 @@
 // would taint the PNG canvas).
 import * as XLSX from 'xlsx';
 import type { Member, Relationship } from './types';
-import { buildAdjacency, lifespan, initials, computeGenerations, yearOf } from './adjacency';
+import { buildAdjacency, lifespan, initials, computeGenerations, yearOf, compareByAge } from './adjacency';
 import { layoutPyramid, NODE_W, NODE_H } from './treeLayout';
 import { layoutRadial } from './radialLayout';
 import { layoutNetwork } from './networkLayout';
@@ -353,7 +353,7 @@ export function buildBookletHTML(
   };
 
   const genSections = [...byGen.keys()].sort((a, b) => a - b).map((g) => {
-    const list = byGen.get(g)!.slice().sort((a, b) => (yearOf(a.birthDate) ?? 9999) - (yearOf(b.birthDate) ?? 9999));
+    const list = byGen.get(g)!.slice().sort(compareByAge);
     return `<section class="gen">
       <h2><span class="genline"></span>Generation ${g + 1}<span class="genline"></span></h2>
       ${list.map(card).join('')}

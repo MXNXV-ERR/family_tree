@@ -7,6 +7,10 @@ export interface Member {
     photoUrl?: string;
     birthDate?: string;
     deathDate?: string;
+    // Manual age order among the member's generation (1 = eldest). Only
+    // consulted when birth years can't decide (see adjacency.compareByAge) —
+    // a real birthDate always wins over this.
+    birthOrder?: number;
     gender?: 'male' | 'female' | 'other';
     about?: string;
     associatedUserId?: string; // Links this node to a specific app user for "Me"

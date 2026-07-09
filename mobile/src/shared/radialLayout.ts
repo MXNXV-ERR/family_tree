@@ -2,6 +2,7 @@
 // Places the focus person at origin with relatives on concentric rings,
 // spacing driven by card width and relaxed so cards don't overlap.
 import type { Adjacency, NeighborNode } from './adjacency';
+import { compareByAge } from './adjacency';
 
 const SECTORS: Record<string, { center: number; max: number }> = {
   parent:  { center: -Math.PI / 2, max: Math.PI * 0.6 },
@@ -10,10 +11,23 @@ const SECTORS: Record<string, { center: number; max: number }> = {
   sibling: { center: Math.PI,      max: Math.PI * 0.5 },
 };
 
-function arc(center: number, span: number, count: number): number[] {
-  if (count <= 1) return [center];
-  const step = span / (count - 1);
-  return Array.from({ length: count }, (_, i) => center - span / 2 + i * step);
+// Weighted arc: each node gets an angular slice proportional to its subtree
+// weight, so branches with more descendants open up more room. With equal
+// weights this reproduces the old even spacing (first/last land on the span
+// endpoints). Because weights change whenever the depth slider changes, the
+// layout re-solves every ring on every depth — nodes glide to their new spots
+// (the tree view's generations-slider behavior) while the focus stays at 0,0.
+function weightedArc(center: number, span: number, ws: number[]): number[] {
+  const n = ws.length;
+  if (n <= 1) return [center];
+  const total = ws.reduce((a, b) => a + b, 0) || n;
+  const full = (span * n) / (n - 1); // slot-centre math: equal weights hit the old endpoints
+  let cum = 0;
+  return ws.map((w) => {
+    const a = center - full / 2 + ((cum + w / 2) / total) * full;
+    cum += w;
+    return a;
+  });
 }
 
 function relaxRing(items: Array<{ id: string; angle: number }>, minGap: number) {
@@ -53,6 +67,18 @@ export type RadialLayout = {
 
 export function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: number): RadialLayout {
   const nodes = adjacency.neighborhood(focusId, maxDepth);
+
+  // Subtree weight of every node within the CURRENT neighborhood: itself plus
+  // everyone routed through it (viaId chains). Children accumulate into their
+  // via parent deepest-first, so each weight is final before it propagates.
+  const weight = new Map<string, number>();
+  for (const id of nodes.keys()) weight.set(id, 1);
+  const deepestFirst = [...nodes.entries()].sort((a, b) => b[1].depth - a[1].depth);
+  for (const [id, n] of deepestFirst) {
+    if (!n.viaId || !weight.has(n.viaId)) continue;
+    weight.set(n.viaId, weight.get(n.viaId)! + weight.get(id)!);
+  }
+  const wOf = (id: string) => weight.get(id) ?? 1;
 
   const ring1: Record<string, string[]> = {};
   let ring1Count = 0;
@@ -97,9 +123,10 @@ export function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: nu
   const perNode1 = CARD_ARC_1 / ring1Radius;
   for (const key in ring1) {
     const sec = SECTORS[key] || { center: Math.PI / 2, max: Math.PI / 2 };
-    const ids = ring1[key];
+    // age-ordered within the sector (year first, manual birthOrder fallback)
+    const ids = ring1[key].slice().sort((a, b) => compareByAge(adjacency.get(a), adjacency.get(b)));
     const span = Math.min(perNode1 * (ids.length - 1), sec.max);
-    const angles = arc(sec.center, span, ids.length);
+    const angles = weightedArc(sec.center, span, ids.map(wOf));
     ids.forEach((id, i) => ring1Items.push({ id, angle: angles[i] }));
   }
   relaxRing(ring1Items, perNode1 * 0.9);
@@ -119,8 +146,8 @@ export function layoutRadial(adjacency: Adjacency, focusId: string, maxDepth: nu
     for (const viaId in byVia) {
       const via = pos.get(viaId);
       if (!via) continue;
-      const ids = byVia[viaId];
-      const angles = arc(via.angle, minGap * (ids.length - 1), ids.length);
+      const ids = byVia[viaId].slice().sort((a, b) => compareByAge(adjacency.get(a), adjacency.get(b)));
+      const angles = weightedArc(via.angle, minGap * (ids.length - 1), ids.map(wOf));
       ids.forEach((id, i) => items.push({ id, angle: angles[i] }));
     }
     relaxRing(items, minGap);

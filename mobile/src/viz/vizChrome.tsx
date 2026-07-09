@@ -2,8 +2,8 @@
 // tab spacing — req 11/12), floating zoom buttons, and a bottom focus bar that
 // opens the selected member's profile. Restyled to the design bundle: line
 // icons, Jakarta/mono type, accent-pill active segment.
-import { useEffect, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { useTheme, radius, font } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { GlassSurface } from '../theme/GlassSurface';
@@ -88,6 +88,34 @@ export function FocusBar({ member, onOpen, onClose, extra }: {
         </View>
       </GlassSurface>
     </Animated.View>
+  );
+}
+
+// Bottom-left legend that collapses to a small chip so it never covers the
+// canvas on phones (starts collapsed on narrow screens, open on desktop).
+export function CollapsibleLegend({ title, children }: { title: string; children: ReactNode }) {
+  const { c } = useTheme();
+  const { width } = useWindowDimensions();
+  const [open, setOpen] = useState(width >= 900);
+  return (
+    <View style={{ position: 'absolute', left: 12, bottom: 16 }}>
+      <GlassSurface rounded={radius.md}>
+        {open ? (
+          <Pressable onPress={() => setOpen(false)} style={{ paddingHorizontal: 13, paddingVertical: 11 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', flex: 1 }}>{title}</Text>
+              <Icon name="chevD" size={12} color={c.mute} />
+            </View>
+            {children}
+          </Pressable>
+        ) : (
+          <Pressable onPress={() => setOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 8 }}>
+            <Icon name="info" size={13} color={c.mute} />
+            <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 9.5, letterSpacing: 1.4, textTransform: 'uppercase' }}>{title}</Text>
+          </Pressable>
+        )}
+      </GlassSurface>
+    </View>
   );
 }
 

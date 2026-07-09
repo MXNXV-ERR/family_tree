@@ -11,12 +11,12 @@ import Svg, { Rect, Circle, Defs, LinearGradient, Stop, Line as SvgLine } from '
 import { useTheme, radius, font, genderTint, type Palette } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { GlassSurface } from '../theme/GlassSurface';
-import { type ZoomApi } from './vizChrome';
+import { CollapsibleLegend, type ZoomApi } from './vizChrome';
 import { Slider } from '../ui/Slider';
 import { Icon, type IconName } from '../ui/Icon';
 import { Avatar, Rise } from '../ui/primitives';
 import { useAmbientMotion } from '../ui/AmbientMotion';
-import { yearOf, computeGenerations } from '../shared/adjacency';
+import { yearOf, computeGenerations, compareByAge } from '../shared/adjacency';
 import { displayLabels } from '../shared/displayName';
 import { relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
@@ -56,7 +56,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
 
   const rows = useMemo(() => {
     const list = members.map((m) => ({ m, gen: generations.get(m.id) ?? 0 }));
-    list.sort((a, b) => (a.gen !== b.gen ? a.gen - b.gen : (yearOf(a.m.birthDate) ?? 9999) - (yearOf(b.m.birthDate) ?? 9999)));
+    list.sort((a, b) => (a.gen !== b.gen ? a.gen - b.gen : compareByAge(a.m, b.m)));
     return list;
   }, [members, generations]);
 
@@ -293,10 +293,17 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                           </LinearGradient>
                         </Defs>
                         {b != null && mode === 'dot' ? (
-                          <Circle cx={xOf(b)} cy={ROW_H / 2} r={6} fill={barColor} stroke={c.bg} strokeWidth={2} />
+                          <>
+                            {/* soft glow halo under the dot */}
+                            <Circle cx={xOf(b)} cy={ROW_H / 2} r={10} fill={barColor} opacity={0.2} />
+                            <Circle cx={xOf(b)} cy={ROW_H / 2} r={6} fill={barColor} stroke={c.bg} strokeWidth={2} />
+                          </>
                         ) : null}
                         {b != null && mode !== 'dot' ? (
                           <>
+                            {/* soft glow underlay — a wider, fainter copy of the bar */}
+                            <Rect x={xOf(b) - 3} y={ROW_H / 2 - 9} width={Math.max((end - b) * pxPerYear + (alive ? 40 : 0), 8) + 6} height={18} rx={9}
+                              fill={barColor} opacity={0.16} />
                             {alive ? (
                               // Living: fading tail extending past today — "infinite rod".
                               <Rect x={xOf(b)} y={ROW_H / 2 - 6} width={Math.max((end - b) * pxPerYear + 40, 10)} height={12} rx={6}
@@ -371,18 +378,16 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
 
       {/* Event legend (events mode) */}
       {mode === 'events' && !tip ? (
-        <View style={{ position: 'absolute', left: 12, bottom: 16 }} pointerEvents="none">
-          <GlassSurface rounded={radius.md}>
-            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
-              {([['cake', 'Birth', c.teal], ['ring', 'Marriage', c.rose], ['heart', 'Child', c.accent], ['flower', 'Passing', c.amber]] as [IconName, string, string][]).map(([ic, lb, col]) => (
-                <View key={lb} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Icon name={ic} size={11} stroke={2} color={col} />
-                  <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 9.5 }}>{lb}</Text>
-                </View>
-              ))}
-            </View>
-          </GlassSurface>
-        </View>
+        <CollapsibleLegend title="Events">
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {([['cake', 'Birth', c.teal], ['ring', 'Marriage', c.rose], ['heart', 'Child', c.accent], ['flower', 'Passing', c.amber]] as [IconName, string, string][]).map(([ic, lb, col]) => (
+              <View key={lb} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name={ic} size={11} stroke={2} color={col} />
+                <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 9.5 }}>{lb}</Text>
+              </View>
+            ))}
+          </View>
+        </CollapsibleLegend>
       ) : null}
     </View>
   );

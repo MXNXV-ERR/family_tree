@@ -3,7 +3,7 @@
 // "Join by invite" inline flows plus a jump to Family info. Used by the mobile
 // header sheet and the desktop switcher dropdown.
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme, font, radius } from '../theme/theme';
 import { useAuth } from '../firebase/AuthContext';
@@ -14,7 +14,7 @@ import { claimMember } from '../firebase/firestore';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { Icon } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import type { FamilyTree } from '../shared/types';
 
 type Mode = 'list' | 'new' | 'join' | 'claim';
@@ -118,7 +118,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="users" title="Your families" sub={headSub} onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 10 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 10 }}>
         {mode === 'list' && (
           <>
             {shownFamilies.map((f) => {
@@ -243,7 +243,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
             </Pressable>
           </View>
         )}
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

@@ -3,7 +3,7 @@
 // the people who have access. Subscribes to the tree doc + membership docs.
 // Shared by the mobile family sheet and the desktop drawer.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator, Image, Share } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform, Alert, ActivityIndicator, Image, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { joinUrl, inviteMessage } from '../shared/invite';
@@ -11,7 +11,7 @@ import { useTheme, font, radius } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
 import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, ensureInviteCode, FAMILY_COLORS, monoOf, subscribeJoinRequests, approveJoinRequest, rejectJoinRequest } from '../firebase/families';
 import { subscribeActivity, timeAgo, type ActivityEntry } from '../firebase/activity';
@@ -150,7 +150,7 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="info" title="Family info" sub={fam?.name} onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 16 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 16 }}>
         {editing ? (
           <View style={{ gap: 12 }}>
             <Field label="Family name" c={c}><TextInput value={fName} onChangeText={setFName} placeholder="Family name" placeholderTextColor={c.mute} style={inputStyle} /></Field>
@@ -409,7 +409,7 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
         ) : null}
         </>
         )}
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

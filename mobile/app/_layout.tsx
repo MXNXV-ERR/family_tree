@@ -80,10 +80,13 @@ function NavShell() {
     // Root paints the themed bg edge-to-edge; AmbientBackground draws the fixed
     // aurora + stars behind everything; the SafeAreaView + Stack are transparent
     // so screens fade/slide OVER the constant sky (no black flash on navigation).
-    // minHeight:100vh (web) guarantees the base fills the viewport even on short
+    // minHeight:100dvh (web) guarantees the base fills the viewport even on short
     // screens (login/loading) now that screens no longer paint their own bg.
+    // dvh, not vh: mobile Chrome's 100vh is the LARGE viewport (URL bar hidden),
+    // which pushed bottom-anchored UI (legend / chat input / nav) below the fold.
+    // Browsers without dvh drop the declaration and fall back to #root height:100%.
     <AmbientMotionProvider>
-      <View style={[{ flex: 1, backgroundColor: c.bg }, Platform.OS === 'web' ? ({ minHeight: '100vh' } as any) : null]}>
+      <View style={[{ flex: 1, backgroundColor: c.bg }, Platform.OS === 'web' ? ({ minHeight: '100dvh' } as any) : null]}>
         <AmbientBackground />
         <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: 'transparent' }}>
           <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />

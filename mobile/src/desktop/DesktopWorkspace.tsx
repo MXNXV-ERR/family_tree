@@ -28,6 +28,7 @@ import { SubBarZoom, type ZoomApi } from '../viz/vizChrome';
 import { DesktopDrawer } from './DesktopDrawer';
 import { DesktopProfile } from './DesktopProfile';
 import { MemberForm } from '../components/MemberForm';
+import { SiblingOrderSheet } from '../components/SiblingOrderSheet';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { FamilyInfoPanel } from '../components/FamilyInfoPanel';
 import { FamilyPhotoFlow } from '../components/FamilyPhotoFlow';
@@ -43,7 +44,7 @@ import { canEditMember, canDeleteMember, canEditRelationship, canImport, canMana
 import type { Member, Relationship } from '../shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline' | 'network' | 'master';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link'; id?: string; kind?: LinkKind } | null;
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link' | 'order'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -232,7 +233,7 @@ export function DesktopWorkspace() {
           the top toolbar stays visible and clickable while a panel is open. */}
       <View style={{ flex: 1 }}>
         {view === 'master' ? (
-          <MasterEditGrid treeId={activeTreeId} members={members} canManage={canManageData(role)} onClose={() => setView('tree')} />
+          <MasterEditGrid treeId={activeTreeId} members={members} relationships={relationships} canManage={canManageData(role)} onClose={() => setView('tree')} />
         ) : members.length === 0 ? (
           <EmptyCanvas c={c} family={activeFamily} onAddFirst={() => editMember()} onPickFamily={() => setDrawer({ type: 'familyPicker' })} />
         ) : !focusId ? (
@@ -259,7 +260,12 @@ export function DesktopWorkspace() {
             onDeleteRelative={(kind, relatedId) => removeLink(drawer.id!, kind, relatedId)}
             onClaim={() => claimThis(drawer.id!)}
             onSync={() => syncProfile(drawer.id!)}
+            onOrderSiblings={canEditRelationship(role, drawer.id, drawer.id, members, user?.uid) ? () => setDrawer({ type: 'order', id: drawer.id }) : undefined}
             onFocusInTree={(id) => { setFocusId(id); setView('tree'); setDrawer(null); }} />
+        ) : null}
+        {drawer?.type === 'order' && activeTreeId ? (
+          <SiblingOrderSheet members={members} relationships={relationships} treeId={activeTreeId} highlightId={drawer.id}
+            onClose={() => setDrawer(drawer.id ? { type: 'profile', id: drawer.id } : null)} />
         ) : null}
         {drawer?.type === 'link' ? (
           <LinkForm members={members} relationships={relationships} presetAId={drawer.id} presetKind={drawer.kind}

@@ -4,11 +4,11 @@
 // quick-link, and the whole set exports as a .ics file that Google/Apple/
 // Outlook import in one step. Shown in the desktop drawer and a mobile sheet.
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
+import { View, Text, Pressable, Linking } from 'react-native';
 import { useTheme, font, radius, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon, type IconName } from '../ui/Icon';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import { buildOccasions, occasionsInMonth, googleCalendarUrl, buildICS, type OccasionKind } from '../shared/occasions';
 import { saveText } from '../export/fileExport';
 import type { Member, Relationship, FamilyEvent } from '../shared/types';
@@ -86,7 +86,7 @@ export function CalendarPanel({ members, relationships, events, treeName, onClos
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="calendar" title="Family calendar" sub="Birthdays · anniversaries · events" onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 14 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 14 }}>
         {/* month switcher */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <NavBtn c={c} icon="chevL" onPress={() => shift(-1)} />
@@ -189,7 +189,7 @@ export function CalendarPanel({ members, relationships, events, treeName, onClos
         <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5, lineHeight: 16, textAlign: 'center', marginTop: -6 }}>
           Import the file in Google Calendar (Settings → Import & export) or open it with Apple/Outlook Calendar. Birthdays and anniversaries repeat yearly.
         </Text>
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

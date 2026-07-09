@@ -2,11 +2,12 @@
 // conversation in glass bubbles. Member names in replies become tappable chips
 // that open the profile. Used by both the full-screen /chat route (native) and
 // the floating glass sheet (web).
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { TypingDots } from '../ui/primitives';
+import { useViewportInset } from '../ui/useViewportInset';
 import { Icon } from '../ui/Icon';
 import { useAuth } from '../firebase/AuthContext';
 import { useRelTerms } from '../theme/RelTermsContext';
@@ -32,6 +33,12 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose, sessi
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  // Mobile-web keyboard: pad the composer up by however much of the viewport
+  // the keyboard covers (visualViewport), and keep the newest turn in view.
+  const kbInset = useViewportInset();
+  useEffect(() => {
+    if (kbInset > 0) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+  }, [kbInset]);
 
   async function send(text: string) {
     const q = text.trim();
@@ -89,7 +96,7 @@ export function ChatPanel({ members, relationships, onOpenMember, onClose, sessi
         ) : null}
       </ScrollView>
 
-      <View style={{ flexDirection: 'row', gap: 8, padding: 12, alignItems: 'flex-end' }}>
+      <View style={{ flexDirection: 'row', gap: 8, padding: 12, alignItems: 'flex-end', paddingBottom: 12 + kbInset }}>
         <TextInput
           value={input} onChangeText={setInput} placeholder="Ask about your family…" placeholderTextColor={c.mute}
           multiline onSubmitEditing={() => send(input)}
