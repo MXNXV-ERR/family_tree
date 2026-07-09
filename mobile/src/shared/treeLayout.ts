@@ -3,7 +3,7 @@
 // hourglass (ancestors + descendants of focus). Rendering is RN-side.
 import type { Member } from './types';
 import type { Adjacency } from './adjacency';
-import { yearOf } from './adjacency';
+import { compareByAge } from './adjacency';
 
 // Node cards are the design's horizontal avatar-left shape (wide + short).
 // SIB_GAP is the horizontal gap between siblings — halved from 28 per user
@@ -12,6 +12,10 @@ export const NODE_W = 126, NODE_H = 60, COUPLE_GAP = 14;
 export const COUPLE_W = NODE_W * 2 + COUPLE_GAP;
 export const SIB_GAP = 12;
 export const ROW_H = 160;
+// The couple pill (gold rounded border around a spouse pair) overhangs the two
+// cards by this much on every side. Connectors must terminate AT the pill
+// border — not the card edge — or they pierce the rounded outline.
+export const PILL_PAD = 6;
 
 export type Pos = { x: number; y: number; isInLaw?: boolean };
 export type CouplePill = { x: number; y: number; ids: [string, string]; status: 'current' | 'divorced' };
@@ -28,12 +32,7 @@ export type LayoutResult = {
 
 function makeKidsOf(adjacency: Adjacency) {
   return (id: string): string[] =>
-    adjacency.children(id).slice().sort((a, b) => {
-      const ya = yearOf(adjacency.get(a)?.birthDate) ?? 9999;
-      const yb = yearOf(adjacency.get(b)?.birthDate) ?? 9999;
-      if (ya !== yb) return ya - yb;
-      return a.localeCompare(b);
-    });
+    adjacency.children(id).slice().sort((a, b) => compareByAge(adjacency.get(a), adjacency.get(b)));
 }
 
 function makeGetPrimary(adjacency: Adjacency) {
@@ -128,7 +127,7 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency, sibGap: n
     });
 
     const coupleCx = meX + selfW / 2;
-    const coupleBottom = meY + NODE_H;
+    const coupleBottom = meY + NODE_H + (partner ? PILL_PAD : 0);
     const sibBarY = meY + NODE_H + (ROW_H - NODE_H) / 2;
     const nextRowY = (depth + 1) * ROW_H;
 
@@ -139,9 +138,10 @@ export function layoutPyramid(members: Member[], adjacency: Adjacency, sibGap: n
     kids.forEach((k, i) => {
       const kPartner = adjacency.currentSpouses(k)[0] || adjacency.exSpouses(k)[0];
       const kSelfW = kPartner ? COUPLE_W : NODE_W;
+      const kPad = kPartner ? PILL_PAD : 0;
       const kp = positions.get(k);
       const kCx = kp ? kp.x + kSelfW / 2 : childCenters[i];
-      lines.push({ d: `M ${childCenters[i]} ${sibBarY} L ${childCenters[i]} ${nextRowY - 2} M ${childCenters[i]} ${nextRowY - 2} L ${kCx} ${nextRowY}`, kind: 'parent' });
+      lines.push({ d: `M ${childCenters[i]} ${sibBarY} L ${childCenters[i]} ${nextRowY - 2 - kPad} M ${childCenters[i]} ${nextRowY - 2 - kPad} L ${kCx} ${nextRowY - kPad}`, kind: 'parent' });
     });
   };
 
@@ -274,15 +274,15 @@ export function layoutLayered(members: Member[], adjacency: Adjacency, sibGap: n
   // earlier parent; x-centering below then pulls it between both.
   const orderIdx = new Map<string, number>();
   const setOrder = (layer: string[]) => layer.forEach((a, i) => orderIdx.set(a, i));
-  const byYear = (a: string) => yearOf(adjacency.get(a)?.birthDate) ?? 9999;
-  layerAnchors[0].sort((x, y) => byYear(x) - byYear(y) || x.localeCompare(y));
+  const byAge = (x: string, y: string) => compareByAge(adjacency.get(x), adjacency.get(y));
+  layerAnchors[0].sort(byAge);
   setOrder(layerAnchors[0]);
   for (let g = 1; g <= maxGen; g++) {
     const parentKey = (a: string) => {
       const ps = unitParents(a).filter((p) => orderIdx.has(p)).map((p) => orderIdx.get(p)!);
       return ps.length ? Math.min(...ps) : Number.MAX_SAFE_INTEGER;
     };
-    layerAnchors[g].sort((x, y) => parentKey(x) - parentKey(y) || byYear(x) - byYear(y) || x.localeCompare(y));
+    layerAnchors[g].sort((x, y) => parentKey(x) - parentKey(y) || byAge(x, y));
     setOrder(layerAnchors[g]);
   }
 
@@ -350,18 +350,21 @@ export function layoutLayered(members: Member[], adjacency: Adjacency, sibGap: n
     const p = positions.get(a)!;
     const g = genOf(a);
     const coupleCx = p.x + unitWidth(a) / 2;
-    const coupleBottom = p.y + NODE_H;
+    const coupleBottom = p.y + NODE_H + (unitPartner.get(a) ? PILL_PAD : 0);
     const nextRowY = (g + 1) * ROW_H;
-    const centers = kids.map((k) => (positions.get(k)!.x + unitWidth(k) / 2)).sort((m, n) => m - n);
+    const ends = kids
+      .map((k) => ({ cx: positions.get(k)!.x + unitWidth(k) / 2, pad: unitPartner.get(k) ? PILL_PAD : 0 }))
+      .sort((m, n) => m.cx - n.cx);
+    const centers = ends.map((e) => e.cx);
     const x1 = Math.min(coupleCx, ...centers), x2 = Math.max(coupleCx, ...centers);
     const taken = new Set(lanes[g].filter((b) => b.x1 <= x2 + 10 && b.x2 >= x1 - 10).map((b) => b.lane));
     let lane = 0;
     while (taken.has(lane)) lane++;
     lanes[g].push({ x1, x2, lane });
-    const sibBarY = coupleBottom + (ROW_H - NODE_H) / 2 + Math.min(lane, 8) * 7;
+    const sibBarY = p.y + NODE_H + (ROW_H - NODE_H) / 2 + Math.min(lane, 8) * 7;
     lines.push({ d: `M ${coupleCx} ${coupleBottom} L ${coupleCx} ${sibBarY}`, kind: 'parent', ownerId: a });
     if (centers.length > 1) lines.push({ d: `M ${Math.min(...centers)} ${sibBarY} L ${Math.max(...centers)} ${sibBarY}`, kind: 'parent', ownerId: a });
-    for (const cx of centers) lines.push({ d: `M ${cx} ${sibBarY} L ${cx} ${nextRowY}`, kind: 'parent', ownerId: a });
+    for (const e of ends) lines.push({ d: `M ${e.cx} ${sibBarY} L ${e.cx} ${nextRowY - e.pad}`, kind: 'parent', ownerId: a });
   }
 
   let maxX = 0, maxY = 0;
@@ -369,7 +372,9 @@ export function layoutLayered(members: Member[], adjacency: Adjacency, sibGap: n
   return { positions, couplePills, lines, width: maxX + 40, height: maxY + 40 };
 }
 
-export function layoutInverted(focusId: string, adjacency: Adjacency, maxDepth = 4): LayoutResult {
+// focusTopPad: the hourglass draws the focus with a couple pill; the last
+// ancestor drop must stop at the pill border, not the focus card top.
+export function layoutInverted(focusId: string, adjacency: Adjacency, maxDepth = 4, focusTopPad = 0): LayoutResult {
   const positions = new Map<string, Pos>();
   const lines: Line[] = [];
 
@@ -409,8 +414,9 @@ export function layoutInverted(focusId: string, adjacency: Adjacency, maxDepth =
       const childPos = positions.get(memberId);
       if (childPos) {
         const cx = x + NODE_W / 2, cy = y + NODE_H;
-        const ccx = childPos.x + NODE_W / 2, ccy = childPos.y;
-        const midY = (cy + ccy) / 2;
+        const ccx = childPos.x + NODE_W / 2;
+        const ccy = childPos.y - (memberId === focusId ? focusTopPad : 0);
+        const midY = (cy + childPos.y) / 2;
         lines.push({ d: `M ${cx} ${cy} L ${cx} ${midY} L ${ccx} ${midY} L ${ccx} ${ccy}`, kind: 'parent' });
       }
       placeAncestors(pid, depth + 1, subSlot);
@@ -428,7 +434,8 @@ function shiftPath(d: string, dx: number, dy: number): string {
 }
 
 export function layoutHourglass(focusId: string, members: Member[], adjacency: Adjacency, maxAncestors = 3): LayoutResult {
-  const ancestorLayout = layoutInverted(focusId, adjacency, maxAncestors);
+  const focusPartner = adjacency.currentSpouses(focusId)[0] || adjacency.exSpouses(focusId)[0];
+  const ancestorLayout = layoutInverted(focusId, adjacency, maxAncestors, focusPartner ? PILL_PAD : 0);
   const kidsOf = makeKidsOf(adjacency);
 
   const widths = new Map<string, number>();
@@ -472,7 +479,7 @@ export function layoutHourglass(focusId: string, members: Member[], adjacency: A
       cursor += w(k) + SIB_GAP;
     });
     const coupleCx = meX + selfW / 2;
-    const coupleBottom = meY + NODE_H;
+    const coupleBottom = meY + NODE_H + (p ? PILL_PAD : 0);
     const sibBarY = meY + NODE_H + (ROW_H - NODE_H) / 2;
     const nextRowY = (depth + 1) * ROW_H;
     lines.push({ d: `M ${coupleCx} ${coupleBottom} L ${coupleCx} ${sibBarY}`, kind: 'parent' });
@@ -482,9 +489,10 @@ export function layoutHourglass(focusId: string, members: Member[], adjacency: A
     kids.forEach((k, i) => {
       const kP = adjacency.currentSpouses(k)[0] || adjacency.exSpouses(k)[0];
       const kSelfW = kP ? COUPLE_W : NODE_W;
+      const kPad = kP ? PILL_PAD : 0;
       const kp = positions.get(k);
       const kCx = kp ? kp.x + kSelfW / 2 : childCenters[i];
-      lines.push({ d: `M ${childCenters[i]} ${sibBarY} L ${childCenters[i]} ${nextRowY - 2} L ${kCx} ${nextRowY}`, kind: 'parent' });
+      lines.push({ d: `M ${childCenters[i]} ${sibBarY} L ${childCenters[i]} ${nextRowY - 2 - kPad} L ${kCx} ${nextRowY - kPad}`, kind: 'parent' });
     });
   };
   place(focusId, 0, 0);

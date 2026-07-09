@@ -21,6 +21,8 @@ import { GlassSurface } from '../src/theme/GlassSurface';
 import { Icon } from '../src/ui/Icon';
 import { Rise, Fade } from '../src/ui/primitives';
 import { buildAdjacency, initials, lifespan } from '../src/shared/adjacency';
+import { BottomSheet } from '../src/components/BottomSheet';
+import { SiblingOrderSheet } from '../src/components/SiblingOrderSheet';
 import type { Member } from '../src/shared/types';
 
 type Tab = 'info' | 'relations' | 'story';
@@ -33,6 +35,7 @@ export default function Profile() {
   const router = useRouter();
   const { id: rawId } = useLocalSearchParams<{ id?: string }>();
   const [tab, setTab] = useState<Tab>('info');
+  const [orderOpen, setOrderOpen] = useState(false);
   // A master (combined) view passes a namespaced `treeId:localId`; read + write
   // against the ORIGIN tree, and keep in-profile navigation namespaced so
   // browsing relatives stays in the combined context.
@@ -157,10 +160,17 @@ export default function Profile() {
 
         <Fade trigger={tab}>
           {tab === 'info' && <InfoTab m={m} c={c} />}
-          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: nav(rid) } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: nav(m.id), kind } })} />}
+          {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: nav(rid) } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: nav(m.id), kind } })} onOrder={canLink ? () => setOrderOpen(true) : undefined} />}
           {tab === 'story' && <StoryTab m={m} c={c} />}
         </Fade>
       </ScrollView>
+
+      {/* age-order editor (generation row-groups) */}
+      {treeId ? (
+        <BottomSheet visible={orderOpen} onClose={() => setOrderOpen(false)} heightRatio={0.86}>
+          <SiblingOrderSheet members={members} relationships={relationships} treeId={treeId} highlightId={m.id} onClose={() => setOrderOpen(false)} />
+        </BottomSheet>
+      ) : null}
     </View>
   );
 }
@@ -197,9 +207,10 @@ function InfoTab({ m, c }: { m: Member; c: Palette }) {
   );
 }
 
-function RelationsTab({ m, adj, c, canAdd, canDelete, onOpen, onAdd, onDelete }: {
+function RelationsTab({ m, adj, c, canAdd, canDelete, onOpen, onAdd, onDelete, onOrder }: {
   m: Member; adj: ReturnType<typeof buildAdjacency>; c: Palette; canAdd: boolean; canDelete: boolean;
   onOpen: (id: string) => void; onAdd: (kind: string) => void; onDelete: (kind: string, relatedId: string) => void;
+  onOrder?: () => void;
 }) {
   const groups: { title: string; ids: string[]; addKind: string }[] = [
     { title: 'Parents', ids: adj.parents(m.id), addKind: 'child' },
@@ -214,11 +225,19 @@ function RelationsTab({ m, adj, c, canAdd, canDelete, onOpen, onAdd, onDelete }:
           <View style={{ padding: space(4) }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <Text style={[styles.section, { color: c.mute }]}>{g.title.toUpperCase()}</Text>
-              {canAdd ? (
-                <Pressable onPress={() => onAdd(g.addKind)} hitSlop={8}>
-                  <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>+ Add</Text>
-                </Pressable>
-              ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                {g.title === 'Siblings' && onOrder && g.ids.length > 0 ? (
+                  <Pressable onPress={onOrder} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name="filter" size={13} color={c.accent} />
+                    <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>Order</Text>
+                  </Pressable>
+                ) : null}
+                {canAdd ? (
+                  <Pressable onPress={() => onAdd(g.addKind)} hitSlop={8}>
+                    <Text style={{ color: c.accent, fontWeight: '700', fontSize: 13 }}>+ Add</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
             {g.ids.length === 0 ? (
               <Text style={{ color: c.mute, fontSize: 13 }}>None recorded.</Text>

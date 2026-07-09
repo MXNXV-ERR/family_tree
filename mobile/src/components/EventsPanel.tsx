@@ -3,12 +3,12 @@
 // and optional member links. Events surface on the timeline (events mode).
 // Viewing is open to members; editing is owner/admin only (canManage).
 import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useTheme, radius, font } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon } from '../ui/Icon';
 import { DateField } from '../ui/DateField';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import { addEvent, updateEvent, deleteEvent } from '../firebase/firestore';
 import { yearOf } from '../shared/adjacency';
 import type { FamilyEvent, Member } from '../shared/types';
@@ -73,7 +73,7 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
     return (
       <View style={{ flex: 1 }}>
         <SheetHead icon="calendar" title={editing.id ? 'Edit event' : 'New event'} sub="Get-togethers, reunions, trips…" onClose={() => setEditing(null)} />
-        <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 12 }}>
+        <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 12 }}>
           <Lbl c={c}>Title</Lbl>
           {input(editing.title, (v) => setEditing({ ...editing, title: v }), 'e.g. Diwali get-together')}
           <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -107,7 +107,7 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
               {busy ? <ActivityIndicator color={c.accentInk} /> : <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 15 }}>{editing.id ? 'Save' : 'Add event'}</Text>}
             </Pressable>
           </View>
-        </ScrollView>
+        </PanelScroll>
       </View>
     );
   }
@@ -115,7 +115,7 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="calendar" title="Family events" sub="Shown on the timeline" onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 10 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 10 }}>
         {canManage ? (
           <Pressable onPress={startNew} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.md, backgroundColor: c.accent, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
             <Icon name="plus" size={18} stroke={2.1} color={c.accentInk} />
@@ -161,7 +161,7 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
             <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 14, textAlign: 'center' }}>No events yet.{canManage ? ' Add your first get-together.' : ''}</Text>
           </View>
         ) : null}
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

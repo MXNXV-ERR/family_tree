@@ -2,8 +2,9 @@
 // adjacency already loaded by the workspace. Header + quick actions + info +
 // relations + story, in one scroll (the full tabbed profile lives at /profile
 // for mobile).
-import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
+import { View, Text, Pressable, Linking } from 'react-native';
 import { useTheme, font, radius } from '../theme/theme';
+import { PanelScroll } from '../components/panelChrome';
 import { useSettings } from '../theme/SettingsContext';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar, IconBtn } from '../ui/primitives';
@@ -12,11 +13,11 @@ import { lifespan } from '../shared/adjacency';
 import type { Adjacency } from '../shared/adjacency';
 import type { LinkKind } from '../shared/relationshipActions';
 
-export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, canClaim = false, canSync = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onSync, onFocusInTree }: {
+export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, canClaim = false, canSync = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onSync, onOrderSiblings, onFocusInTree }: {
   adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; canClaim?: boolean; canSync?: boolean; onClose: () => void;
   onEdit: (id: string) => void; onOpen: (id: string) => void;
   onAddRelative: (kind?: LinkKind) => void; onDeleteRelative?: (kind: LinkKind, relatedId: string) => void;
-  onClaim?: () => void; onSync?: () => void; onFocusInTree: (id: string) => void;
+  onClaim?: () => void; onSync?: () => void; onOrderSiblings?: () => void; onFocusInTree: (id: string) => void;
 }) {
   const { c } = useTheme();
   const { years } = useSettings();
@@ -51,7 +52,7 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
           {canEdit ? <IconBtn name="edit" tone="glass" size={38} onPress={() => onEdit(m.id)} /> : null}
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }}>
+      <PanelScroll contentStyle={{ padding: 18, gap: 16 }}>
         <View style={{ alignItems: 'center' }}>
           <Avatar m={m} size={92} ring={c.accent} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
@@ -101,7 +102,15 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
             <View style={{ padding: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: ids.length ? 12 : 0 }}>
                 <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.5, textTransform: 'uppercase' }}>{title} · {ids.length}</Text>
-                {canAddRelative ? <Pressable onPress={() => onAddRelative(kind)}><Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>+ Add</Text></Pressable> : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                  {title === 'Siblings' && onOrderSiblings && ids.length > 0 ? (
+                    <Pressable onPress={onOrderSiblings} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Icon name="filter" size={12} color={c.accent} />
+                      <Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>Order</Text>
+                    </Pressable>
+                  ) : null}
+                  {canAddRelative ? <Pressable onPress={() => onAddRelative(kind)}><Text style={{ color: c.accent, fontFamily: font.sansBold, fontSize: 12.5 }}>+ Add</Text></Pressable> : null}
+                </View>
               </View>
               {ids.length ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -135,7 +144,7 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
             </View>
           </GlassSurface>
         ))}
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

@@ -1,13 +1,16 @@
 // Master edit grid — a spreadsheet-style view to edit every member's fields at
-// once. Owner/admin only. Edits stage in memory and commit together on "Save
-// all" (one chunked batch via bulkUpdateMembers). No add/delete here — those
-// stay in the normal member flows.
+// once, plus an "Age order" tab (the same generation-grouped reorder list as
+// the profile Order sheet). Owner/admin only. Both tabs stage in memory and
+// commit together on "Save all" (one chunked batch via bulkUpdateMembers).
+// No add/delete here — those stay in the normal member flows.
 import { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator } from 'react-native';
 import { useTheme, radius, font } from '../theme/theme';
 import { Icon } from '../ui/Icon';
+import { SegTabs } from '../ui/primitives';
+import { AgeOrderGroups, useAgeOrder } from './AgeOrderList';
 import { bulkUpdateMembers } from '../firebase/firestore';
-import type { Member } from '../shared/types';
+import type { Member, Relationship } from '../shared/types';
 
 type Col = { key: keyof Member; label: string; w: number; kind?: 'gender' };
 const COLS: Col[] = [
@@ -26,15 +29,18 @@ const IDX_W = 44;
 const ROW_H = 46;
 const GENDERS: Member['gender'][] = ['male', 'female', 'other'];
 
-export function MasterEditGrid({ treeId, members, canManage, onClose }: {
-  treeId: string; members: Member[]; canManage: boolean; onClose: () => void;
+export function MasterEditGrid({ treeId, members, relationships, canManage, onClose }: {
+  treeId: string; members: Member[]; relationships: Relationship[]; canManage: boolean; onClose: () => void;
 }) {
   const { c } = useTheme();
   const [staged, setStaged] = useState<Record<string, Partial<Member>>>({});
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<'details' | 'order'>('details');
+  const order = useAgeOrder(members, relationships);
 
   const totalW = useMemo(() => IDX_W + COLS.reduce((s, col) => s + col.w, 0), []);
-  const dirtyCount = Object.keys(staged).length;
+  const orderChanges = order.dirty ? order.buildChanges() : [];
+  const dirtyCount = new Set([...Object.keys(staged), ...orderChanges.map((ch) => ch.id)]).size;
 
   const val = (m: Member, key: keyof Member): string => {
     const s = staged[m.id];
@@ -47,13 +53,20 @@ export function MasterEditGrid({ treeId, members, canManage, onClose }: {
   const sorted = useMemo(() => [...members].sort((a, b) => a.name.localeCompare(b.name)), [members]);
 
   const save = async () => {
-    const changes = Object.entries(staged)
-      .map(([id, data]) => ({ id, data: clean(data) }))
-      .filter((ch) => Object.keys(ch.data).length);
-    if (!changes.length) { onClose(); return; }
+    // one batch: staged detail edits merged with birthOrder diffs by member id
+    const merged = new Map<string, Partial<Member>>();
+    for (const [id, data] of Object.entries(staged)) {
+      const d = clean(data);
+      if (Object.keys(d).length) merged.set(id, d);
+    }
+    for (const ch of orderChanges) merged.set(ch.id, { ...merged.get(ch.id), ...ch.data });
+    if (!merged.size) { onClose(); return; }
     setBusy(true);
-    try { await bulkUpdateMembers(treeId, changes); setStaged({}); }
-    finally { setBusy(false); }
+    try {
+      await bulkUpdateMembers(treeId, [...merged].map(([id, data]) => ({ id, data })));
+      setStaged({});
+      order.markSaved();
+    } finally { setBusy(false); }
   };
 
   if (!canManage) {
@@ -77,8 +90,10 @@ export function MasterEditGrid({ treeId, members, canManage, onClose }: {
           <Text style={{ color: c.ink, fontFamily: font.serifItalic, fontSize: 19 }}>Edit all members</Text>
           <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>{members.length} people · {dirtyCount} edited</Text>
         </View>
+        <SegTabs value={tab} onChange={setTab} options={[['details', 'Details'], ['order', 'Age order']]}
+          fill={false} padV={7} padH={14} fontSize={12.5} />
         {dirtyCount > 0 ? (
-          <Pressable onPress={() => setStaged({})} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={() => { setStaged({}); order.reset(); }} style={{ height: 40, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 13 }}>Discard</Text>
           </Pressable>
         ) : null}
@@ -87,6 +102,13 @@ export function MasterEditGrid({ treeId, members, canManage, onClose }: {
         </Pressable>
       </View>
 
+      {tab === 'order' ? (
+        <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
+          <View style={{ width: '100%', maxWidth: 640, alignSelf: 'center', gap: 14 }}>
+            <AgeOrderGroups order={order} />
+          </View>
+        </ScrollView>
+      ) : (
       <ScrollView horizontal contentContainerStyle={{ minWidth: totalW }} showsHorizontalScrollIndicator>
         <View style={{ width: totalW }}>
           {/* header row */}
@@ -126,6 +148,7 @@ export function MasterEditGrid({ treeId, members, canManage, onClose }: {
           </ScrollView>
         </View>
       </ScrollView>
+      )}
     </View>
   );
 }

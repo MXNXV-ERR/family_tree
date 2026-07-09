@@ -95,5 +95,10 @@ export const ZoomPanCanvas = forwardRef<CanvasHandle, {
 });
 
 const styles = StyleSheet.create({
-  canvas: { flex: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  // minHeight/minWidth 0 — the stage child is laid out UNSCALED (transforms are
+  // visual only), so on web the flex item would otherwise grow to the stage
+  // size (min-height:auto), stretch the page past the viewport, and push every
+  // bottom-anchored element (focus bar, legends, light-mode scenery) below the
+  // fold on big families.
+  canvas: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
 });

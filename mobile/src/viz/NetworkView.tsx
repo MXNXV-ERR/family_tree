@@ -125,8 +125,7 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siblingEdges, positions, off, highlight, c]);
-  const animate = motion && members.length <= 60;
-  const dash = Math.ceil(size.w + size.h);
+  const animate = motion && edgeLines.length + sibLines.length <= 300;
   const drawKey = `net-${members.length}`;
 
   const sel = selId ? adjacency.get(selId) : undefined;
@@ -137,8 +136,8 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
         onTapEmpty={() => { if (Date.now() - lastPress.current > 350) setSelId(null); }}>
         <View style={{ width: size.w, height: size.h }}>
           <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
-            <DrawLines lines={edgeLines} color={c.relOther} dash={dash} animate={animate} drawKey={drawKey} strokeWidth={1.4} />
-            <DrawLines lines={sibLines} color={c.relSibling} dash={dash} animate={animate} drawKey={drawKey} strokeWidth={1.2} />
+            <DrawLines lines={edgeLines} color={c.relOther} animate={animate} drawKey={drawKey} strokeWidth={1.4} />
+            <DrawLines lines={sibLines} color={c.relSibling} animate={animate} drawKey={drawKey} strokeWidth={1.2} />
           </Svg>
           {members.filter((m) => positions.has(m.id)).map((m, idx) => {
             const p = P(m.id);
@@ -155,7 +154,7 @@ export function NetworkView({ members, relationships, adjacency, focusId, meId, 
                   onPress={() => { lastPress.current = Date.now(); setSelId(m.id); setFocusId(m.id); }}
                   onLongPress={() => setFocusId(m.id)}
                   style={{ width: 120, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: dim ? 0.22 : 1 }}>
-                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: av, borderWidth: isMe || isFocus || tint ? 2 : 1, borderColor: nodeBorder, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: av, borderWidth: isMe || isFocus || tint ? 2 : 1, borderColor: nodeBorder, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', shadowColor: nodeBorder, shadowOpacity: c.mode === 'dark' ? 0.4 : 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 3 }}>
                     {m.photoUrl
                       ? <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} />
                       : <Text style={{ color: c.inkSoft, fontFamily: font.sansBold, fontSize: 10 }}>{initials(m.name)}</Text>}

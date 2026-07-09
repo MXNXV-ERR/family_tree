@@ -229,6 +229,20 @@ export function computeGenerations(members: Member[], relationships: Relationshi
 
 export const yearOf = (d?: string): number | undefined => (d ? Number(d.slice(0, 4)) : undefined);
 
+// Age ordering for siblings / generation rows. Birth YEAR always wins when both
+// are dated; the manual `birthOrder` (set via the sibling-order sheet) only
+// decides among members whose years can't — so entering a real date later never
+// leaves a stale manual arrangement in charge.
+export function compareByAge(a?: Member, b?: Member): number {
+  const ya = yearOf(a?.birthDate), yb = yearOf(b?.birthDate);
+  if (ya != null && yb != null && ya !== yb) return ya - yb;
+  const oa = a?.birthOrder, ob = b?.birthOrder;
+  if (oa != null && ob != null && oa !== ob) return oa - ob;
+  if (ya != null && yb == null) return -1; // dated members ahead of unknowns
+  if (yb != null && ya == null) return 1;
+  return (a?.id ?? '').localeCompare(b?.id ?? '');
+}
+
 export const lifespan = (m: Member): string => {
   const b = yearOf(m.birthDate);
   const d = yearOf(m.deathDate);

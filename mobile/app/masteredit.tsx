@@ -12,11 +12,11 @@ export default function MasterEditRoute() {
   const { c } = useTheme();
   const router = useRouter();
   const { activeTreeId, activeFamily } = useFamily();
-  const { members } = useFamilyTree(activeTreeId);
+  const { members, relationships } = useFamilyTree(activeTreeId);
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {activeTreeId ? (
-        <MasterEditGrid treeId={activeTreeId} members={members} canManage={canManageData(activeFamily?.role)} onClose={() => router.back()} />
+        <MasterEditGrid treeId={activeTreeId} members={members} relationships={relationships} canManage={canManageData(activeFamily?.role)} onClose={() => router.back()} />
       ) : null}
     </View>
   );

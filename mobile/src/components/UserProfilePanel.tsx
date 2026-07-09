@@ -3,9 +3,9 @@
 // details here can be pushed onto a claimed node from the member profile screen
 // ("Sync my profile"). Also holds the per-user regional-language override.
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useTheme, font, radius } from '../theme/theme';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import { DateField } from '../ui/DateField';
 import { useAuth } from '../firebase/AuthContext';
 import { useUserProfile } from '../firebase/UserProfileContext';
@@ -50,7 +50,7 @@ export function UserProfilePanel({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="user" title="Your profile" sub={user?.email ?? undefined} onClose={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 12 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 12 }}>
         <Field label="Name" c={c}><TextInput value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor={c.mute} style={inputStyle} /></Field>
 
         <Field label="Gender" c={c}>
@@ -84,7 +84,7 @@ export function UserProfilePanel({ onBack }: { onBack: () => void }) {
             {busy ? <ActivityIndicator color={c.accentInk} /> : <Text style={{ color: c.accentInk, fontFamily: font.sansBold, fontSize: 15 }}>Save profile</Text>}
           </Pressable>
         </View>
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

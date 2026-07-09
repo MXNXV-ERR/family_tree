@@ -30,7 +30,7 @@ function Ring({ cx, cy, r, color }: { cx: number; cy: number; r: number; color: 
 }
 import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
 import { DrawLines, FadeOutLines, type DrawLine } from './DrawLines';
-import { FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
+import { CollapsibleLegend, FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { layoutRadial, type RadialPos } from '../shared/radialLayout';
 import { initials, lifespan } from '../shared/adjacency';
 import { displayLabels } from '../shared/displayName';
@@ -47,7 +47,7 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { firstNames, motion } = useSettings();
+  const { firstNames, motion, revealSpeed } = useSettings();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const labels = useMemo(() => displayLabels(members, firstNames), [members, firstNames]);
   const [depth, setDepth] = useState(1);
@@ -114,11 +114,24 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
   // what depth the stage was solved for, so a stage resize never moves anything
   // on screen — the whole spoke layer just rides a <G> anchored at the centre.
   // Highlight only changes per-line opacity — no redraw.
-  const spokes = useMemo<DrawLine[]>(() => {
-    const out: DrawLine[] = [];
+  // Grouped by target ring so each ring's lines can wait for that ring's NODES
+  // to appear first (flat list kept for the relayout fade-out snapshot).
+  const { spokes, spokeRings } = useMemo(() => {
+    const flat: DrawLine[] = [];
+    const byRing = new Map<number, DrawLine[]>();
+    // Cards are drawn ~68px tall, centred on their position, with known widths
+    // (RadialCard: focus 168 / depth-1 150 / else 116). Inset each endpoint to
+    // the card's edge — an ellipse approximation of the card rect along the
+    // spoke direction — so lines meet the node instead of stopping at the ring
+    // circle underneath it.
+    const halfW = (id: string) => ((id === focusId ? 168 : (nodes.get(id)?.depth ?? 2) === 1 ? 150 : 116) / 2) + 4;
+    const HALF_H = 34 + 4;
+    const edgeR = (hw: number, ux: number, uy: number) =>
+      (hw * HALF_H) / Math.hypot(HALF_H * ux, hw * uy);
     for (const [id, n] of nodes.entries()) {
       if (n.depth === 0) continue;
-      const from = n.viaId ? positions.get(n.viaId) : positions.get(focusId);
+      const fromId = n.viaId ?? focusId;
+      const from = positions.get(fromId);
       const to = positions.get(id);
       if (!from || !to) continue;
       const rel = n.viaRel;
@@ -126,24 +139,48 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
         : rel === 'partner' ? c.relPartner : rel === 'ex-partner' ? c.relEx
         : rel === 'sibling' ? c.relSibling : c.relOther;
       const isHl = highlight && highlight.has(id);
-      out.push({
-        d: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+      const dist = Math.hypot(to.x - from.x, to.y - from.y);
+      let d = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+      if (dist > 1) {
+        const ux = (to.x - from.x) / dist, uy = (to.y - from.y) / dist;
+        const rFrom = edgeR(halfW(fromId), ux, uy);
+        const rTo = edgeR(halfW(id), ux, uy);
+        // only inset when the cards don't already touch (tight partner spokes)
+        if (dist > rFrom + rTo + 12) {
+          const fx = from.x + ux * rFrom, fy = from.y + uy * rFrom;
+          const tx = to.x - ux * rTo, ty = to.y - uy * rTo;
+          d = `M ${fx.toFixed(1)} ${fy.toFixed(1)} L ${tx.toFixed(1)} ${ty.toFixed(1)}`;
+        }
+      }
+      const line: DrawLine = {
+        d,
         color, dashed: rel === 'ex-partner',
         opacity: highlight ? (isHl ? 1 : 0.15) : 0.5,
-      });
+      };
+      flat.push(line);
+      let g = byRing.get(n.depth);
+      if (!g) byRing.set(n.depth, (g = []));
+      g.push(line);
     }
-    return out;
+    return { spokes: flat, spokeRings: [...byRing.entries()].sort((a, b) => a[0] - b[0]) };
   }, [nodes, positions, highlight, focusId, c]);
-  // Entrance animations only on small graphs (same guard as the tree view) and
-  // a dash longer than any spoke (stage diagonal).
-  const animate = motion && positions.size <= 60;
-  const dash = Math.ceil(stageSize * 1.5);
+  // Draw-on scales to most graphs now (per-line dash); only huge ones render
+  // instantly.
+  const animate = motion && spokes.length <= 300;
   const drawKey = `${focusId}-${depth}`;
   // Cards enter ring-by-ring: order by depth, keep within-ring layout order.
   const ordered = useMemo(
     () => [...positions.entries()].sort((a, b) => (nodes.get(a[0])?.depth ?? 0) - (nodes.get(b[0])?.depth ?? 0)),
     [positions, nodes],
   );
+  // Index of each ring's LAST card in the entrance order — its line group must
+  // not start drawing until that card has begun fading in (nodes first, then
+  // lines, inner ring → outer ring).
+  const ringLastIdx = useMemo(() => {
+    const m = new Map<number, number>();
+    ordered.forEach(([id], idx) => m.set(nodes.get(id)?.depth ?? 0, idx));
+    return m;
+  }, [ordered, nodes]);
 
   // Relayout choreography: snapshot the OLD spokes and fade them out while the
   // nodes glide to their new spots; the NEW spokes draw in only after the glide
@@ -195,11 +232,17 @@ export function RadialView({ members, relationships, adjacency, focusId, meId, s
               <Ring key={i} cx={C} cy={C} r={r} color={c.accent} />
             ))}
             {/* spokes ride a centre-anchored group; old set fades while nodes
-                glide, new set draws in after (delay ≈ MorphNode glide time) */}
+                glide, then each ring's lines draw AFTER that ring's cards have
+                started fading in (min(lastIdx*18,340) mirrors the MorphNode
+                entrance delay; +220 clears the visibility threshold; +d*90
+                keeps a strict inner→outer cascade past the stagger cap). */}
             <G x={C} y={C}>
               {fading ? <FadeOutLines key={`fade-${drawKey}`} lines={fading} color={c.relOther} strokeWidth={1.6} /> : null}
-              <DrawLines lines={spokes} color={c.relOther} dash={dash} animate={animate} drawKey={drawKey} strokeWidth={1.6}
-                delay={mounted.current ? 620 : 0} />
+              {spokeRings.map(([d, ringLines]) => (
+                <DrawLines key={`ring-${d}`} lines={ringLines} color={c.relOther} animate={animate} drawKey={drawKey} strokeWidth={1.6}
+                  stagger={Math.round(45 / (revealSpeed || 1))}
+                  delay={Math.round(((mounted.current ? 620 : 0) + Math.min((ringLastIdx.get(d) ?? 0) * 18, 340) + 220 + Math.min(d * 90, 450)) / (revealSpeed || 1))} />
+              ))}
             </G>
           </Svg>
 
@@ -259,21 +302,16 @@ function RelationLegend({ c }: { c: Palette }) {
     ['Sibling / cousin', c.relSibling, false],
   ];
   return (
-    <View style={{ position: 'absolute', left: 12, bottom: 16 }} pointerEvents="none">
-      <GlassSurface rounded={radius.md}>
-        <View style={{ paddingHorizontal: 13, paddingVertical: 11 }}>
-          <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 9.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 8 }}>Relationship</Text>
-          <View style={{ gap: 6 }}>
-            {rows.map(([lb, col, dash]) => (
-              <View key={lb} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 16, height: 0, borderTopWidth: 2, borderColor: col, borderStyle: dash ? 'dashed' : 'solid' }} />
-                <Text style={{ color: c.inkSoft, fontSize: 11.5, fontFamily: font.sans }}>{lb}</Text>
-              </View>
-            ))}
+    <CollapsibleLegend title="Relationship">
+      <View style={{ gap: 6 }}>
+        {rows.map(([lb, col, dash]) => (
+          <View key={lb} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 16, height: 0, borderTopWidth: 2, borderColor: col, borderStyle: dash ? 'dashed' : 'solid' }} />
+            <Text style={{ color: c.inkSoft, fontSize: 11.5, fontFamily: font.sans }}>{lb}</Text>
           </View>
-        </View>
-      </GlassSurface>
-    </View>
+        ))}
+      </View>
+    </CollapsibleLegend>
   );
 }
 
@@ -296,7 +334,14 @@ function RadialCard({ m, c, label, pos, isFocus, isMe, dim, selected, relLabel, 
       ) : null}
       <View style={{ width: '100%' }}>
         <Pressable onPress={onPress} style={{ width: '100%' }}>
-          <GlassSurface rounded={radius.lg} intensity={50} style={{ borderColor: cardBorder, borderWidth: isFocus ? 2 : tint ? 1.5 : 1, ...(isFocus ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 } : null) }}>
+          <GlassSurface rounded={radius.lg} intensity={50} style={{
+            borderColor: cardBorder, borderWidth: isFocus ? 2 : tint ? 1.5 : 1,
+            // every card glows softly in its relationship colour; focus gets the
+            // stronger accent halo
+            ...(isFocus
+              ? { shadowColor: c.accent, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }
+              : { shadowColor: relColor, shadowOpacity: c.mode === 'dark' ? 0.35 : 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 }),
+          }}>
             <View style={{ padding: 10, alignItems: 'center', flexDirection: w > 130 ? 'row' : 'column', gap: 8 }}>
               <View style={{ width: isFocus ? 48 : 38, height: isFocus ? 48 : 38, borderRadius: 24, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {m.photoUrl

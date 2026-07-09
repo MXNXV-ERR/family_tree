@@ -8,7 +8,7 @@ import Svg, { Defs, Pattern, Circle, Rect } from 'react-native-svg';
 import { useTheme, radius, font, type Palette } from '../theme/theme';
 import { useSettings } from '../theme/SettingsContext';
 import { ZoomPanCanvas, type CanvasHandle } from './ZoomPanCanvas';
-import { DrawLines } from './DrawLines';
+import { DrawLines, type DrawLine } from './DrawLines';
 import { VizSegment, FocusBar, ZoomButtons, type ZoomApi } from './vizChrome';
 import { MorphNode } from '../ui/primitives';
 import { Slider } from '../ui/Slider';
@@ -16,7 +16,7 @@ import { Icon } from '../ui/Icon';
 import { useAmbientMotion } from '../ui/AmbientMotion';
 import {
   layoutPyramid, layoutLayered, layoutInverted, layoutHourglass,
-  NODE_W, NODE_H, COUPLE_W, type LayoutResult,
+  NODE_W, NODE_H, COUPLE_W, PILL_PAD, ROW_H, type LayoutResult,
 } from '../shared/treeLayout';
 import { initials, lifespan, computeGenerations, buildAdjacency } from '../shared/adjacency';
 import { displayLabels } from '../shared/displayName';
@@ -38,11 +38,15 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
 }) {
   const { c } = useTheme();
   const { terms } = useRelTerms();
-  const { motion, firstNames } = useSettings();
+  const { motion, firstNames, revealSpeed } = useSettings();
   const am = useAmbientMotion();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [layout, setLayout] = useState<TreeLayout>('pyramid');
   const [selId, setSelId] = useState<string | null>(null);
+  // The canvas tap (onTapEmpty) fires simultaneously with a card press; without
+  // this guard the empty-tap clears the selection a card just set and the focus
+  // bar never shows (same fix as RadialView/NetworkView).
+  const lastCardPress = useRef(0);
   // Pan the sky to this layout's sub-slot (absolute, mirrors the view filmstrip)
   // so switching layouts MOVES the background instead of zoom-pulsing it.
   useEffect(() => { am?.setLayoutPos(LAYOUT_ORDER.indexOf(layout) * 0.25); }, [layout, am]);
@@ -92,25 +96,44 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
   const offX = full ? (stageW - width) / 2 : 0;
   const offY = full ? (stageH - height) / 2 : 0;
 
-  // Dip the connectors during a generation change, then bring them back once the
-  // nodes have glided in — so lines never point at mid-flight nodes.
+  const fit = Math.max(0.2, Math.min(1, (screenW - 40) / stageW, (screenH - 220) / stageH));
+  // Line draw-on now scales to most real trees (per-line dash = cheap worklets);
+  // only truly huge graphs fall back to the instant render + fade dip.
+  const animate = motion && lines.length <= 300;
+
+  // Dip the connectors during a generation change, then bring them back once
+  // the nodes have glided in — but ONLY for big trees (animate off): small
+  // trees get the per-row cascade below instead, which the dip would flatten.
   const lineFade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (!motion) { lineFade.setValue(1); return; }
+    if (!motion || animate) { lineFade.setValue(1); return; }
     lineFade.setValue(0.12);
     Animated.timing(lineFade, { toValue: 1, duration: 460, delay: 240, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genLimit]);
 
-  const fit = Math.max(0.2, Math.min(1, (screenW - 40) / stageW, (screenH - 220) / stageH));
-  // Entrance animations only on small trees — hundreds of NodePop/line-draw
-  // animations stutter and "skip" on big trees, so render those instantly.
-  const animate = motion && positions.size <= 60;
-  // Dash long enough to cover any single connector at this tree size.
-  const dash = Math.ceil(stageW + stageH);
-  // Lines redraw on layout/size change, not on every focus tap (geometry is the
-  // same), so the canvas stays mounted across focus changes (no remount jank).
-  const drawKey = `${layout}-${Math.round(width)}`;
+  // Lines redraw on layout/generation change, not on every focus tap (geometry
+  // is the same), so the canvas stays mounted across focus changes.
+  const drawKey = `${layout}-${genLimit}-${Math.round(width)}`;
+
+  // Per-generation cascade: group connectors by the ROW they start in (first
+  // `M x y` of the path — starts sit at row*ROW_H + 60|66|110, so floor lands
+  // on the row cleanly), then draw row 0 first, downward — parent before
+  // children, matching the radial's inner→outer ring cascade. The lines array
+  // is post-order (deepest first), so parse rather than trust array order.
+  const lineRows = useMemo(() => {
+    const byRow = new Map<number, DrawLine[]>();
+    for (const l of lines) {
+      const match = /M\s*[-\d.]+\s+([-\d.]+)/.exec(l.d);
+      const row = match ? Math.max(0, Math.floor(Number(match[1]) / ROW_H)) : 0;
+      let g = byRow.get(row);
+      if (!g) byRow.set(row, (g = []));
+      g.push(l);
+    }
+    return [...byRow.entries()].sort((a, b) => a[0] - b[0]);
+  }, [lines]);
+  const mountedTree = useRef(false);
+  useEffect(() => { mountedTree.current = true; }, []);
 
   // Smoothly pan the canvas so the focus member sits at centre — on first load
   // (the default "you"/random focus) and whenever the focus changes. Content is
@@ -164,7 +187,8 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
           </View>
         </View>
       ) : null}
-      <ZoomPanCanvas key={layout} ref={canvasRef} initialScale={fit} minScale={0.15} maxScale={2.5} onTapEmpty={() => setSelId(null)}>
+      <ZoomPanCanvas key={layout} ref={canvasRef} initialScale={fit} minScale={0.15} maxScale={2.5}
+        onTapEmpty={() => { if (Date.now() - lastCardPress.current > 350) setSelId(null); }}>
         <View style={{ width: stageW, height: stageH }}>
           <Svg width={stageW} height={stageH} style={StyleSheet.absoluteFill}>
             {/* dotted canvas (design .dotgrid) */}
@@ -175,20 +199,26 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
             </Defs>
             <Rect x={0} y={0} width={stageW} height={stageH} fill="url(#ft-dots)" />
           </Svg>
-          {/* Connectors on their own layer, offset to the centred subset so they
-              can dip out/in during a generation morph (lineFade) without touching
-              the dot grid. */}
+          {/* Connectors on their own layer, offset to the centred subset. Small
+              trees: one DrawLines per generation row, top row first — parent
+              connectors draw before their children's (radial's ring cascade).
+              Delay base covers the MorphNode glide (540/sp) on relayout. Big
+              trees fall back to the lineFade dip. */}
           <Animated.View style={{ position: 'absolute', left: 0, top: 0, opacity: lineFade, transform: [{ translateX: offX }, { translateY: offY }] }} pointerEvents="none">
             <Svg width={width} height={height}>
-              <DrawLines lines={lines} color={c.relParent} dash={dash} animate={animate} drawKey={drawKey}
-                colorFor={layered && colorOf ? (ownerId) => (ownerId ? colorOf(ownerId) : undefined) : undefined} />
+              {lineRows.map(([row, rowLines]) => (
+                <DrawLines key={`row-${row}`} lines={rowLines} color={c.relParent} animate={animate} drawKey={drawKey}
+                  delay={Math.round(((mountedTree.current ? 560 : 120) + Math.min(row * 110, 660)) / (revealSpeed || 1))}
+                  stagger={Math.round(70 / (revealSpeed || 1))}
+                  colorFor={layered && colorOf ? (ownerId) => (ownerId ? colorOf(ownerId) : undefined) : undefined} />
+              ))}
             </Svg>
           </Animated.View>
 
           {couplePills.map((p) => (
-            <MorphNode key={`pill-${p.ids[0]}`} x={p.x - 6 + offX} y={p.y - 6 + offY}>
+            <MorphNode key={`pill-${p.ids[0]}`} x={p.x - PILL_PAD + offX} y={p.y - PILL_PAD + offY}>
               <View pointerEvents="none" style={{
-                width: COUPLE_W + 12, height: NODE_H + 12,
+                width: COUPLE_W + PILL_PAD * 2, height: NODE_H + PILL_PAD * 2,
                 borderRadius: radius.lg, borderWidth: 1,
                 borderColor: p.status === 'divorced' ? c.relEx : c.gold,
                 borderStyle: p.status === 'divorced' ? 'dashed' : 'solid', opacity: 0.55,
@@ -207,7 +237,7 @@ export function TreeView({ members, relationships, adjacency, focusId, meId, set
               <MorphNode key={id} i={idx} x={pos.x + offX} y={pos.y + offY}>
                 <NodeCard m={m} c={c} label={labels.get(id) ?? m.name}
                   isFocus={isFocus} isMe={isMe} dim={dim} hl={hl} tint={colorOf?.(id)}
-                  onPress={() => { setSelId(id); setFocusId(id); }} />
+                  onPress={() => { lastCardPress.current = Date.now(); setSelId(id); setFocusId(id); }} />
               </MorphNode>
             );
           })}
@@ -233,12 +263,13 @@ function NodeCard({ m, c, label, isFocus, isMe, dim, hl, tint, onPress }: {
       width: NODE_W, height: NODE_H,
       borderRadius: radius.md, borderWidth: isFocus ? 2 : tint ? 2 : 1, borderColor: border, backgroundColor: bg,
       opacity: dim ? 0.35 : 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8,
-      // depth + accent glow on the focused card (design look)
-      shadowColor: isFocus ? c.accent : '#000',
-      shadowOpacity: isFocus ? 0.5 : (c.mode === 'dark' ? 0.35 : 0.12),
-      shadowRadius: isFocus ? 16 : 5,
+      // every card carries a soft glow in its border colour; the focused card
+      // gets the stronger accent halo (design look)
+      shadowColor: isFocus ? c.accent : border,
+      shadowOpacity: isFocus ? 0.5 : (c.mode === 'dark' ? 0.45 : 0.22),
+      shadowRadius: isFocus ? 16 : 10,
       shadowOffset: { width: 0, height: isFocus ? 8 : 2 },
-      elevation: isFocus ? 8 : 2,
+      elevation: isFocus ? 8 : 3,
     }}>
       <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {m.photoUrl

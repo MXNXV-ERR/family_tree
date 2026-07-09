@@ -9,7 +9,7 @@ import { View, Text, Image, Pressable, ScrollView, TextInput, Modal, ActivityInd
 import { useTheme, radius, font } from '../theme/theme';
 import { Icon } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
-import { SheetHead, Toggle } from './panelChrome';
+import { SheetHead, Toggle, PanelScroll } from './panelChrome';
 import { pickRawImage, cropToDataUri, compressUri, type CropBox } from '../shared/photo';
 import { detectFaces } from '../face/faceEngine';
 import { buildMemberDescriptors, matchPrebuilt } from '../face/faceRunner';
@@ -110,7 +110,7 @@ export function FamilyPhotoFlow({ treeId, members, onClose }: {
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="image" title="Family photo" sub="Assign each face to a member" onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 14 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 14 }}>
         {phase === 'pick' ? (
           <View style={{ gap: 14, alignItems: 'center', paddingVertical: 24 }}>
             <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -197,7 +197,7 @@ export function FamilyPhotoFlow({ treeId, members, onClose }: {
             </Pressable>
           </>
         ) : null}
-      </ScrollView>
+      </PanelScroll>
 
       {/* member picker */}
       {pickFor !== null ? (

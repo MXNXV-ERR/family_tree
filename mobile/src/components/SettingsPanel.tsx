@@ -2,7 +2,7 @@
 // Display toggles (birth years, glass surfaces, motion) wired to SettingsContext,
 // and sign out. Shared by the mobile settings sheet and the desktop drawer.
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme, font, radius, ACCENT_SWATCHES, AURORA_PRESETS, AURORA_KEYS } from '../theme/theme';
 import { useSettings, type Settings, type TextSize } from '../theme/SettingsContext';
@@ -14,7 +14,7 @@ import { generateRelationshipTerms } from '../shared/gemini';
 import { STATIC_REL_TERMS, STATIC_LANGS } from '../shared/relTermsStatic';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon, type IconName } from '../ui/Icon';
-import { SheetHead, Toggle } from './panelChrome';
+import { SheetHead, Toggle, PanelScroll } from './panelChrome';
 import { UserProfilePanel } from './UserProfilePanel';
 import { remindersSupported, requestReminderPermission, clearReminders } from '../notifications/reminders';
 
@@ -106,7 +106,7 @@ export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="settings" title="Settings" sub="Appearance & display" onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 18 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 18 }}>
         {/* Your profile */}
         <View>
           <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Account</Text>
@@ -147,15 +147,17 @@ export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void
           <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.7, textTransform: 'uppercase', marginBottom: 10, marginLeft: 2 }}>Ambience</Text>
           <GlassSurface rounded={radius.lg}>
             <View style={{ padding: 16, gap: 14 }}>
-              {/* Stars */}
+              {/* Sky density — stars at night, clouds by day (same dial, key stays `stars`) */}
               <View style={{ gap: 9 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Icon name="sparkles" size={17} color={c.gold} />
-                  <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>Stars</Text>
+                  <Icon name={mode === 'dark' ? 'sparkles' : 'sun'} size={17} color={c.gold} />
+                  <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansSemi, fontSize: 14 }}>{mode === 'dark' ? 'Star density' : 'Cloud density'}</Text>
                   <Text style={{ color: c.gold, fontFamily: font.monoMed, fontSize: 11.5 }}>{s.stars}</Text>
                 </View>
                 <FullSlider value={s.stars} min={0} max={320} step={10} onChange={(v) => s.setOption('stars', v)} />
-                {mode === 'light' ? <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11 }}>Stars appear in dark mode.</Text> : null}
+                <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 11 }}>
+                  {mode === 'dark' ? 'Stars, meteors, moon & other night-sky objects.' : 'Clouds, birds, balloons & other day-sky objects.'}
+                </Text>
               </View>
               {/* Background glow */}
               <View style={{ gap: 9 }}>
@@ -299,7 +301,7 @@ export function SettingsPanel({ onClose, onOpenCalendar }: { onClose: () => void
           <Icon name="logout" size={18} color={c.inkSoft} />
           <Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Sign out</Text>
         </Pressable>
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

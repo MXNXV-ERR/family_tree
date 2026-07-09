@@ -16,7 +16,7 @@ export interface Settings {
   reminders: boolean;  // birthday/anniversary local notifications (native)
   firstNames: boolean; // visualizations label nodes "Ravi" (dupes get "Ravi K.")
   textSize: TextSize;  // global text/UI scale
-  stars: number;       // ambient constellation density (0–320, dark mode only)
+  stars: number;       // sky-object density, both modes (0–320): stars/meteors at night, clouds/birds by day
   glow: number;        // ambient aurora intensity (0–100%)
   aurora: string;      // aurora colour preset key (theme.AURORA_PRESETS)
   revealSpeed: number; // node/generation entrance speed multiplier (0.5–2.5×)

@@ -2,12 +2,12 @@
 // desktop workspace "people" button (which previously only showed collaborators,
 // not the family members). Tap a row to open that member's profile.
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, Platform } from 'react-native';
 import { useTheme, radius, font } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import { lifespan } from '../shared/adjacency';
 import type { Member } from '../shared/types';
 
@@ -44,7 +44,7 @@ export function MembersPanel({ members, meId, onOpenProfile, onOpenFamilyInfo, o
         ) : null}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 8 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 8 }}>
         {shown.map((m) => (
           <Pressable key={m.id} onPress={() => onOpenProfile(m)} style={({ pressed }) => ({
             flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: radius.md,
@@ -70,7 +70,7 @@ export function MembersPanel({ members, meId, onOpenProfile, onOpenFamilyInfo, o
         {shown.length === 0 ? (
           <GlassSurface><Text style={{ color: c.mute, fontFamily: font.sansMed, textAlign: 'center', padding: 24 }}>{query.trim() ? 'No matches found.' : 'No members yet.'}</Text></GlassSurface>
         ) : null}
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }

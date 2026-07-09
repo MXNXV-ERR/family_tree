@@ -12,7 +12,7 @@ import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, ActivityIndic
 import { SvgXml } from 'react-native-svg';
 import { useTheme, radius, space, font, type Palette } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
-import { SheetHead } from './panelChrome';
+import { SheetHead, PanelScroll } from './panelChrome';
 import { Icon, type IconName } from '../ui/Icon';
 import { Slider } from '../ui/Slider';
 import { Avatar } from '../ui/primitives';
@@ -132,7 +132,7 @@ export function ExportPanel({ treeId, members, relationships, treeName = 'Family
   return (
     <View style={{ flex: 1 }}>
       <SheetHead icon="download" title="Export & import" sub={treeName} onClose={onClose} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 4, gap: 16 }}>
+      <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 16 }}>
         {/* view + theme pickers — drive the image exports */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', padding: 4, gap: 2, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, borderRadius: radius.pill }}>
@@ -244,7 +244,7 @@ export function ExportPanel({ treeId, members, relationships, treeName = 'Family
         <Text style={{ color: c.mute, fontSize: 11, textAlign: 'center' }}>
           {Platform.OS === 'web' ? 'Files download to your browser. PDF opens the print dialog (save as PDF).' : 'Files open the share sheet to save or send.'}
         </Text>
-      </ScrollView>
+      </PanelScroll>
     </View>
   );
 }
