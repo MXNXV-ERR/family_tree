@@ -10,14 +10,16 @@ import { GlassSurface } from '../theme/GlassSurface';
 import { Avatar, IconBtn } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/Icon';
 import { lifespan } from '../shared/adjacency';
+import { LifeTimeline } from '../components/LifeTimeline';
 import type { Adjacency } from '../shared/adjacency';
 import type { LinkKind } from '../shared/relationshipActions';
+import type { Relationship, FamilyEvent } from '../shared/types';
 
-export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative = true, canClaim = false, canSync = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onSync, onOrderSiblings, onFocusInTree }: {
-  adj: Adjacency; id: string; meId?: string; canEdit?: boolean; canAddRelative?: boolean; canClaim?: boolean; canSync?: boolean; onClose: () => void;
+export function DesktopProfile({ adj, id, meId, relationships = [], events = [], canEdit = true, canAddRelative = true, canClaim = false, canSync = false, canSendNote = false, onClose, onEdit, onOpen, onAddRelative, onDeleteRelative, onClaim, onSync, onSendNote, onOrderSiblings, onFocusInTree }: {
+  adj: Adjacency; id: string; meId?: string; relationships?: Relationship[]; events?: FamilyEvent[]; canEdit?: boolean; canAddRelative?: boolean; canClaim?: boolean; canSync?: boolean; canSendNote?: boolean; onClose: () => void;
   onEdit: (id: string) => void; onOpen: (id: string) => void;
   onAddRelative: (kind?: LinkKind) => void; onDeleteRelative?: (kind: LinkKind, relatedId: string) => void;
-  onClaim?: () => void; onSync?: () => void; onOrderSiblings?: () => void; onFocusInTree: (id: string) => void;
+  onClaim?: () => void; onSync?: () => void; onSendNote?: () => void; onOrderSiblings?: () => void; onFocusInTree: (id: string) => void;
 }) {
   const { c } = useTheme();
   const { years } = useSettings();
@@ -69,6 +71,7 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
             ...(canAddRelative ? [['link', 'Add relative', () => onAddRelative()]] as [IconName, string, () => void][] : []),
             ...(canClaim && onClaim ? [['user', 'This is me', onClaim]] as [IconName, string, () => void][] : []),
             ...(canSync && onSync ? [['copy', 'Sync me', onSync]] as [IconName, string, () => void][] : []),
+            ...(canSendNote && onSendNote ? [['mail', 'Send note', onSendNote]] as [IconName, string, () => void][] : []),
             ...(canEdit ? [['edit', 'Edit', () => onEdit(m.id)]] as [IconName, string, () => void][] : []),
           ]) as [IconName, string, () => void][]).map(([ic, lb, fn]) => (
             <Pressable key={lb} onPress={fn} style={({ pressed }) => ({ flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: radius.md, backgroundColor: c.paper, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
@@ -132,6 +135,12 @@ export function DesktopProfile({ adj, id, meId, canEdit = true, canAddRelative =
             </View>
           </GlassSurface>
         ))}
+
+        {/* life */}
+        <View>
+          <Text style={{ color: c.mute, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, marginLeft: 2 }}>Life</Text>
+          <LifeTimeline member={m} adjacency={adj} relationships={relationships} events={events} />
+        </View>
 
         {/* story */}
         {story.filter((b) => b[1]).map(([label, val]) => (

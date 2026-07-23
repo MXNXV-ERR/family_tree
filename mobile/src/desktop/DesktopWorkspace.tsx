@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../firebase/AuthContext';
 import { useFamily } from '../firebase/FamilyContext';
 import { useFamilyTree } from '../firebase/useFamilyTree';
+import { useInbox } from '../firebase/useInbox';
 import { addMember, updateMember, deleteMember, deleteRelationship, deleteRelationships, addRelationships, claimMember } from '../firebase/firestore';
 import { useUserProfile } from '../firebase/UserProfileContext';
 import { PROFILE_TO_MEMBER_FIELDS } from '../firebase/userProfile';
@@ -40,11 +41,13 @@ import { ChatPanel } from '../components/ChatPanel';
 import { MembersPanel } from '../components/MembersPanel';
 import { ExportPanel } from '../components/ExportPanel';
 import { LinkForm } from '../components/LinkForm';
-import { canEditMember, canDeleteMember, canEditRelationship, canImport, canManageData } from '../shared/permissions';
+import { NoteComposePanel } from '../components/NoteComposePanel';
+import { DesktopNotesPanel } from '../components/DesktopNotesPanel';
+import { canEditMember, canDeleteMember, canEditRelationship, canImport, canManageData, roleLabel } from '../shared/permissions';
 import type { Member, Relationship } from '../shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline' | 'network' | 'master';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link' | 'order'; id?: string; kind?: LinkKind } | null;
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link' | 'order' | 'inbox' | 'noteCompose'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -69,6 +72,7 @@ export function DesktopWorkspace() {
 
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
+  const { unread } = useInbox(activeTreeId, user?.uid, meId);
   const role = activeFamily?.role;
   const gens = useMemo(() => (members.length ? Math.max(...computeGenerations(members, relationships).values()) + 1 : 0), [members, relationships]);
 
@@ -198,6 +202,14 @@ export function DesktopWorkspace() {
           <IconBtn name="calendar" tone="ghost" onPress={() => setDrawer({ type: 'calendar' })} />
           <IconBtn name="download" tone="ghost" onPress={() => setDrawer({ type: 'export' })} />
           <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
+          <View>
+            <IconBtn name="mail" tone="ghost" onPress={() => setDrawer({ type: 'inbox' })} />
+            {unread > 0 ? (
+              <View pointerEvents="none" style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: c.accentInk, fontFamily: font.sansHeavy, fontSize: 9 }}>{unread > 9 ? '9+' : unread}</Text>
+              </View>
+            ) : null}
+          </View>
           <IconBtn name="settings" tone="ghost" onPress={() => setDrawer({ type: 'settings' })} />
           <ThemeToggle />
           <Pressable onPress={() => setDrawer({ type: 'chat' })} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, height: 42, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.97 : 1 }] })}>
@@ -250,11 +262,13 @@ export function DesktopWorkspace() {
         {/* RIGHT DRAWER */}
         <DesktopDrawer open={!!drawer} onClose={() => setDrawer(null)}>
         {drawer?.type === 'profile' && drawer.id ? (
-          <DesktopProfile adj={adjacency} id={drawer.id} meId={meId} onClose={() => setDrawer(null)}
+          <DesktopProfile adj={adjacency} id={drawer.id} meId={meId} relationships={relationships} events={events} onClose={() => setDrawer(null)}
             canEdit={canEditMember(role, adjacency.get(drawer.id), user?.uid)}
             canAddRelative={canEditRelationship(role, drawer.id, drawer.id, members, user?.uid)}
             canClaim={!meId && !adjacency.get(drawer.id)?.associatedUserId}
             canSync={!!meId && drawer.id === meId && !!profile}
+            canSendNote={drawer.id !== meId}
+            onSendNote={() => setDrawer({ type: 'noteCompose', id: drawer.id })}
             onEdit={(id) => editMember(id)} onOpen={(id) => setDrawer({ type: 'profile', id })}
             onAddRelative={(kind) => setDrawer({ type: 'link', id: drawer.id, kind })}
             onDeleteRelative={(kind, relatedId) => removeLink(drawer.id!, kind, relatedId)}
@@ -304,6 +318,12 @@ export function DesktopWorkspace() {
         ) : null}
         {drawer?.type === 'export' && activeTreeId ? (
           <ExportPanel treeId={activeTreeId} members={members} relationships={relationships} treeName={activeFamily?.name ?? treeMetadata?.name} focusId={focusId} canImport={canImport(role)} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'inbox' ? (
+          <DesktopNotesPanel treeId={activeTreeId} uid={user?.uid} members={members} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'noteCompose' && drawer.id ? (
+          <NoteComposePanel treeId={activeTreeId} recipient={adjacency.get(drawer.id)} myId={meId} onClose={() => setDrawer(null)} />
         ) : null}
         </DesktopDrawer>
       </View>
@@ -369,7 +389,7 @@ function FamilySwitcher({ c, family, fallbackName, onPick }: { c: Palette; famil
           <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.serifItalic, fontSize: 20 }}>{name}</Text>
           <Icon name="chevD" size={15} color={c.mute} />
         </View>
-        <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 10.5, textTransform: 'capitalize' }}>{family?.role ?? 'member'}</Text>
+        <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 10.5 }}>{roleLabel(family?.role)}</Text>
       </View>
     </Pressable>
   );

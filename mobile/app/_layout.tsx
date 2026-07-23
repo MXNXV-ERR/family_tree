@@ -15,6 +15,7 @@ import { useTheme } from '../src/theme/theme';
 import { useAppFonts } from '../src/theme/fonts';
 import { AmbientBackground } from '../src/ui/AmbientBackground';
 import { AmbientMotionProvider } from '../src/ui/AmbientMotion';
+import { NoteNotifier } from '../src/notifications/NoteNotifier';
 
 // react-native-svg spreads RN responder props onto the web <svg> element, which
 // React warns about. Harmless and web-only — silence it so it doesn't spam dev.
@@ -96,6 +97,7 @@ function NavShell() {
             </View>
           ) : (
             <NavThemeProvider value={navTheme}>
+              <NoteNotifier />
               <Stack
                 screenOptions={{
                   headerShown: false,

@@ -57,9 +57,11 @@ export interface TreeMetadata {
 }
 
 // ---- Multi-family (membership restructure) ----
-// owner: 1 per tree, manages roles. admin: full data control. member: normal
-// user (own info + depth-1 links). Legacy 'editor'/'viewer' normalise to member.
-export type FamilyRole = 'owner' | 'admin' | 'member';
+// owner: 1 per tree (founder), manages roles + can delete the family. coowner:
+// all owner powers except delete-family / demote-founder. admin: full data
+// control. member: normal user (own info + depth-1 links). Legacy 'editor'/
+// 'viewer' normalise to member.
+export type FamilyRole = 'owner' | 'coowner' | 'admin' | 'member';
 
 // How outsiders join this tree:
 //   'open'     — anyone with the invite code joins instantly (legacy behaviour;
@@ -143,7 +145,45 @@ export interface FamilyEvent {
     description?: string;
     memberIds?: string[];    // optional links → also surfaces on those members' rows
     createdBy?: string;      // uid of the creator
+    // User-chosen event icon. `icon` is either a built-in Icon name (iconKind
+    // 'glyph', the default) or an emoji glyph (iconKind 'emoji'). Absent → the
+    // default calendar glyph.
+    icon?: string;
+    iconKind?: 'glyph' | 'emoji';
 }
+
+// A private note (optional image) sent to a member who has claimed "This is me".
+// Stored at trees/{treeId}/notes/{id}. Only the recipient (toUid) and the sender
+// (fromUid) can read it. `image` is a < 1 MB base64 data URI stored inline (no
+// Firebase Storage), same as member photos.
+export interface Note {
+    id: string;
+    toMemberId: string;     // recipient member node
+    toUid: string;          // recipient's account uid (member.associatedUserId)
+    fromUid: string;        // sender's account uid
+    fromName?: string;      // sender display name (denormalised for the inbox)
+    fromMemberId?: string;  // sender's own node, if any
+    text?: string;
+    image?: string;         // < 1 MB base64 data URI
+    createdAt?: unknown;    // serverTimestamp
+    read?: boolean;         // recipient marks read
+    reaction?: string;      // recipient's emoji reaction (single)
+    subject?: string;       // optional title/subject line
+    rootId?: string;        // reply → the thread root note's id (absent on a root)
+    // Sender-chosen presentation: accent colour, an emoji "seal" (doubles as the
+    // pin badge on list rows/headers), a reveal animation, and a celebratory
+    // effect that plays (once + softly in the background) when the note opens.
+    theme?: {
+        color?: string;
+        seal?: string;
+        reveal?: 'unfold' | 'envelope' | 'flip' | 'curtain' | 'scroll' | 'zoom';
+        effect?: NoteEffectKind;
+    };
+}
+
+export type NoteEffectKind =
+    | 'none' | 'confetti' | 'hearts' | 'sparkles' | 'stars' | 'fireworks'
+    | 'balloons' | 'snow' | 'bubbles' | 'petals' | 'emojiRain' | 'glitter' | 'ribbons' | 'wings';
 
 // A request to join a family whose joinPolicy is 'approval'. Stored at
 // trees/{treeId}/joinRequests/{uid}; an owner/admin flips `status`.

@@ -13,6 +13,7 @@ import { SegTabs, SlideSwap } from '../src/ui/primitives';
 import { useAmbientMotion } from '../src/ui/AmbientMotion';
 import { SearchOverlay } from '../src/components/SearchOverlay';
 import { buildAdjacency } from '../src/shared/adjacency';
+import { safeBack } from '../src/shared/nav';
 import { TreeView } from '../src/viz/TreeView';
 import { RadialView } from '../src/viz/RadialView';
 import { TimelineView } from '../src/viz/TimelineView';
@@ -56,7 +57,7 @@ export default function VizScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 8 }}>
-        <Pressable onPress={() => router.back()} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
+        <Pressable onPress={() => safeBack(router)} hitSlop={8}><Icon name="back" size={20} color={c.accent} /></Pressable>
         <SegTabs<ViewKind>
           value={view} onChange={setView}
           options={[['tree', 'Tree'], ['radial', 'Radial'], ['timeline', 'Timeline'], ['network', 'Network']]}

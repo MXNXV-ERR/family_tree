@@ -229,6 +229,21 @@ export function computeGenerations(members: Member[], relationships: Relationshi
 
 export const yearOf = (d?: string): number | undefined => (d ? Number(d.slice(0, 4)) : undefined);
 
+// Fractional year for time-proportional placement: 2020-07-01 → ~2020.5. Powers
+// the timeline's exact-date spacing so events in the same year no longer collapse
+// onto one pixel. Year-only strings (no month) fall on Jan 1 of that year.
+const DAYS_BEFORE = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+export const yearFrac = (d?: string): number | undefined => {
+  if (!d) return undefined;
+  const y = Number(d.slice(0, 4));
+  if (!Number.isFinite(y)) return undefined;
+  const mo = Number(d.slice(5, 7));
+  if (!Number.isFinite(mo) || mo < 1 || mo > 12) return y;
+  const day = Number(d.slice(8, 10));
+  const doy = DAYS_BEFORE[mo - 1] + (Number.isFinite(day) && day >= 1 ? day - 1 : 0);
+  return y + doy / 365;
+};
+
 // Age ordering for siblings / generation rows. Birth YEAR always wins when both
 // are dated; the manual `birthOrder` (set via the sibling-order sheet) only
 // decides among members whose years can't — so entering a real date later never

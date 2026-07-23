@@ -15,6 +15,7 @@ import { useUserProfile } from '../firebase/UserProfileContext';
 import { Icon } from '../ui/Icon';
 import { Avatar } from '../ui/primitives';
 import { SheetHead, PanelScroll } from './panelChrome';
+import { roleLabel } from '../shared/permissions';
 import type { FamilyTree } from '../shared/types';
 
 type Mode = 'list' | 'new' | 'join' | 'claim';
@@ -135,7 +136,7 @@ export function FamilyPickerPanel({ onClose, onOpenInfo }: { onClose: () => void
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text numberOfLines={1} style={{ color: c.ink, fontFamily: font.sansBold, fontSize: 16 }}>{f.name}</Text>
-                    <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11, marginTop: 2, textTransform: 'capitalize' }}>{f.role ?? 'member'}</Text>
+                    <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11, marginTop: 2 }}>{roleLabel(f.role)}</Text>
                   </View>
                   {on ? (
                     <View style={{ padding: 6, borderRadius: radius.pill, backgroundColor: c.accent }}><Icon name="check" size={16} color={c.accentInk} /></View>

@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './config';
 import { logActivity } from './activity';
-import type { Member, Relationship, FamilyEvent } from '../shared/types';
+import type { Member, Relationship, FamilyEvent, Note } from '../shared/types';
 
 const treeRef = (uid: string) => doc(db, 'trees', uid);
 
@@ -182,6 +182,40 @@ export const updateEvent = (treeId: string, id: string, data: Partial<FamilyEven
 
 export const deleteEvent = (treeId: string, id: string) =>
   deleteDoc(doc(treeRef(treeId), 'events', id));
+
+// ---- Notes (trees/{treeId}/notes) — private note + image to a claimed member ----
+// Rules restrict reads to the recipient (toUid) and sender (fromUid); each query
+// below is constrained to one of those so the collection listener is authorised.
+// Degrades to an empty list if the notes rules aren't deployed yet.
+// Inbox is keyed on the RECIPIENT MEMBER NODE (toMemberId): a note is addressed to
+// a member, and whoever has claimed that node ("This is me") reads it. Anyone can
+// send; only the claimed owner receives.
+export const subscribeInbox = (treeId: string, memberId: string, cb: (n: Note[]) => void) =>
+  onSnapshot(
+    query(collection(treeRef(treeId), 'notes'), where('toMemberId', '==', memberId)),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Note[]),
+    (e) => { console.warn('subscribeInbox', (e as any)?.message ?? e); cb([]); },
+  );
+
+export const subscribeSent = (treeId: string, uid: string, cb: (n: Note[]) => void) =>
+  onSnapshot(
+    query(collection(treeRef(treeId), 'notes'), where('fromUid', '==', uid)),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Note[]),
+    (e) => { console.warn('subscribeSent', (e as any)?.message ?? e); cb([]); },
+  );
+
+export const addNote = (treeId: string, note: Omit<Note, 'id' | 'createdAt' | 'read'>) =>
+  addDoc(collection(treeRef(treeId), 'notes'), { ...note, read: false, createdAt: serverTimestamp() });
+
+export const markNoteRead = (treeId: string, id: string) =>
+  updateDoc(doc(treeRef(treeId), 'notes', id), { read: true });
+
+// Recipient's emoji reaction to a note (empty string clears it).
+export const setNoteReaction = (treeId: string, id: string, reaction: string) =>
+  updateDoc(doc(treeRef(treeId), 'notes', id), { reaction });
+
+export const deleteNote = (treeId: string, id: string) =>
+  deleteDoc(doc(treeRef(treeId), 'notes', id));
 
 // Update many members' fields in one chunked batch — the master-edit grid Save
 // and the family-photo face assignment both write several members at once.
