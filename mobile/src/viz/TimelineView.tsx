@@ -14,9 +14,10 @@ import { GlassSurface } from '../theme/GlassSurface';
 import { CollapsibleLegend, type ZoomApi } from './vizChrome';
 import { Slider } from '../ui/Slider';
 import { Icon, type IconName } from '../ui/Icon';
+import { EventGlyph } from '../components/EventIcon';
 import { Avatar, Rise } from '../ui/primitives';
 import { useAmbientMotion } from '../ui/AmbientMotion';
-import { yearOf, computeGenerations, compareByAge } from '../shared/adjacency';
+import { yearOf, yearFrac, computeGenerations, compareByAge } from '../shared/adjacency';
 import { displayLabels } from '../shared/displayName';
 import { relationLabel } from '../shared/relationTo';
 import { useRelTerms } from '../theme/RelTermsContext';
@@ -27,7 +28,7 @@ type Mode = 'dot' | 'bar' | 'events';
 const ROW_H = 48;
 const LABEL_W = 132;
 
-type LifeEvent = { year: number; icon: IconName; color: string; soft: string; label: string };
+type LifeEvent = { year: number; frac: number; icon: string; iconKind?: 'glyph' | 'emoji'; color: string; soft: string; label: string };
 
 export function TimelineView({ members, relationships, events, adjacency, focusId, meId, setFocusId, onOpenProfile, onZoomReady, hideZoomUI }: {
   members: Member[]; relationships: Relationship[]; events?: FamilyEvent[]; adjacency: Adjacency; focusId: string; meId?: string;
@@ -106,19 +107,19 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
     members.forEach((m) => {
       const out: LifeEvent[] = [];
       const b = yearOf(m.birthDate);
-      if (b) out.push({ year: b, icon: 'cake', color: c.teal, soft: c.bg, label: `${m.name} born · ${b}` });
+      if (b) out.push({ year: b, frac: yearFrac(m.birthDate) ?? b, icon: 'cake', color: c.teal, soft: c.bg, label: `${m.name} born · ${b}` });
       relationships.forEach((r) => {
         if (r.type !== 'spouse' || r.fromId !== m.id || !r.marriageDate) return;
         const y = yearOf(r.marriageDate);
         const sp = adjacency.get(r.toId);
-        if (y && sp) out.push({ year: y, icon: 'ring', color: c.rose, soft: c.roseSoft, label: `Married ${sp.name} · ${y}` });
+        if (y && sp) out.push({ year: y, frac: yearFrac(r.marriageDate) ?? y, icon: 'ring', color: c.rose, soft: c.roseSoft, label: `Married ${sp.name} · ${y}` });
       });
       adjacency.children(m.id).forEach((cid) => {
         const ch = adjacency.get(cid); const y = yearOf(ch?.birthDate);
-        if (y && ch) out.push({ year: y, icon: 'heart', color: c.accent, soft: c.accentSoft, label: `Birth of ${ch.name} · ${y}` });
+        if (y && ch) out.push({ year: y, frac: yearFrac(ch?.birthDate) ?? y, icon: 'heart', color: c.accent, soft: c.accentSoft, label: `Birth of ${ch.name} · ${y}` });
       });
       const d = yearOf(m.deathDate);
-      if (d) out.push({ year: d, icon: 'flower', color: c.amber, soft: c.bg, label: `${m.name} passed away · ${d}` });
+      if (d) out.push({ year: d, frac: yearFrac(m.deathDate) ?? d, icon: 'flower', color: c.amber, soft: c.bg, label: `${m.name} passed away · ${d}` });
       map.set(m.id, out);
     });
     // Custom events linked to members also surface on those members' rows.
@@ -127,7 +128,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
       if (!y || !ev.memberIds) return;
       ev.memberIds.forEach((mid) => {
         const arr = map.get(mid);
-        if (arr) arr.push({ year: y, icon: 'calendar', color: c.accent, soft: c.accentSoft, label: `${ev.title} · ${y}` });
+        if (arr) arr.push({ year: y, frac: yearFrac(ev.date) ?? y, icon: ev.icon ?? 'calendar', iconKind: ev.iconKind, color: c.accent, soft: c.accentSoft, label: `${ev.title} · ${y}` });
       });
     });
     return map;
@@ -136,8 +137,9 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
   // Standalone events lane (year-sorted) for all family events.
   const eventLane = useMemo(
     () => (mode === 'events' ? (events ?? []) : [])
-      .map((ev) => ({ ev, year: yearOf(ev.date) }))
-      .filter((e): e is { ev: FamilyEvent; year: number } => e.year != null),
+      .map((ev) => ({ ev, frac: yearFrac(ev.date) }))
+      .filter((e): e is { ev: FamilyEvent; frac: number } => e.frac != null)
+      .sort((a, b) => a.frac - b.frac),
     [mode, events],
   );
 
@@ -226,12 +228,22 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                   <Text style={{ color: c.accent, fontFamily: font.monoMed, fontSize: 10, letterSpacing: 1.4 }}>EVENTS</Text>
                 </View>
                 <View style={{ width: contentW, height: ROW_H }}>
-                  {eventLane.map(({ ev, year }) => (
-                    <Pressable key={ev.id} onPress={() => { setEvTip(ev); setTip(null); setSelId(null); }}
-                      style={{ position: 'absolute', left: xOf(year) - 11, top: ROW_H / 2 - 11, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: c.accent }}>
-                      <Icon name="calendar" size={11} color={c.accent} />
-                    </Pressable>
-                  ))}
+                  {(() => {
+                    // Position by exact date, then nudge apart any markers that would
+                    // otherwise overlap so a cluster stays readable (chronological).
+                    let lastX = -Infinity;
+                    return eventLane.map(({ ev, frac }) => {
+                      let x = xOf(frac);
+                      if (x < lastX + 24) x = lastX + 24;
+                      lastX = x;
+                      return (
+                        <Pressable key={ev.id} onPress={() => { setEvTip(ev); setTip(null); setSelId(null); }}
+                          style={{ position: 'absolute', left: x - 11, top: ROW_H / 2 - 11, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft, borderWidth: 1.5, borderColor: c.accent }}>
+                          <EventGlyph icon={ev.icon ?? 'calendar'} iconKind={ev.iconKind} size={11} color={c.accent} />
+                        </Pressable>
+                      );
+                    });
+                  })()}
                 </View>
               </Rise>
             ) : null}
@@ -318,16 +330,25 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
                         ) : null}
                       </Svg>
                       <Pressable onPress={() => tapRow(m.id)} style={StyleSheet.absoluteFill} />
-                      {mode === 'events' ? events.map((ev, i) => (
-                        <Pressable key={i} onPress={() => { setSelId(m.id); setTip({ text: ev.label }); }}
-                          style={{
-                            position: 'absolute', left: xOf(ev.year) - 9, top: ROW_H / 2 - 9, width: 18, height: 18,
-                            borderRadius: 9, alignItems: 'center', justifyContent: 'center',
-                            backgroundColor: c.bg, borderWidth: 1.5, borderColor: ev.color,
-                          }}>
-                          <Icon name={ev.icon} size={10} stroke={2} color={ev.color} />
-                        </Pressable>
-                      )) : null}
+                      {mode === 'events' ? (() => {
+                        // Exact-date x, then spread overlapping markers along the row.
+                        let lastX = -Infinity;
+                        return [...events].sort((a, b) => a.frac - b.frac).map((ev, i) => {
+                          let x = xOf(ev.frac);
+                          if (x < lastX + 20) x = lastX + 20;
+                          lastX = x;
+                          return (
+                            <Pressable key={i} onPress={() => { setSelId(m.id); setTip({ text: ev.iconKind === 'emoji' && ev.icon ? `${ev.icon} ${ev.label}` : ev.label }); }}
+                              style={{
+                                position: 'absolute', left: x - 9, top: ROW_H / 2 - 9, width: 18, height: 18,
+                                borderRadius: 9, alignItems: 'center', justifyContent: 'center',
+                                backgroundColor: c.bg, borderWidth: 1.5, borderColor: ev.color,
+                              }}>
+                              <EventGlyph icon={ev.icon} iconKind={ev.iconKind} size={10} color={ev.color} />
+                            </Pressable>
+                          );
+                        });
+                      })() : null}
                     </View>
                   </View>
                 </Rise>
@@ -360,7 +381,7 @@ export function TimelineView({ members, relationships, events, adjacency, focusI
           <GlassSurface rounded={radius.lg}>
             <View style={{ padding: 12, gap: 5 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="calendar" size={16} color={c.accent} />
+                <EventGlyph icon={evTip.icon ?? 'calendar'} iconKind={evTip.iconKind} size={16} color={c.accent} />
                 <Text style={{ color: c.ink, flex: 1, fontFamily: font.sansBold, fontSize: 14 }}>{evTip.title}</Text>
                 <Pressable onPress={() => setEvTip(null)} hitSlop={10}><Icon name="close" size={16} color={c.mute} /></Pressable>
               </View>

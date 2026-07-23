@@ -23,9 +23,11 @@ import { Rise, Fade } from '../src/ui/primitives';
 import { buildAdjacency, initials, lifespan } from '../src/shared/adjacency';
 import { BottomSheet } from '../src/components/BottomSheet';
 import { SiblingOrderSheet } from '../src/components/SiblingOrderSheet';
+import { LifeTimeline } from '../src/components/LifeTimeline';
+import { safeBack } from '../src/shared/nav';
 import type { Member } from '../src/shared/types';
 
-type Tab = 'info' | 'relations' | 'story';
+type Tab = 'info' | 'relations' | 'story' | 'life';
 
 export default function Profile() {
   const { c } = useTheme();
@@ -44,7 +46,7 @@ export default function Profile() {
   const localId = split ? split.localId : rawId;
   const role = split ? families.find((f) => f.id === treeId)?.role : activeFamily?.role;
   const nav = (lid: string) => (split && treeId ? nsId(treeId, lid) : lid);
-  const { members, relationships, loading } = useFamilyTree(treeId);
+  const { members, relationships, events, loading } = useFamilyTree(treeId);
 
   const adj = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
   const m = localId ? members.find((x) => x.id === localId) : undefined;
@@ -101,7 +103,7 @@ export default function Profile() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <Pressable onPress={() => router.back()} style={{ marginBottom: 12 }}>
+        <Pressable onPress={() => safeBack(router)} style={{ marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Icon name="back" size={18} color={c.accent} />
             <Text style={{ color: c.accent, fontWeight: '600' }}>Back</Text>
@@ -141,6 +143,11 @@ export default function Profile() {
                   <Text style={{ color: c.accent, fontWeight: '700' }}>Sync my profile</Text>
                 </Pressable>
               ) : null}
+              {myId && m.id !== myId ? (
+                <Pressable onPress={() => router.push({ pathname: '/note', params: { to: nav(m.id) } })} style={[styles.editBtn, { borderColor: c.accent, backgroundColor: c.accentSoft, marginTop: 0 }]}>
+                  <Text style={{ color: c.accent, fontWeight: '700' }}>Send note</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </GlassSurface>
@@ -148,7 +155,7 @@ export default function Profile() {
 
         {/* Tabs */}
         <View style={[styles.tabbar, { backgroundColor: c.paper, borderColor: c.line }]}>
-          {(['info', 'relations', 'story'] as Tab[]).map((t) => {
+          {(['info', 'relations', 'story', 'life'] as Tab[]).map((t) => {
             const on = tab === t;
             return (
               <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, on && { backgroundColor: c.accentSoft }]}>
@@ -162,6 +169,7 @@ export default function Profile() {
           {tab === 'info' && <InfoTab m={m} c={c} />}
           {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: nav(rid) } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: nav(m.id), kind } })} onOrder={canLink ? () => setOrderOpen(true) : undefined} />}
           {tab === 'story' && <StoryTab m={m} c={c} />}
+          {tab === 'life' && <LifeTimeline member={m} adjacency={adj} relationships={relationships} events={events} />}
         </Fade>
       </ScrollView>
 

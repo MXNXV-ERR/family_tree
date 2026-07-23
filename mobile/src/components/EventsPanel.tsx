@@ -7,6 +7,7 @@ import { View, Text, Pressable, TextInput, Platform, Alert, ActivityIndicator, L
 import { useTheme, radius, font } from '../theme/theme';
 import { GlassSurface } from '../theme/GlassSurface';
 import { Icon } from '../ui/Icon';
+import { EventGlyph, EventIconPicker } from './EventIcon';
 import { DateField } from '../ui/DateField';
 import { SheetHead, PanelScroll } from './panelChrome';
 import { addEvent, updateEvent, deleteEvent } from '../firebase/firestore';
@@ -43,6 +44,7 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
         ...(editing.driveUrl?.trim() ? { driveUrl: editing.driveUrl.trim() } : {}),
         ...(editing.description?.trim() ? { description: editing.description.trim() } : {}),
         ...(editing.memberIds?.length ? { memberIds: editing.memberIds } : {}),
+        ...(editing.icon ? { icon: editing.icon, iconKind: editing.iconKind ?? 'glyph' } : {}),
       };
       if (editing.id) await updateEvent(treeId, editing.id, payload);
       else await addEvent(treeId, payload);
@@ -76,6 +78,8 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
         <PanelScroll contentStyle={{ padding: 16, paddingTop: 4, gap: 12 }}>
           <Lbl c={c}>Title</Lbl>
           {input(editing.title, (v) => setEditing({ ...editing, title: v }), 'e.g. Diwali get-together')}
+          <Lbl c={c}>Icon</Lbl>
+          <EventIconPicker value={{ icon: editing.icon, iconKind: editing.iconKind }} onChange={(v) => setEditing({ ...editing, icon: v.icon, iconKind: v.iconKind })} />
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <View style={{ flex: 1 }}><Lbl c={c}>Date</Lbl><DateField value={editing.date} onChange={(v) => setEditing({ ...editing, date: v })} placeholder="Date" allowFuture /></View>
             <View style={{ flex: 1 }}><Lbl c={c}>End (optional)</Lbl><DateField value={editing.endDate} onChange={(v) => setEditing({ ...editing, endDate: v })} placeholder="End date" allowFuture /></View>
@@ -127,7 +131,7 @@ export function EventsPanel({ treeId, members, events, canManage, onClose }: {
           <GlassSurface key={e.id} rounded={radius.lg}>
             <View style={{ padding: 13, gap: 6 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="calendar" size={16} color={c.accent} />
+                <EventGlyph icon={e.icon} iconKind={e.iconKind} size={16} color={c.accent} />
                 <Text style={{ flex: 1, color: c.ink, fontFamily: font.sansBold, fontSize: 15 }}>{e.title}</Text>
                 <Text style={{ color: c.mute, fontFamily: font.mono, fontSize: 11 }}>{yearOf(e.date) ?? e.date}</Text>
               </View>

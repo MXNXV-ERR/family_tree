@@ -9,6 +9,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '../src/firebase/AuthContext';
 import { useFamily } from '../src/firebase/FamilyContext';
 import { useFamilyTree } from '../src/firebase/useFamilyTree';
+import { useInbox } from '../src/firebase/useInbox';
 import { reconcileFamilyIndex } from '../src/firebase/families';
 import { useTheme, radius, space, font, type Palette } from '../src/theme/theme';
 import { GlassSurface } from '../src/theme/GlassSurface';
@@ -24,6 +25,7 @@ import { Avatar, IconBtn, SectionLabel, Counter, ThemeToggle, Rise } from '../sr
 import { useResponsive } from '../src/ui/useResponsive';
 import { DesktopWorkspace } from '../src/desktop/DesktopWorkspace';
 import { lifespan, computeGenerations, countCouples } from '../src/shared/adjacency';
+import { roleLabel } from '../src/shared/permissions';
 import { remindersSupported, syncReminders } from '../src/notifications/reminders';
 import type { Member } from '../src/shared/types';
 
@@ -55,6 +57,7 @@ function MobileHome() {
   const openChat = () => router.push('/chat');
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
+  const { unread } = useInbox(activeTreeId, user?.uid, meId);
   const couples = useMemo(() => countCouples(members, relationships), [members, relationships]);
   const gens = useMemo(() => {
     if (!members.length) return 0;
@@ -72,7 +75,7 @@ function MobileHome() {
   const mono = activeFamily?.mono ?? (treeName.trim().charAt(0).toUpperCase() || 'F');
   const famColor = activeFamily?.color ?? c.accent;
   const famSub = activeFamily?.role
-    ? `${activeFamily.role[0].toUpperCase()}${activeFamily.role.slice(1)}${families.length > 1 ? ` · ${families.length} families` : ''}`
+    ? `${roleLabel(activeFamily.role)}${families.length > 1 ? ` · ${families.length} families` : ''}`
     : (user?.email ?? '');
 
   useEffect(() => {
@@ -118,6 +121,14 @@ function MobileHome() {
             </View>
           </Pressable>
           <ThemeToggle />
+          <View>
+            <IconBtn name="mail" tone="glass" onPress={() => router.push('/inbox')} />
+            {unread > 0 ? (
+              <View pointerEvents="none" style={{ position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: c.accentInk, fontFamily: font.sansHeavy, fontSize: 9 }}>{unread > 9 ? '9+' : unread}</Text>
+              </View>
+            ) : null}
+          </View>
           <IconBtn name="settings" tone="glass" onPress={() => setSettingsOpen(true)} />
         </View>
 
@@ -162,6 +173,7 @@ function MobileHome() {
               ['scan', 'Face match', () => router.push('/facematch')],
               ['sparkles', 'Family AI', openChat],
               ['calendar', 'Calendar', () => setCalendarOpen(true)],
+              ['mail', 'Inbox', () => router.push('/inbox')],
               ['plus', 'Add member', () => router.push('/member')],
               ['link', 'Add link', () => router.push('/link')],
               ['share', 'Export', () => router.push('/export')],

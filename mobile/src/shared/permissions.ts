@@ -1,28 +1,44 @@
-// Role-based permissions (pure). Three roles:
-//   owner  — exactly one; full control + manages roles (promote/demote admins).
-//   admin  — many; full data control (add/edit/delete anyone, import).
-//   member — normal user; may edit only their OWN linked node and add/remove
-//            relationships at depth 1 (edges that touch their own node).
+// Role-based permissions (pure). Four roles:
+//   owner   — exactly one (the founder); full control, and the only role that can
+//             delete the family or demote the founder.
+//   coowner — full owner powers EXCEPT deleting the family / demoting the founder.
+//   admin   — many; full data control (add/edit/delete anyone, import).
+//   member  — normal user; may edit only their OWN linked node and add/remove
+//             relationships at depth 1 (edges that touch their own node).
 // Legacy roles ('editor' / 'viewer' from the old model) normalise to 'member'.
 import type { Member } from './types';
 
-export type Role = 'owner' | 'admin' | 'member';
+export type Role = 'owner' | 'coowner' | 'admin' | 'member';
 
 export function normalizeRole(r?: string | null): Role {
-  return r === 'owner' ? 'owner' : r === 'admin' ? 'admin' : 'member';
+  return r === 'owner' ? 'owner' : r === 'coowner' ? 'coowner' : r === 'admin' ? 'admin' : 'member';
 }
 
 export const isOwner = (r?: string | null) => normalizeRole(r) === 'owner';
+export const isCoOwner = (r?: string | null) => normalizeRole(r) === 'coowner';
 export const isAdmin = (r?: string | null) => normalizeRole(r) === 'admin';
+
+// Owner + co-owner share every owner power EXCEPT destroying the family and
+// demoting the founding owner — those stay isOwner-only (UI + rules).
+export const hasOwnerPowers = (r?: string | null) => {
+  const x = normalizeRole(r);
+  return x === 'owner' || x === 'coowner';
+};
 
 // Full data control: add/edit/delete any member, link/unlink anyone, import.
 export const canManageData = (r?: string | null) => {
   const x = normalizeRole(r);
-  return x === 'owner' || x === 'admin';
+  return x === 'owner' || x === 'coowner' || x === 'admin';
 };
 
-// Only the owner promotes/demotes admins.
-export const canManageRoles = (r?: string | null) => isOwner(r);
+// Owner + co-owner promote/demote collaborators.
+export const canManageRoles = (r?: string | null) => hasOwnerPowers(r);
+
+// Display label for a role (handles the two-word co-owner).
+export const roleLabel = (r?: string | null): string => {
+  const x = normalizeRole(r);
+  return x === 'owner' ? 'Owner' : x === 'coowner' ? 'Co-owner' : x === 'admin' ? 'Admin' : 'Member';
+};
 
 // Bulk import is a privileged write — owner/admin only.
 export const canImport = (r?: string | null) => canManageData(r);

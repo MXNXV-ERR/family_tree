@@ -144,11 +144,12 @@ export async function joinFamilyByInvite(uid: string, email: string | null | und
   return treeId;
 }
 
-// Promote / demote a collaborator (owner only — enforced by the rules). Writes
-// the authoritative membership doc AND the target user's switcher index so their
-// role updates live. Never assigns 'owner' (ownership stays with the creator).
+// Promote / demote a collaborator (owner/co-owner — enforced by the rules).
+// Writes the authoritative membership doc AND the target user's switcher index so
+// their role updates live. Never assigns 'owner' (the founder keeps that); a
+// co-owner is a full-power role that stops short of deleting the family.
 export async function setMemberRole(treeId: string, targetUid: string, role: FamilyRole) {
-  const safeRole: FamilyRole = role === 'admin' ? 'admin' : 'member';
+  const safeRole: FamilyRole = role === 'admin' ? 'admin' : role === 'coowner' ? 'coowner' : 'member';
   await setDoc(membershipDoc(treeId, targetUid), { role: safeRole }, { merge: true });
   // Owner is allowed to write the target's family index (see firestore.rules).
   await setDoc(familyIndexDoc(targetUid, treeId), { role: safeRole }, { merge: true }).catch((e) => console.warn('setMemberRole index', e?.message ?? e));

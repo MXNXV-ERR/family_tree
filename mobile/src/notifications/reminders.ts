@@ -74,6 +74,20 @@ export async function syncReminders(members: Member[], relationships: Relationsh
   }
 }
 
+// Present a local notification immediately — surfaces an incoming note while the
+// app is running (foreground delivery). Native-only; no-ops on web / Expo Go.
+export async function presentNoteNotification(title: string, body: string): Promise<void> {
+  if (!remindersSupported) return;
+  try {
+    const ok = await requestReminderPermission();
+    if (!ok) return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, data: { tag: 'family-note' } },
+      trigger: null, // present now
+    });
+  } catch { /* Expo Go on SDK 53+ / unsupported runtime */ }
+}
+
 export async function clearReminders(): Promise<void> {
   if (!remindersSupported) return;
   try {

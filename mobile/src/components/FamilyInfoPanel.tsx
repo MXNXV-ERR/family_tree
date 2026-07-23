@@ -15,9 +15,9 @@ import { SheetHead, PanelScroll } from './panelChrome';
 import { useAuth } from '../firebase/AuthContext';
 import { subscribeFamilyDoc, subscribeCollaborators, setMemberRole, updateFamily, deleteFamily, ensureInviteCode, FAMILY_COLORS, monoOf, subscribeJoinRequests, approveJoinRequest, rejectJoinRequest } from '../firebase/families';
 import { subscribeActivity, timeAgo, type ActivityEntry } from '../firebase/activity';
-import { canManageRoles, canManageData, normalizeRole, isOwner } from '../shared/permissions';
+import { canManageRoles, canManageData, normalizeRole, isOwner, hasOwnerPowers, roleLabel } from '../shared/permissions';
 import { computeGenerations, countCouples } from '../shared/adjacency';
-import type { FamilyTree, Collaborator, Member, Relationship, JoinRequest, JoinPolicy } from '../shared/types';
+import type { FamilyTree, Collaborator, Member, Relationship, JoinRequest, JoinPolicy, FamilyRole } from '../shared/types';
 
 export function FamilyInfoPanel({ treeId, family, members, relationships, onClose, onSwitchFamily, onUploadPhoto, onOpenEvents, onOpenMasterEdit }: {
   treeId: string;
@@ -82,6 +82,8 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
   // Owner-only edit + delete. The legacy primary tree (treeId === uid) can't be
   // deleted, so the user is never left with no family at all.
   const owner = isOwner(fam?.role) || isOwner(family?.role);
+  // Co-owner may edit family details but not delete the family.
+  const canEditFam = hasOwnerPowers(fam?.role) || hasOwnerPowers(family?.role);
 
   // Legacy trees predate invite codes — heal one in so the QR/share works.
   // The live doc subscription picks the write up and re-renders with the code.
@@ -320,13 +322,21 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
                       {cl.email ? <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.sans, fontSize: 11.5 }}>{cl.email}</Text> : null}
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      <View style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: cl.role === 'owner' ? c.accentSoft : c.paper, borderWidth: cl.role === 'owner' ? 0 : 1, borderColor: c.line }}>
-                        <Text style={{ color: cl.role === 'owner' ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 12, textTransform: 'capitalize' }}>{normalizeRole(cl.role)}</Text>
+                      <View style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: hasOwnerPowers(cl.role) ? c.accentSoft : c.paper, borderWidth: hasOwnerPowers(cl.role) ? 0 : 1, borderColor: c.line }}>
+                        <Text style={{ color: hasOwnerPowers(cl.role) ? c.accent : c.inkSoft, fontFamily: font.sansSemi, fontSize: 12 }}>{roleLabel(cl.role)}</Text>
                       </View>
                       {canManage && cl.role !== 'owner' && cl.uid !== user?.uid ? (
-                        <Pressable onPress={() => setMemberRole(treeId, cl.uid, normalizeRole(cl.role) === 'admin' ? 'member' : 'admin')} hitSlop={6}>
-                          <Text style={{ color: c.accent, fontFamily: font.sansSemi, fontSize: 11 }}>{normalizeRole(cl.role) === 'admin' ? 'Make member' : 'Make admin'}</Text>
-                        </Pressable>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {(['member', 'admin', 'coowner'] as FamilyRole[]).map((rk) => {
+                            const on = normalizeRole(cl.role) === rk;
+                            return (
+                              <Pressable key={rk} onPress={() => setMemberRole(treeId, cl.uid, rk)} hitSlop={4}
+                                style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill, borderWidth: 1, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.accentSoft : 'transparent' }}>
+                                <Text style={{ color: on ? c.accent : c.mute, fontFamily: font.sansSemi, fontSize: 10.5 }}>{roleLabel(rk)}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
                       ) : null}
                     </View>
                   </View>
@@ -392,19 +402,19 @@ export function FamilyInfoPanel({ treeId, family, members, relationships, onClos
           </View>
         ) : null}
 
-        {/* owner actions */}
-        {owner ? (
+        {/* owner / co-owner actions */}
+        {canEditFam ? (
           <View style={{ gap: 10, marginTop: 4 }}>
             <Pressable onPress={startEdit} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: c.line, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
               <Icon name="edit" size={17} color={c.inkSoft} /><Text style={{ color: c.inkSoft, fontFamily: font.sansSemi, fontSize: 14.5 }}>Edit family details</Text>
             </Pressable>
-            {!isPrimary ? (
+            {owner && !isPrimary ? (
               <Pressable onPress={removeFamily} disabled={busy} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: c.danger, opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
                 <Icon name="trash" size={17} color={c.danger} /><Text style={{ color: c.danger, fontFamily: font.sansSemi, fontSize: 14.5 }}>Delete family</Text>
               </Pressable>
-            ) : (
+            ) : owner && isPrimary ? (
               <Text style={{ color: c.mute, fontFamily: font.sans, fontSize: 12, textAlign: 'center' }}>Your primary family can't be deleted.</Text>
-            )}
+            ) : null}
           </View>
         ) : null}
         </>
