@@ -59,7 +59,8 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-build-properties",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

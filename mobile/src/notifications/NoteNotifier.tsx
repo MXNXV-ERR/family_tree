@@ -28,6 +28,10 @@ export function NoteNotifier() {
         if (seen.current.has(n.id)) continue;
         seen.current.add(n.id);
         if (n.fromUid === user?.uid) continue; // never notify for my own note
+        // A birthday wish must never announce itself: the title alone would leak
+        // a name and the body a preview, before the day (SPEC §5). The sealed-safe
+        // morning push is scheduled separately in shared/reminders.ts.
+        if (n.wish) continue;
         const title = n.fromName ? `Note from ${n.fromName}` : 'New note';
         const body = n.text ? n.text.slice(0, 140) : (n.image ? 'Sent you a photo' : 'You have a new note');
         presentNoteNotification(title, body);

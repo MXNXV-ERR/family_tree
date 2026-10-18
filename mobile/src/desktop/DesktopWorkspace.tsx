@@ -27,6 +27,8 @@ import { TimelineView } from '../viz/TimelineView';
 import { NetworkView } from '../viz/NetworkView';
 import { SubBarZoom, type ZoomApi } from '../viz/vizChrome';
 import { DesktopDrawer } from './DesktopDrawer';
+import { DesktopBirthdayPanel, BirthdayToolButton } from '../birthday/DesktopBirthdayPanel';
+import { openWindows, startOfDay } from '../shared/birthday';
 import { DesktopProfile } from './DesktopProfile';
 import { MemberForm } from '../components/MemberForm';
 import { SiblingOrderSheet } from '../components/SiblingOrderSheet';
@@ -47,7 +49,7 @@ import { canEditMember, canDeleteMember, canEditRelationship, canImport, canMana
 import type { Member, Relationship } from '../shared/types';
 
 type ViewKind = 'tree' | 'radial' | 'timeline' | 'network' | 'master';
-type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link' | 'order' | 'inbox' | 'noteCompose'; id?: string; kind?: LinkKind } | null;
+type Drawer = { type: 'profile' | 'member' | 'settings' | 'family' | 'familyPicker' | 'familyPhoto' | 'events' | 'calendar' | 'chat' | 'members' | 'export' | 'link' | 'order' | 'inbox' | 'noteCompose' | 'birthday'; id?: string; kind?: LinkKind } | null;
 
 export function DesktopWorkspace() {
   const { c } = useTheme();
@@ -72,7 +74,7 @@ export function DesktopWorkspace() {
 
   const adjacency = useMemo(() => buildAdjacency(members, relationships), [members, relationships]);
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
-  const { unread } = useInbox(activeTreeId, user?.uid, meId);
+  const { unread, all: allNotes } = useInbox(activeTreeId, user?.uid, meId);
   const role = activeFamily?.role;
   const gens = useMemo(() => (members.length ? Math.max(...computeGenerations(members, relationships).values()) + 1 : 0), [members, relationships]);
 
@@ -156,7 +158,16 @@ export function DesktopWorkspace() {
     updateMember(activeTreeId, memberId, patch);
   }
 
-  const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
+  // A member in their birthday window: drives the toolbar's cake tool and gives
+  // their in-canvas node a gold border + halo (SPEC §9 "Desktop").
+  const bdayWin = useMemo(() => openWindows(members)[0] ?? null, [members]);
+  const bdayMember = useMemo(() => (bdayWin ? members.find((m) => m.id === bdayWin.memberId) ?? null : null), [bdayWin, members]);
+  const bdaySealed = !!bdayWin && !!meId && meId === bdayWin.memberId && startOfDay(new Date()) < startOfDay(bdayWin.date);
+
+  const shared = {
+    members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile,
+    colorOf: bdayWin ? (id: string) => (id === bdayWin.memberId ? c.gold : undefined) : undefined,
+  };
 
   // Active family still resolving — brief spinner, never a blank canvas.
   if (!activeTreeId) {
@@ -202,6 +213,7 @@ export function DesktopWorkspace() {
           <IconBtn name="calendar" tone="ghost" onPress={() => setDrawer({ type: 'calendar' })} />
           <IconBtn name="download" tone="ghost" onPress={() => setDrawer({ type: 'export' })} />
           <IconBtn name="scan" tone="ghost" onPress={() => router.push('/facematch')} />
+          {bdayMember ? <BirthdayToolButton calm={bdaySealed} onPress={() => setDrawer({ type: 'birthday' })} /> : null}
           <View>
             <IconBtn name="mail" tone="ghost" onPress={() => setDrawer({ type: 'inbox' })} />
             {unread > 0 ? (
@@ -321,6 +333,20 @@ export function DesktopWorkspace() {
         ) : null}
         {drawer?.type === 'inbox' ? (
           <DesktopNotesPanel treeId={activeTreeId} uid={user?.uid} members={members} onClose={() => setDrawer(null)} />
+        ) : null}
+        {drawer?.type === 'birthday' && bdayWin && bdayMember ? (
+          <DesktopBirthdayPanel
+            win={bdayWin}
+            celebrant={bdayMember}
+            notes={allNotes}
+            members={members}
+            relationships={relationships}
+            treeId={activeTreeId}
+            uid={user?.uid}
+            myMemberId={meId}
+            myName={profile?.name || user?.email?.split('@')[0] || 'Someone'}
+            onPlay={() => { setDrawer(null); router.push({ pathname: '/birthday', params: { id: bdayMember.id } }); }}
+            onClose={() => setDrawer(null)} />
         ) : null}
         {drawer?.type === 'noteCompose' && drawer.id ? (
           <NoteComposePanel treeId={activeTreeId} recipient={adjacency.get(drawer.id)} myId={meId} onClose={() => setDrawer(null)} />

@@ -2,6 +2,7 @@
 // member.birthDate and wedding anniversaries from spouse edges carrying a
 // marriageDate. The platform scheduler (src/notifications) turns these into
 // local notifications; the pure part is unit-testable and web-safe.
+import { BIRTHDAY_PUSH_TITLE } from './birthdayCopy';
 import type { Member, Relationship } from './types';
 
 export interface Reminder {
@@ -37,7 +38,7 @@ const yearsSince = (iso: string, at: Date) => {
 // All reminders inside the next `windowDays`, soonest first.
 export function upcomingReminders(
   members: Member[], relationships: Relationship[],
-  opts: { windowDays?: number; hour?: number; now?: Date } = {},
+  opts: { windowDays?: number; hour?: number; now?: Date; meId?: string | null } = {},
 ): Reminder[] {
   const now = opts.now ?? new Date();
   const windowDays = opts.windowDays ?? 365;
@@ -51,10 +52,15 @@ export function upcomingReminders(
     const d = nextOccurrence(m.birthDate, now, hour);
     if (!d || d.getTime() > horizon) continue;
     const age = yearsSince(m.birthDate, d);
+    // The celebrant's OWN morning push must carry no name and no count — it
+    // only opens the sky (SPEC §4/§5). Everyone else gets the normal reminder.
+    const isMe = !!opts.meId && m.id === opts.meId;
     out.push({
       id: `bday:${m.id}`, kind: 'birthday', date: d, memberIds: [m.id],
-      title: `🎂 ${m.name}'s birthday`,
-      body: age !== undefined && age > 0 ? `${m.name} turns ${age} today.` : `It's ${m.name}'s birthday today.`,
+      title: isMe ? BIRTHDAY_PUSH_TITLE : `🎂 ${m.name}'s birthday`,
+      body: isMe
+        ? 'Open the app to see it.'
+        : age !== undefined && age > 0 ? `${m.name} turns ${age} today.` : `It's ${m.name}'s birthday today.`,
     });
   }
 

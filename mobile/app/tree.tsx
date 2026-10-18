@@ -14,6 +14,7 @@ import { useAmbientMotion } from '../src/ui/AmbientMotion';
 import { SearchOverlay } from '../src/components/SearchOverlay';
 import { buildAdjacency } from '../src/shared/adjacency';
 import { safeBack } from '../src/shared/nav';
+import { openWindows } from '../src/shared/birthday';
 import { TreeView } from '../src/viz/TreeView';
 import { RadialView } from '../src/viz/RadialView';
 import { TimelineView } from '../src/viz/TimelineView';
@@ -52,7 +53,14 @@ export default function VizScreen() {
     return <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.accent} /></View>;
   }
 
-  const shared = { members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile };
+  // The member whose birthday window is open gets a gold node + halo on every
+  // canvas (the viz `colorOf` hook already drives border and glow).
+  const bdayWin = useMemo(() => openWindows(members)[0] ?? null, [members]);
+
+  const shared = {
+    members, relationships, adjacency, focusId, meId, setFocusId, onOpenProfile: openProfile,
+    colorOf: bdayWin ? (id: string) => (id === bdayWin.memberId ? c.gold : undefined) : undefined,
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>

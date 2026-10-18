@@ -42,7 +42,7 @@ export async function requestReminderPermission(): Promise<boolean> {
 
 // Cancel our previously-scheduled reminders, then schedule the next window.
 // Returns how many are scheduled, or -1 when unsupported / denied.
-export async function syncReminders(members: Member[], relationships: Relationship[]): Promise<number> {
+export async function syncReminders(members: Member[], relationships: Relationship[], meId?: string | null): Promise<number> {
   if (!remindersSupported) return -1;
   ensureHandler();
   try {
@@ -52,7 +52,7 @@ export async function syncReminders(members: Member[], relationships: Relationsh
         .filter((n) => (n.content.data as any)?.tag === TAG)
         .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier).catch(() => {})),
     );
-    const items = upcomingReminders(members, relationships).slice(0, MAX_SCHEDULED);
+    const items = upcomingReminders(members, relationships, { meId }).slice(0, MAX_SCHEDULED);
     for (const r of items) {
       await Notifications.scheduleNotificationAsync({
         content: {

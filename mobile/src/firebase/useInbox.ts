@@ -40,10 +40,21 @@ export function useInbox(treeId?: string | null, uid?: string | null, myMemberId
     return [...m.values()];
   }, [notes, sentRaw]);
 
+  // Birthday wishes live in this same collection but must never surface in the
+  // Inbox or its badge: before the day that would leak the seal (a count, a
+  // name, a preview), and after it they belong on the celebrant's sky, not in a
+  // list. `all` still carries them — that is what the birthday screens read.
+  // A REPLY to a wish has no `wish` block of its own, so it has to be matched
+  // through its root — otherwise it counts toward the badge while the list
+  // (roots only, wishes removed) has nothing to show, and the drawer reads
+  // "Inbox (1)" over "No notes yet".
+  const wishIds = new Set(all.filter((n) => n.wish).map((n) => n.id));
+  const notWish = (n: Note) => !n.wish && !(n.rootId && wishIds.has(n.rootId));
+
   return {
-    inbox: notes.filter((n) => !n.rootId).sort(byNewest),
-    sent: sentRaw.filter((n) => !n.rootId).sort(byNewest),
+    inbox: notes.filter((n) => !n.rootId && notWish(n)).sort(byNewest),
+    sent: sentRaw.filter((n) => !n.rootId && notWish(n)).sort(byNewest),
     all,
-    unread: notes.filter((n) => !n.read).length,
+    unread: notes.filter((n) => !n.read && notWish(n)).length,
   };
 }

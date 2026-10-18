@@ -27,6 +27,10 @@ import { DesktopWorkspace } from '../src/desktop/DesktopWorkspace';
 import { lifespan, computeGenerations, countCouples } from '../src/shared/adjacency';
 import { roleLabel } from '../src/shared/permissions';
 import { remindersSupported, syncReminders } from '../src/notifications/reminders';
+import { BirthdayOrb } from '../src/birthday/BirthdayOrb';
+import { buildSenders } from '../src/birthday/model';
+import { birthdayCopy } from '../src/shared/birthdayCopy';
+import { openWindows, wishesFor, myWishesFor, senderCount, startOfDay } from '../src/shared/birthday';
 import type { Member } from '../src/shared/types';
 
 // On wide web viewports the home route becomes the desktop workspace; phones and
@@ -57,7 +61,41 @@ function MobileHome() {
   const openChat = () => router.push('/chat');
 
   const meId = useMemo(() => members.find((m) => m.associatedUserId === user?.uid)?.id, [members, user]);
-  const { unread } = useInbox(activeTreeId, user?.uid, meId);
+  const { unread, all: allNotes } = useInbox(activeTreeId, user?.uid, meId);
+
+  // ---- birthday window (SPEC §4 "Giving") --------------------------------
+  // The nearest member in window drives the orb, the gold hero and the gold row.
+  // Wishes the viewer can see are their own unless they are the celebrant, so
+  // `senderCount` here is always the truthful count for THIS viewer.
+  const bday = useMemo(() => {
+    const win = openWindows(members)[0];
+    if (!win) return null;
+    const celebrant = members.find((m) => m.id === win.memberId);
+    if (!celebrant) return null;
+    const wishes = wishesFor(allNotes, celebrant.id, win.year);
+    const viewerIsCelebrant = !!meId && meId === celebrant.id;
+    const senders = buildSenders(wishes, members, relationships, celebrant.id);
+    const faces = viewerIsCelebrant
+      ? senders.map((s) => members.find((m) => m.associatedUserId === s.uid)).filter(Boolean) as Member[]
+      : [celebrant];
+    return {
+      win, celebrant, wishes, senders, viewerIsCelebrant, faces,
+      mine: myWishesFor(allNotes, celebrant.id, win.year, user?.uid),
+      sealed: viewerIsCelebrant && startOfDay(new Date()) < startOfDay(win.date),
+      copy: birthdayCopy({
+        senders, wishCount: wishes.length, viewerIsCelebrant,
+        celebrantName: celebrant.name, daysUntil: win.daysUntil,
+      }),
+    };
+  }, [members, relationships, allNotes, meId, user]);
+
+  const openBirthday = () => bday && router.push({ pathname: '/birthday', params: { id: bday.celebrant.id } });
+
+  // The gold hero replaces Visualize only while names still fit (≤2 senders) and
+  // the day is live; at 3+ senders the violet Visualize hero comes back and the
+  // birthday drops into the list.
+  const goldHero = !!bday && !bday.sealed && bday.win.isToday
+    && (bday.viewerIsCelebrant ? senderCount(bday.wishes) > 0 && senderCount(bday.wishes) <= 2 : true);
   const couples = useMemo(() => countCouples(members, relationships), [members, relationships]);
   const gens = useMemo(() => {
     if (!members.length) return 0;
@@ -96,9 +134,9 @@ function MobileHome() {
   // so a burst of snapshot updates doesn't thrash the scheduler.
   useEffect(() => {
     if (!reminders || !remindersSupported || loading || !members.length) return;
-    const t = setTimeout(() => { syncReminders(members, relationships); }, 1500);
+    const t = setTimeout(() => { syncReminders(members, relationships, meId); }, 1500);
     return () => clearTimeout(t);
-  }, [reminders, members, relationships, loading]);
+  }, [reminders, members, relationships, loading, meId]);
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
@@ -133,6 +171,32 @@ function MobileHome() {
         </View>
 
         <View style={{ paddingHorizontal: 16, gap: 16 }}>
+          {/* GOLD HERO — the birthday takes the top slot while names still fit */}
+          {goldHero && bday ? (
+            <Rise i={0}>
+              <Pressable onPress={openBirthday} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+                <LinearGradient colors={[c.gold, c.gold2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={{ borderRadius: radius.xl, paddingVertical: 18, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14, shadowColor: c.gold, shadowOpacity: 0.3, shadowRadius: 26, shadowOffset: { width: 0, height: 14 }, elevation: 10 }}>
+                  <BreathingAvatar m={bday.viewerIsCelebrant ? bday.faces[0] : bday.celebrant} c={c} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: c.goldInk, opacity: 0.82, fontFamily: font.monoMed, fontSize: 10.5, letterSpacing: 1.9, textTransform: 'uppercase' }}>Today</Text>
+                    <Text style={{ color: c.goldInk, fontFamily: font.serifItalic, fontSize: 26, lineHeight: 29, marginTop: 4 }}>
+                      {bday.viewerIsCelebrant
+                        ? bday.copy.headline
+                        : `${bday.celebrant.name.split(' ')[0]}${bday.win.turning ? ` turns ${bday.win.turning}` : '’s birthday'}`}
+                    </Text>
+                    <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: 'rgba(42,26,5,0.12)' }}>
+                      <Text style={{ color: c.goldInk, fontFamily: font.sansBold, fontSize: 13.5 }}>
+                        {bday.viewerIsCelebrant ? bday.copy.cta : bday.mine.length ? 'Add another' : 'Add your wish'}
+                      </Text>
+                      <Icon name="chevR" size={15} stroke={2.2} color={c.goldInk} />
+                    </View>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            </Rise>
+          ) : null}
+
           {/* HERO — the main tool */}
           <Rise i={0}>
             <Pressable onPress={() => router.push('/tree')} style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
@@ -206,12 +270,15 @@ function MobileHome() {
             </Pressable>
           </View>
           <View style={{ gap: 8 }}>
-            {shown.map((m, i) => (
+            {shown.map((m, i) => {
+              // the celebrant's row carries the day, in gold — never a count
+              const isCelebrant = bday?.win.isToday && bday.celebrant.id === m.id;
+              return (
               <Rise key={m.id} i={i}>
-                <Pressable onPress={() => router.push({ pathname: '/profile', params: { id: m.id } })}
+                <Pressable onPress={() => (isCelebrant ? openBirthday() : router.push({ pathname: '/profile', params: { id: m.id } }))}
                   style={({ pressed }) => ({
                     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 11, borderRadius: 15,
-                    backgroundColor: c.paper, borderWidth: 1, borderColor: c.line,
+                    backgroundColor: c.paper, borderWidth: 1, borderColor: isCelebrant ? c.gold : c.line,
                     transform: [{ scale: pressed ? 0.98 : 1 }],
                   })}>
                   <Avatar m={m} size={44} />
@@ -224,14 +291,20 @@ function MobileHome() {
                         </View>
                       ) : null}
                     </View>
-                    <Text numberOfLines={1} style={{ color: c.mute, fontFamily: font.mono, fontSize: 11.5, marginTop: 2 }}>
-                      {[years ? lifespan(m) : '', m.occupation].filter(Boolean).join(' · ')}
+                    <Text numberOfLines={1} style={{
+                      color: isCelebrant ? c.gold : c.mute, fontFamily: font.mono, fontSize: 11.5, marginTop: 2,
+                      ...(isCelebrant ? { letterSpacing: 1, textTransform: 'uppercase' as const } : null),
+                    }}>
+                      {isCelebrant
+                        ? (bday?.win.turning ? `Turns ${bday.win.turning} today` : 'Birthday today')
+                        : [years ? lifespan(m) : '', m.occupation].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
-                  <Icon name="chevR" size={18} color={c.faint} />
+                  {isCelebrant ? <Icon name="cake" size={18} color={c.gold} /> : <Icon name="chevR" size={18} color={c.faint} />}
                 </Pressable>
               </Rise>
-            ))}
+            );
+            })}
             {loading && !members.length ? (
               // skeleton rows while the first snapshot loads
               <>
@@ -274,6 +347,18 @@ function MobileHome() {
         </View>
       </ScrollView>
 
+      {/* the orb — visible for the whole fourteen-day window */}
+      {bday ? (
+        <BirthdayOrb
+          faces={bday.faces}
+          wishCount={bday.sealed ? 0 : bday.viewerIsCelebrant ? bday.wishes.length : bday.mine.length}
+          senderCount={bday.viewerIsCelebrant ? senderCount(bday.wishes) : bday.mine.length ? 1 : 0}
+          daysUntil={bday.win.daysUntil}
+          calm={bday.sealed}
+          onPress={openBirthday}
+        />
+      ) : null}
+
       {/* bottom nav */}
       <BottomNav c={c} meId={meId} onHome={() => {}} onScan={() => router.push('/facematch')} onTree={() => router.push('/tree')} onAI={openChat}
         onMe={() => meId ? router.push({ pathname: '/profile', params: { id: meId } }) : router.push('/member')} />
@@ -306,6 +391,32 @@ function MobileHome() {
         ) : null}
       </BottomSheet>
 
+    </View>
+  );
+}
+
+// The gold hero's 60px avatar, wearing a breathing ring in the on-gold ink.
+function BreathingAvatar({ m, c }: { m?: Member; c: Palette }) {
+  const { motion } = useSettings();
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!motion) return;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: 3600, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [motion]);
+  return (
+    <View style={{ width: 60, height: 60, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View pointerEvents="none" style={{
+        position: 'absolute', left: -5, top: -5, right: -5, bottom: -5, borderRadius: 40,
+        borderWidth: 1.5, borderColor: 'rgba(42,26,5,0.55)',
+        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.3] }) }],
+      }} />
+      <Avatar m={m} size={60} ring="rgba(42,26,5,0.55)" />
     </View>
   );
 }

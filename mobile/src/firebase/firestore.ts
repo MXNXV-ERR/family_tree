@@ -1,7 +1,7 @@
 // Firestore data access. Same structure as web: trees/{uid}/members + /relationships.
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot,
-  serverTimestamp, getDocs, writeBatch, query, where,
+  serverTimestamp, getDocs, writeBatch, query, where, deleteField,
 } from 'firebase/firestore';
 import { db, auth } from './config';
 import { logActivity } from './activity';
@@ -216,6 +216,30 @@ export const setNoteReaction = (treeId: string, id: string, reaction: string) =>
 
 export const deleteNote = (treeId: string, id: string) =>
   deleteDoc(doc(treeRef(treeId), 'notes', id));
+
+// ---- Birthday wishes (notes carrying a `wish` block) ----
+// Opening a wish stamps readAt — that cools its link on the sky, which is the
+// primary read affordance. `read` is kept in step so the Inbox unread count and
+// the wish agree.
+export const markWishRead = (treeId: string, id: string) =>
+  updateDoc(doc(treeRef(treeId), 'notes', id), { readAt: Date.now(), read: true });
+
+// The reply itself lives in the chat thread (a normal reply note); the wish only
+// records that it was answered, which draws the violet tick on its token.
+export const markWishReplied = (treeId: string, id: string) =>
+  updateDoc(doc(treeRef(treeId), 'notes', id), { repliedAt: Date.now() });
+
+// Edit a wish you sent — open the whole fourteen days, per wish.
+// A cleared field arrives as `undefined` (the composer drops the text or the
+// photo), and the SDK rejects undefined outright — this app never set
+// `ignoreUndefinedProperties`. Clearing means DELETING the field.
+export const updateWish = (treeId: string, id: string, data: Partial<Note>) =>
+  updateDoc(
+    doc(treeRef(treeId), 'notes', id),
+    Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [k, v === undefined ? deleteField() : v]),
+    ),
+  );
 
 // Update many members' fields in one chunked batch — the master-edit grid Save
 // and the family-photo face assignment both write several members at once.
