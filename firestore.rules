@@ -155,8 +155,19 @@ service cloud.firestore {
         allow create: if signedIn() && isMemberHere()
           && request.resource.data.fromUid == uid()
           && exists(/databases/$(database)/documents/trees/$(treeId)/members/$(request.resource.data.toMemberId));
-        allow update: if signedIn() && memberOwnedByMe(resource.data.toMemberId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'reaction']);
+        // Recipient: marks read / reacts. `readAt` + `repliedAt` are the birthday
+        // wish equivalents — readAt cools a wish's link on the sky, repliedAt
+        // draws the replied tick once the reply lands in the notes thread.
+        // Sender: may edit their OWN wish's content for the whole window (the
+        // 14-day limit is enforced in the composer, which is the only writer).
+        allow update: if signedIn() && (
+          (memberOwnedByMe(resource.data.toMemberId)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['read', 'reaction', 'readAt', 'repliedAt']))
+          || (resource.data.fromUid == uid()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['text', 'image', 'subject', 'wish']))
+        );
         allow delete: if signedIn() && (resource.data.fromUid == uid() || memberOwnedByMe(resource.data.toMemberId));
       }
 

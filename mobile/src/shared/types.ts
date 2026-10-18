@@ -170,6 +170,18 @@ export interface Note {
     reaction?: string;      // recipient's emoji reaction (single)
     subject?: string;       // optional title/subject line
     rootId?: string;        // reply → the thread root note's id (absent on a root)
+    // Birthday wish (src/shared/birthday.ts). Present ⇒ this note is a WISH: it
+    // lives on the celebrant's sky instead of the Inbox list, stays sealed until
+    // their birthday, and carries the sender's sticker as its token. `image`
+    // holds a photo wish; `wish.videoUrl` a Drive video.
+    wish?: {
+        year: number;           // calendar year of the birthday it belongs to
+        sticker?: string;       // emoji chosen in the composer (note tokens)
+        media?: 'none' | 'photo' | 'video';
+        videoUrl?: string;      // Google Drive (or any) video link
+    };
+    readAt?: number;        // ms epoch — celebrant opened the wish (cools its link)
+    repliedAt?: number;     // ms epoch — celebrant replied in the chat thread
     // Sender-chosen presentation: accent colour, an emoji "seal" (doubles as the
     // pin badge on list rows/headers), a reveal animation, and a celebratory
     // effect that plays (once + softly in the background) when the note opens.

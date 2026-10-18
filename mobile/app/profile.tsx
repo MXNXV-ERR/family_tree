@@ -24,10 +24,12 @@ import { buildAdjacency, initials, lifespan } from '../src/shared/adjacency';
 import { BottomSheet } from '../src/components/BottomSheet';
 import { SiblingOrderSheet } from '../src/components/SiblingOrderSheet';
 import { LifeTimeline } from '../src/components/LifeTimeline';
+import { BirthdayArchive } from '../src/birthday/BirthdayArchive';
+import { useInbox } from '../src/firebase/useInbox';
 import { safeBack } from '../src/shared/nav';
 import type { Member } from '../src/shared/types';
 
-type Tab = 'info' | 'relations' | 'story' | 'life';
+type Tab = 'info' | 'relations' | 'story' | 'life' | 'birthdays';
 
 export default function Profile() {
   const { c } = useTheme();
@@ -54,6 +56,9 @@ export default function Profile() {
   const canLink = !!m && canEditRelationship(role, m.id, m.id, members, user?.uid);
   const myId = myMemberId(members, user?.uid);
   const profile = useUserProfile();
+  // Past birthday skies stay live forever (SPEC §6) — they read the same note
+  // list the wall does.
+  const { all: allNotes } = useInbox(treeId, user?.uid, myId);
 
   // Remove a relationship (direct edges + now-unsupported inferred siblings).
   const removeLink = (kind: string, relatedId: string) => {
@@ -155,11 +160,11 @@ export default function Profile() {
 
         {/* Tabs */}
         <View style={[styles.tabbar, { backgroundColor: c.paper, borderColor: c.line }]}>
-          {(['info', 'relations', 'story', 'life'] as Tab[]).map((t) => {
+          {(['info', 'relations', 'story', 'life', 'birthdays'] as Tab[]).map((t) => {
             const on = tab === t;
             return (
               <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, on && { backgroundColor: c.accentSoft }]}>
-                <Text style={{ color: on ? c.accent : c.inkSoft, fontWeight: '700', textTransform: 'capitalize' }}>{t}</Text>
+                <Text numberOfLines={1} style={{ color: on ? c.accent : c.inkSoft, fontWeight: '700', textTransform: 'capitalize', fontSize: 12.5 }}>{t}</Text>
               </Pressable>
             );
           })}
@@ -170,6 +175,18 @@ export default function Profile() {
           {tab === 'relations' && <RelationsTab m={m} adj={adj} c={c} canAdd={canLink} canDelete={canLink} onDelete={removeLink} onOpen={(rid) => router.push({ pathname: '/profile', params: { id: nav(rid) } })} onAdd={(kind) => router.push({ pathname: '/link', params: { a: nav(m.id), kind } })} onOrder={canLink ? () => setOrderOpen(true) : undefined} />}
           {tab === 'story' && <StoryTab m={m} c={c} />}
           {tab === 'life' && <LifeTimeline member={m} adjacency={adj} relationships={relationships} events={events} />}
+          {tab === 'birthdays' && (
+            <BirthdayArchive
+              member={m}
+              notes={allNotes}
+              members={members}
+              relationships={relationships}
+              treeId={treeId}
+              uid={user?.uid}
+              myMemberId={myId}
+              myName={profile?.name || user?.email?.split('@')[0] || 'Someone'}
+            />
+          )}
         </Fade>
       </ScrollView>
 
